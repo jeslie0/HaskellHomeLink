@@ -62,7 +62,7 @@ executable Audio
     main-is:          Main.hs
 
     -- Modules included in this executable, other than Main.
-    other-modules: Other, Loop
+    other-modules:    Other
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
@@ -80,4 +80,4 @@ executable Audio
     -- Base language which the package is written in.
     default-language: GHC2021
 
-    ghc-options: -O2 -rtsopts -eventlog
+    ghc-options: -O2

@@ -9,11 +9,10 @@ import Data.ByteString.Internal qualified as BI
 import Data.Int (Int8)
 import Foreign (pokeByteOff)
 import Foreign.Ptr (Ptr)
-import Loop (forLoop)
 import Sound.OpenAL (genObjectName, ($=))
 import Sound.OpenAL.AL qualified as AL
 import Sound.OpenAL.ALC qualified as ALC
-import System.Random (randomIO)
+import System.Random (getStdGen, setStdGen, uniform)
 
 -- * Constants
 
@@ -55,7 +54,15 @@ makeNoisyBytes =
 -- random noise.
 filler :: Int -> Ptr a -> IO ()
 filler n ptr =
-  forLoop 0 (< n) (+ 1) $ \m -> randomIO @Int8 >>= pokeByteOff ptr m
+  getStdGen >>= helper 0
+  where
+    helper !m gen
+      | n == m    = setStdGen gen
+      | otherwise =
+        let (r, gen') = uniform @_ @Int8 gen
+        in do
+           pokeByteOff ptr m r
+           helper (m + 1) gen'
 
 -- | Create a new noisy buffer.
 createNoisyBuffer :: IO AL.Buffer
