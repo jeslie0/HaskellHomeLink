@@ -1,53 +1,73 @@
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 module Main where
 
 import Control.Concurrent (threadDelay)
-import Control.Monad (when)
+import Control.Exception (bracket)
+import Control.Monad (void, when)
 import Data.ByteArray (ByteArrayAccess (..))
 import Data.ByteString qualified as B
 import Data.ByteString.Internal qualified as BI
 import Data.Int (Int8)
 import Foreign (pokeByteOff)
-import Foreign.Ptr (Ptr, plusPtr)
-import Sound.OpenAL (genObjectName, get, ($=))
+import Foreign.Ptr (Ptr)
+import Loop (forLoop)
+import Sound.OpenAL (genObjectName, ($=))
 import Sound.OpenAL.AL qualified as AL
 import Sound.OpenAL.ALC qualified as ALC
-import System.Random (getStdGen, random, setStdGen)
-import System.Random.Stateful (IOGenM, newIOGenM, randomM)
+import System.Random (randomIO)
 
+-- * Constants
 
+-- Establish constants used through the module.
+
+-- | The sampling frequency, or sample rate.
 frequency :: Float
-frequency = 44100.0
+frequency =
+  44100.0
 
-bufferSize :: Int
-bufferSize = round $ frequency / 10
+-- | The length of time (in seconds) that a buffer should be played
+--  for.
+bufferTimeSeconds :: Float
+bufferTimeSeconds =
+  0.5
 
+-- | The length of time (in microseconds) that a buffer should be
+--  played for.
 bufferTimeMicroSeconds :: Int
-bufferTimeMicroSeconds = round $ 1000 * frequency / fromIntegral bufferSize
+bufferTimeMicroSeconds =
+  round $ bufferTimeSeconds * 1000000
 
--- Efficiently create a sinewave in memory.
-makeSineWave :: Float -> IO B.ByteString
-makeSineWave f =
-  BI.create bufferSize (filler f bufferSize)
-
-filler :: Float -> Int -> Ptr a -> IO ()
-filler f n ptr = helper 0
+-- | The size of a buffer, calculated from the sampling frequency and
+--  the buffer time.
+bufferSize :: Int
+bufferSize =
+  round $ frequency * fromIntegral bufferTimeMicroSeconds / oneSecond
   where
-    helper !m
-      | n == m = return ()
-      | otherwise = do
-          pokeByteOff ptr m (round @_ @Int8 $ sin (2.0 * pi * f * fromIntegral m))
-          helper (m + 1)
+    oneSecond = 1000000
 
-makeBuffer :: Float -> IO AL.Buffer
-makeBuffer f = do
+-- * Buffer creation
+
+-- | Create a bytestring of random noise, to be used as a buffer.
+makeNoisyBytes :: IO B.ByteString
+makeNoisyBytes =
+  BI.create bufferSize (filler bufferSize)
+
+-- | Given a pointer to a buffer and a length, fill the buffer with
+-- random noise.
+filler :: Int -> Ptr a -> IO ()
+filler n ptr =
+  forLoop 0 (< n) (+ 1) $ \m -> randomIO @Int8 >>= pokeByteOff ptr m
+
+-- | Create a new noisy buffer.
+createNoisyBuffer :: IO AL.Buffer
+createNoisyBuffer = do
   buffer :: AL.Buffer <- genObjectName
-  updateBuffer f buffer
+  updateNoisyBuffer buffer
   return buffer
 
-updateBuffer :: Float -> AL.Buffer -> IO ()
-updateBuffer f buffer = do
-  !bytes <- makeSineWave f
+-- | Modify the given buffer to regenerate it with noise.
+updateNoisyBuffer :: AL.Buffer -> IO ()
+updateNoisyBuffer buffer = do
+  !bytes <- makeNoisyBytes
   withByteArray bytes $ \ptr ->
     let bufferDataSTV =
           AL.bufferData buffer
@@ -55,60 +75,65 @@ updateBuffer f buffer = do
         !newMemRegion =
           AL.MemoryRegion ptr $ fromIntegral (B.length bytes)
 
+        -- Buffer data is expected to consist of bytes, which is why
+        -- we use Mono8 here. We could use 16 bit sounds, but for
+        -- something this simple, there really is no need.
         !newBufferData =
           AL.BufferData newMemRegion AL.Mono8 frequency
      in bufferDataSTV $= newBufferData
 
+-- | A control loop to keep checking and updating the noise source.
+loop :: AL.Source -> IO ()
+loop source = do
+  -- We pause execution for less time than a buffer is being played for.
+  threadDelay $ bufferTimeMicroSeconds `div` 2
+  state <- AL.sourceState source
+  if state == AL.Stopped
+    then return ()
+    else do
+      processed <- AL.buffersProcessed source
+      when (processed >= 1) $ do
+        bufs <- AL.unqueueBuffers source processed
+        let buf = head bufs
+        updateNoisyBuffer buf
+        AL.queueBuffers source [buf]
+      loop source
+
 main :: IO ()
 main = do
-  -- Initialization
-  maybeDevice <- ALC.openDevice Nothing -- select the "preferred device"
-  case maybeDevice of
-    Nothing -> return ()
-    Just device -> do
-      maybeContext <- ALC.createContext device streamAttributes
-      ALC.currentContext $= maybeContext
+  bracket
+    (ALC.openDevice Nothing)
+    (maybe (return ()) $ \device -> void (ALC.closeDevice device))
+    $ \maybeDevice -> do
+      case maybeDevice of
+        Nothing -> return ()
+        Just device -> do
+          maybeContext <- ALC.createContext device streamAttributes
+          ALC.currentContext $= maybeContext
 
-      -- Generate buffers
-      _errors <- AL.alErrors -- clear error code
-      source :: AL.Source <- genObjectName
+          -- Clear the error codes.
+          _errors <- AL.alErrors
 
-      !buffer1 <- makeBuffer 0.02
-      !buffer2 <- makeBuffer 0.05
+          -- Create a new source for the sounds.
+          source :: AL.Source <- genObjectName
 
-      AL.queueBuffers source [buffer1, buffer2]
+          -- Create two buffers that will be reused in the sound
+          -- generation. When one buffer is finished, it gets updated and
+          -- added to the back of the queue.
+          !buffer1 <- createNoisyBuffer
+          !buffer2 <- createNoisyBuffer
 
-      AL.play [source]
+          -- Queue the two buffers.
+          AL.queueBuffers source [buffer1, buffer2]
 
-      gen <- getStdGen
+          -- Start playing the audio in a separate thread.
+          AL.play [source]
 
-      let loop _ 0 = print "done"
-          loop gen' n = do
-            threadDelay bufferTimeMicroSeconds
-            state <- AL.sourceState source
-            if state == AL.Stopped
-              then return ()
-              else do
-                processed <- AL.buffersProcessed source
-                if processed >= 1
-                  then do
-                    bufs <- AL.unqueueBuffers source processed
-                    let buf = head bufs
-                        (f, gen'') = random gen'
-                    updateBuffer f buf
-                    AL.queueBuffers source [buf]
-                    setStdGen gen''
-                    loop gen'' (n - 1)
-                  else loop gen' n
-
-      loop gen 25
-
-      -- Exit
-      _deviceClosed <- ALC.closeDevice device
-      return ()
-      where
-        streamAttributes =
-          [ ALC.Frequency 44100,
-            ALC.MonoSources 1,
-            ALC.StereoSources 0
-          ]
+          -- Start looping and updating the source when required.
+          loop source
+          where
+            streamAttributes =
+              [ ALC.Frequency 44100,
+                ALC.MonoSources 1,
+                ALC.StereoSources 0
+              ]
