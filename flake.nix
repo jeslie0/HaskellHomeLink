@@ -19,7 +19,7 @@
         });
 
       haskellPackages = system:
-        nixpkgsFor.${system}.haskellPackages;
+        nixpkgsFor.${system}.haskell.packages.ghc965;
 
       packageName = system: with builtins;
         let
@@ -44,7 +44,13 @@
               in
                 {
                   default =
-                    (haskellPackages system).callCabal2nix (packageName system) self {};
+                    (haskellPackages system).callCabal2nix (packageName system) self { libpipewire = pkgs.pipewire; };
+
+                  arm32 =
+                    import ./nix/arm32.nix { inherit nixpkgs system; ghcVersion = "ghc965"; packageName = packageName system; src = ./.; };
+
+                  arm64 =
+                    import ./nix/arm64.nix { inherit nixpkgs system; ghcVersion = "ghc965"; packageName = packageName system; src = ./.; };
                 }
             );
 
