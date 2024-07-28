@@ -1,10 +1,20 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Main where
+import Network.Wai
+import Network.HTTP.Types
+import Network.Wai.Handler.Warp (run)
+import Audio (test)
 
-import PipeWire
-import Data.Text qualified as T
-import Data.Text.IO qualified as T
+app :: Application
+app _ respond = do
+    putStrLn "I've done some IO here"
+    respond $ responseLBS
+        status200
+        [("Content-Type", "text/plain")]
+        "Hello, Web!"
 
 main :: IO ()
-main = withPipeWire $ do
-  mClie <- getClientName
-  print mClie
+main = do
+    putStrLn $ "http://localhost:8080/"
+    test
+    -- run 8080 app

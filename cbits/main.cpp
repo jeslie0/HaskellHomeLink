@@ -1,8 +1,7 @@
 #include <iostream>
 #include <cmath>
-#include <alsa/asoundlib.h>
-#include <thread>
 #include <array>
+#include <alsa/asoundlib.h>
 
 const int SAMPLE_RATE = 44100;  // Sample rate in Hz
 const int FREQUENCY = 440;               // Frequency of the sine wave in Hz (A4 note)
@@ -59,7 +58,6 @@ int main() {
 
     // Create double buffers
     std::array<int16_t, BUFFER_SIZE> buffer1;
-    std::array<int16_t, BUFFER_SIZE> buffer2;
 
     // Initialize the first buffer
     generate_sine_wave(buffer1.data(), BUFFER_SIZE, FREQUENCY, SAMPLE_RATE, AMPLITUDE, 0);
@@ -86,10 +84,9 @@ int main() {
         // Generate the next buffer in a separate thread
         // std::thread generation_thread(generate_buffer, buffer2.data(), current_sample);
         // generation_thread.join();
-        generate_buffer(buffer2.data(), current_sample);
+        generate_buffer(buffer1.data(), current_sample);
 
         // Swap buffers
-        std::swap(buffer1, buffer2);
 
     }
 
