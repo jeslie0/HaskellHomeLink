@@ -62,14 +62,14 @@ executable Audio
     main-is:          Main.hs
 
     -- Modules included in this executable, other than Main.
-    other-modules: Audio
+    other-modules:    Audio
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
 
     -- Other library packages from which modules are imported.
-    build-depends:    alsa,
-                      base ^>=4.18.2.1,
+    build-depends:    base ^>=4.18.2.1,
+                      alsa,
                       http-types,
                       random,
                       wai,

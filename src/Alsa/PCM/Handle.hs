@@ -1,7 +1,7 @@
 {-# LANGUAGE CApiFFI #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
 
-module Alsa.PCM.Handle (PCMHandle (..), StreamType(..), newPCMHandle, openPCMHandle, preparePCMHandle, Snd_PCM_t) where
+module Alsa.PCM.Handle (PCMHandle (..), StreamType (..), DeviceMode(..), newPCMHandle, openPCMHandle, preparePCMHandle, Snd_PCM_t) where
 
 import Control.Exception (mask_)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
@@ -33,15 +33,21 @@ data StreamType
   | Capture
   deriving (Eq, Show, Enum)
 
+data DeviceMode
+  = PCMBlocking
+  | PCMNonBlocking
+  | PCMAsync
+  deriving (Eq, Show, Enum)
+
 foreign import capi unsafe "haskell_alsa.h void_snd_pcm_open" void_snd_pcm_open_c :: Ptr (Ptr Snd_PCM_t) -> CString -> CInt -> CInt -> IO CInt
 
-openPCMHandle :: String -> StreamType -> Int -> PCMHandle -> IO Int
+openPCMHandle :: String -> StreamType -> DeviceMode -> PCMHandle -> IO Int
 openPCMHandle name stream mode (PCMHandle ref) = do
   frnPtr <- readIORef ref
   withForeignPtr frnPtr $ \ptr ->
     alloca $ \ptrptr -> do
       poke ptrptr ptr
-      rc <- withCString name $ \cName -> mask_ $ void_snd_pcm_open_c ptrptr cName (fromIntegral . fromEnum $ stream) (fromIntegral mode)
+      rc <- withCString name $ \cName -> mask_ $ void_snd_pcm_open_c ptrptr cName (fromIntegral . fromEnum $ stream) (fromIntegral . fromEnum $ mode)
       updatedHandlePtr <- peek ptrptr
       updatedFrnPtr <- newForeignPtr snd_pcm_close_c updatedHandlePtr
       writeIORef ref updatedFrnPtr

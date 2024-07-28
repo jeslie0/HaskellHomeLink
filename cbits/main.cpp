@@ -34,6 +34,8 @@ int main() {
 
     // Fill it in with default values
     snd_pcm_hw_params_any(pcm_handle, params);
+    snd_pcm_hw_params_set_buffer_size(pcm_handle, 1);
+    snd_pcm_hw_params_set_period_size(pcm_handle, params, 1);
 
     // Set the desired hardware parameters
     snd_pcm_hw_params_set_access(pcm_handle, params, SND_PCM_ACCESS_RW_INTERLEAVED);

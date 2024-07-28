@@ -55,7 +55,7 @@ generateWhiteNoise ptr size = do
 playWhiteNoise :: IO ()
 playWhiteNoise = do
   handle <- newPCMHandle
-  _ <- openPCMHandle "default" Playback 0 handle
+  _ <- openPCMHandle "default" Playback PCMBlocking handle
   srMaybe <- configureDevice handle
   case srMaybe of
     Nothing -> return ()

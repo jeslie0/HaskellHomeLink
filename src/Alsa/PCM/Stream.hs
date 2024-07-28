@@ -98,6 +98,24 @@ setSampleRate (PCMHandle handleRef) (PCMParams paramRef) sampleRate = do
           dir <- peek dirPtr
           return . SampleRate $ (fromIntegral err, fromIntegral newSampleRate, fromIntegral dir)
 
+foreign import capi unsafe "alsa/asoundlib.h snd_pcm_hw_params_set_buffer_size" snd_pcm_hw_params_set_buffer_size_c :: Ptr Snd_PCM_t -> Ptr Snd_PCM_HW_Params_t -> CULong -> IO CInt
+
+setBufferSize :: PCMHandle -> PCMParams -> Word64 -> IO Int
+setBufferSize (PCMHandle handleRef) (PCMParams paramRef) size = do
+  frnHandlePtr <- readIORef handleRef
+  frnParamsPtr <- readIORef paramRef
+  withForeignPtr frnHandlePtr $ \handlePtr ->
+    withForeignPtr frnParamsPtr $ \paramsPtr -> fromIntegral <$> snd_pcm_hw_params_set_buffer_size_c handlePtr paramsPtr (fromIntegral size)
+
+foreign import capi unsafe "alsa/asoundlib.h snd_pcm_hw_params_set_period_size" snd_pcm_hw_params_set_period_size_c :: Ptr Snd_PCM_t -> Ptr Snd_PCM_HW_Params_t -> CULong -> CInt -> IO CInt
+
+setPeriodSize :: PCMHandle -> PCMParams -> Word64 -> Int -> IO Int
+setPeriodSize (PCMHandle handleRef) (PCMParams paramRef) size dir = do
+  frnHandlePtr <- readIORef handleRef
+  frnParamsPtr <- readIORef paramRef
+  withForeignPtr frnHandlePtr $ \handlePtr ->
+    withForeignPtr frnParamsPtr $ \paramsPtr -> fromIntegral <$> snd_pcm_hw_params_set_period_size_c handlePtr paramsPtr (fromIntegral size) (fromIntegral dir)
+
 foreign import capi unsafe "alsa/asoundlib.h snd_pcm_hw_params" snd_pcm_hw_params_c :: Ptr Snd_PCM_t -> Ptr Snd_PCM_HW_Params_t -> IO CInt
 
 writeParamsToDriver :: PCMHandle -> PCMParams -> IO Int
