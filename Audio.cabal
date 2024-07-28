@@ -52,7 +52,7 @@ extra-doc-files:    CHANGELOG.md
 -- extra-source-files:
 
 common warnings
-    ghc-options: -Wall
+    ghc-options: -Wall -Wmissing-signatures
 
 executable Audio
     -- Import common warning flags.
@@ -81,7 +81,7 @@ executable Audio
     -- Base language which the package is written in.
     default-language: GHC2021
 
-    ghc-options: -O2
+    ghc-options: -O2 -static
 
 
 library pipewire
@@ -89,11 +89,13 @@ library pipewire
     import:           warnings
 
     -- Modules exported by the library.
-    exposed-modules:  PipeWire
+    exposed-modules:  PipeWire,
+                      PipeWire.Spa.Utils.Dict
 
     -- Modules included in this library but not exported.
     other-modules:    Lib,
-                      PipeWire.PipeWireH
+                      PipeWire.PipeWireH,
+                      PipeWire.Types
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
@@ -109,8 +111,10 @@ library pipewire
     -- Base language which the package is written in.
     default-language: GHC2021
 
-    -- c-sources: cbits/wrapper.c
+    ghc-options: -O2 -static
 
-    -- include-dirs: cbits
+    c-sources: cbits/types.c
+
+    include-dirs: cbits
 
     pkgconfig-depends: libpipewire-0.3

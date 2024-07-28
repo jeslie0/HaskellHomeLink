@@ -2,7 +2,9 @@
   description = "My Haskell project";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-24.05";
+    # nixpkgs.url = "github:nixos/nixpkgs/nixos-24.05/";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable/";
+    # nixpkgs.url = "github:nixos/nixpkgs/807c549feabce7eddbf259dbdcec9e0600a0660d";
   };
 
   outputs = { self, nixpkgs }:
@@ -41,10 +43,19 @@
               let
                 pkgs =
                   nixpkgsFor.${system};
+
+                default =
+                  (haskellPackages system).callCabal2nix (packageName system) self { libpipewire = pkgs.pipewire.dev; };
               in
                 {
+                  # default = pkgs.pkgsMusl.haskell.lib.overrideCabal default (old: {
+                  #   configureFlags = (old.configureFlags or []) ++ [
+                  #     "--ghc-option=-L${pkgs.pkgsMusl.libffi.overrideAttrs (old: {dontDisabledStatic = true;})}/lib"
+                  #   ];
+                  # });
+
                   default =
-                    (haskellPackages system).callCabal2nix (packageName system) self { libpipewire = pkgs.pipewire; };
+                    default;
 
                   arm32 =
                     import ./nix/arm32.nix { inherit nixpkgs system; ghcVersion = "ghc965"; packageName = packageName system; src = ./.; };
@@ -70,6 +81,7 @@
                   buildInputs = with (haskellPackages system);
                     [ haskell-language-server
                       cabal-install
+                      pkgs.cmake
                     ];
 
                   # Add build inputs of the following derivations.
