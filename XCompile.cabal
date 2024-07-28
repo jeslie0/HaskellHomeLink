@@ -11,7 +11,7 @@ cabal-version:      3.0
 --   http://haskell.org/cabal/users-guide/
 --
 -- The name of the package.
-name:               XCompile
+name:               Audio
 
 -- The package version.
 -- See the Haskell package versioning policy (PVP) for standards
@@ -54,7 +54,7 @@ extra-doc-files:    CHANGELOG.md
 common warnings
     ghc-options: -Wall
 
-executable XCompile
+executable Audio
     -- Import common warning flags.
     import:           warnings
 
@@ -72,7 +72,6 @@ executable XCompile
                       base ^>=4.18.2.1,
                       http-types,
                       random,
-                      random >= 1.2.1.2,
                       wai,
                       warp
 
@@ -90,7 +89,10 @@ library alsa
     import:           warnings
 
     -- Modules exported by the library.
-    exposed-modules: Alsa.PCM.Handle, Alsa.PCM.Params
+    exposed-modules: Alsa.PCM.Handle,
+                     Alsa.PCM.Params,
+                     Alsa.PCM.Stream,
+                     Alsa.PCM.Error
 
     -- Modules included in this library but not exported.
     -- other-modules:
@@ -106,8 +108,6 @@ library alsa
 
     -- Base language which the package is written in.
     default-language: GHC2021
-
-    ghc-options: -O2
 
     c-sources: cbits/haskell_alsa.c
 

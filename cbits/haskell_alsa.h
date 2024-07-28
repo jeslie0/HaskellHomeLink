@@ -5,20 +5,19 @@
 #include <alsa/pcm.h>
 
 // * Handle
-snd_pcm_t *snd_pcm_t_new(char* name, snd_pcm_stream_t stream, int mode);
+snd_pcm_t *snd_pcm_t_new();
 
-void snd_pcm_t_free(snd_pcm_t *pcm_handle);
+void snd_pcm_t_free_unused(snd_pcm_t *pcm_handle);
 
-int open_pcm_for_stream(void** handle_ptr_ptr, char* name);
-
-void with_handle_c(void (*f) (snd_pcm_t*));
-
+int void_snd_pcm_open(void **handle_ptr, char *name, snd_pcm_stream_t stream,
+                      int mode);
 
 // * Parameters
-snd_pcm_hw_params_t* snd_pcm_hw_params_t_new();
 
-void snd_pcm_hw_params_t_free(snd_pcm_hw_params_t *params);
+snd_pcm_hw_params_t *snd_pcm_hw_params_t_new();
 
-/* int snd_pcm_hw_params_malloc_c(void** parms_ptr_ptr); */
+void snd_pcm_hw_params_t_free_unused(snd_pcm_hw_params_t *params);
+
+int void_snd_pcm_hw_params_malloc(void **params);
 
 #endif // HASKELL_SND_PCM_T_H

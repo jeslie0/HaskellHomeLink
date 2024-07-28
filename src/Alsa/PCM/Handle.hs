@@ -1,38 +1,55 @@
 {-# LANGUAGE CApiFFI #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
 
-module Alsa.PCM.Handle where
+module Alsa.PCM.Handle (PCMHandle (..), StreamType(..), newPCMHandle, openPCMHandle, preparePCMHandle, Snd_PCM_t) where
 
 import Control.Exception (mask_)
+import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Foreign (ForeignPtr, FunPtr, Ptr, Storable (..), alloca, newForeignPtr, withForeignPtr)
 import Foreign.C (CInt (..))
 import Foreign.C.String (CString, withCString)
 
+-- Type to represent what Alsa calls a "Sound Device". We always
+-- interface with one indirectly by a pointer
 data Snd_PCM_t
 
-foreign import capi unsafe "haskell_alsa.h snd_pcm_t_new" snd_pcm_t_new_c :: CString -> CInt -> CInt -> IO (Ptr Snd_PCM_t)
+newtype PCMHandle = PCMHandle (IORef (ForeignPtr Snd_PCM_t))
 
-foreign import capi unsafe "haskell_alsa.h &snd_pcm_t_free" snd_pcm_t_free_c :: FunPtr (Ptr Snd_PCM_t -> IO ())
+foreign import capi unsafe "haskell_alsa.h snd_pcm_t_new" snd_pcm_t_new_c :: IO (Ptr Snd_PCM_t)
 
-foreign import capi unsafe "haskell_alsa.h open_pcm_for_stream" open_handle_for_steam_c :: Ptr (Ptr Snd_PCM_t) -> CString -> IO CInt
+foreign import capi unsafe "haskell_alsa.h &snd_pcm_t_free_unused" snd_pcm_t_free_unused_c :: FunPtr (Ptr Snd_PCM_t -> IO ())
 
-newtype PCMHandle = PCMHandle (ForeignPtr Snd_PCM_t)
+newPCMHandle :: IO PCMHandle
+newPCMHandle = do
+  handlePtr <- snd_pcm_t_new_c
+  frnPtr <- newForeignPtr snd_pcm_t_free_unused_c handlePtr
+  ref <- newIORef frnPtr
+  return $ PCMHandle ref
 
-data StreamType =
-  Playback | Capture deriving (Eq, Show, Enum)
+foreign import capi unsafe "alsa/asoundlib.h &snd_pcm_close" snd_pcm_close_c :: FunPtr (Ptr Snd_PCM_t -> IO ())
 
-pcmHandle :: String -> StreamType -> Int -> IO PCMHandle
-pcmHandle name stream mode =
-  withCString name $ \cName ->
-  fmap PCMHandle $ mask_ (snd_pcm_t_new_c cName (fromIntegral . fromEnum $ stream) (fromIntegral mode)) >>= newForeignPtr snd_pcm_t_free_c
+data StreamType
+  = Playback
+  | Capture
+  deriving (Eq, Show, Enum)
 
-openForStream :: PCMHandle -> String -> IO (Int, PCMHandle)
-openForStream (PCMHandle frnPtr) name =
+foreign import capi unsafe "haskell_alsa.h void_snd_pcm_open" void_snd_pcm_open_c :: Ptr (Ptr Snd_PCM_t) -> CString -> CInt -> CInt -> IO CInt
+
+openPCMHandle :: String -> StreamType -> Int -> PCMHandle -> IO Int
+openPCMHandle name stream mode (PCMHandle ref) = do
+  frnPtr <- readIORef ref
   withForeignPtr frnPtr $ \ptr ->
-    withCString name $ \cString ->
-      alloca $ \ptrptr -> do
-        poke ptrptr ptr
-        retVal <- open_handle_for_steam_c ptrptr cString
-        newPtr <- peek ptrptr
-        newFrnPtr <- newForeignPtr snd_pcm_t_free_c newPtr
-        return (fromIntegral retVal, PCMHandle newFrnPtr)
+    alloca $ \ptrptr -> do
+      poke ptrptr ptr
+      rc <- withCString name $ \cName -> mask_ $ void_snd_pcm_open_c ptrptr cName (fromIntegral . fromEnum $ stream) (fromIntegral mode)
+      updatedHandlePtr <- peek ptrptr
+      updatedFrnPtr <- newForeignPtr snd_pcm_close_c updatedHandlePtr
+      writeIORef ref updatedFrnPtr
+      return . fromIntegral $ rc
+
+foreign import capi unsafe "alsa/asoundlib.h snd_pcm_prepare" snd_pcm_prepare_c :: Ptr Snd_PCM_t -> IO CInt
+
+preparePCMHandle :: PCMHandle -> IO Int
+preparePCMHandle (PCMHandle ref) = do
+  frnPtr <- readIORef ref
+  withForeignPtr frnPtr $ fmap fromIntegral . snd_pcm_prepare_c

@@ -3,7 +3,7 @@ module Main where
 import Network.Wai
 import Network.HTTP.Types
 import Network.Wai.Handler.Warp (run)
-import Audio (test)
+import Audio
 
 app :: Application
 app _ respond = do
@@ -16,5 +16,5 @@ app _ respond = do
 main :: IO ()
 main = do
     putStrLn $ "http://localhost:8080/"
-    test
+    playWhiteNoise
     -- run 8080 app
