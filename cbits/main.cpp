@@ -1,3 +1,4 @@
+#include <alsa/pcm.h>
 #include <iostream>
 #include <cmath>
 #include <array>
@@ -31,6 +32,8 @@ int main() {
 
     // Allocate a hardware parameters object
     snd_pcm_hw_params_malloc(&params);
+
+    snd_pcm_readi()
 
     // Fill it in with default values
     snd_pcm_hw_params_any(pcm_handle, params);

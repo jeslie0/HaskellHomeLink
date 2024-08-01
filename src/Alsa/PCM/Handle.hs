@@ -1,12 +1,13 @@
 {-# LANGUAGE CApiFFI #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
 
-module Alsa.PCM.Handle (PCMHandle (..), StreamType (..), DeviceMode(..), newPCMHandle, openPCMHandle, preparePCMHandle, Snd_PCM_t) where
+module Alsa.PCM.Handle (PCMHandle (..), StreamType (..), DeviceMode (..), waitPCM, availablePCMFrames, newPCMHandle, openPCMHandle, preparePCMHandle, Snd_PCM_t) where
 
 import Control.Exception (mask_)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
+import Data.Int (Int64)
 import Foreign (ForeignPtr, FunPtr, Ptr, Storable (..), alloca, newForeignPtr, withForeignPtr)
-import Foreign.C (CInt (..))
+import Foreign.C (CInt (..), CLong (..))
 import Foreign.C.String (CString, withCString)
 
 -- Type to represent what Alsa calls a "Sound Device". We always
@@ -59,3 +60,18 @@ preparePCMHandle :: PCMHandle -> IO Int
 preparePCMHandle (PCMHandle ref) = do
   frnPtr <- readIORef ref
   withForeignPtr frnPtr $ fmap fromIntegral . snd_pcm_prepare_c
+
+foreign import capi unsafe "alsa/asoundlib.h snd_pcm_avail_update" snd_pcm_avail_update_c :: Ptr Snd_PCM_t -> IO CLong
+
+-- |Return number of frames ready to be read (capture) / written (playback)
+availablePCMFrames :: PCMHandle -> IO Int64
+availablePCMFrames (PCMHandle ref) = do
+  frnPtr <- readIORef ref
+  withForeignPtr frnPtr $ fmap fromIntegral . snd_pcm_avail_update_c
+
+foreign import capi unsafe "alsa/asoundlib.h snd_pcm_wait" snd_pcm_wait_c :: Ptr Snd_PCM_t -> CInt -> IO CInt
+
+waitPCM :: PCMHandle -> Int -> IO Int
+waitPCM (PCMHandle ref) n = do
+  frnPtr <- readIORef ref
+  withForeignPtr frnPtr $ \ptr -> fromIntegral <$> snd_pcm_wait_c ptr (fromIntegral n)

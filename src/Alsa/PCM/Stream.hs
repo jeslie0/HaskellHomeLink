@@ -133,9 +133,24 @@ writeBuffer (PCMHandle ref) bufferPtr size = do
   withForeignPtr frnHandlePtr $ \handlePtr ->
     fromIntegral <$> snd_pcm_write_i_c handlePtr (castPtr bufferPtr) (fromIntegral size)
 
+foreign import capi unsafe "alsa/asoundlib.h snd_pcm_readi" snd_pcm_readi_c :: Ptr Snd_PCM_t -> Ptr () -> CULong -> IO CLong
+
+-- | Read interleaved frames from a PCM.  Returns a positive number of
+--  frames actually read otherwise a negative error code If the
+--  blocking behaviour was selected and it is running, then routine
+--  waits until all requested frames are filled. The returned number
+--  of frames can be less only if a signal or underrun occurred.  If
+--  the non-blocking behaviour is selected, then routine doesn't wait
+--  at all.
+-- The function is thread-safe when built with the proper
+-- option.
+readBuffer :: (Storable a) => PCMHandle -> Ptr a -> Word64 -> IO Int64
+readBuffer (PCMHandle ref) bufferPtr size = do
+  frnHandlePtr <- readIORef ref
+  withForeignPtr frnHandlePtr $ \handlePtr ->
+    fromIntegral <$> snd_pcm_readi_c handlePtr (castPtr bufferPtr) (fromIntegral size)
 
 foreign import capi unsafe "alsa/asoundlib.h snd_pcm_drain" snd_pcm_drain_c :: Ptr Snd_PCM_t -> IO CInt
-
 
 -- | Block the thread until the audio device has finished playing it's
 -- queued buffers.
