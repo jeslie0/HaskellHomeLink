@@ -1,50 +1,28 @@
 { pkgs
 , ghcVersion
 , packageName
-, system
+, extendHaskellPackages
 , ...
 }:
 let
-  crossRaspberryPi =
-    pkgs.pkgsCross.raspberryPi.haskell-nix.project' {
-      compiler-nix-name = ghcVersion;
-      src = ../.;
-      modules = [{
-        # You will need to put build fixes here.
-        buildable = false;
-      }];
+  haskellPackages = pkgs:
+    extendHaskellPackages {
+      haskellPackages =
+        pkgs.haskell.${ghcVersion};
+
+      alsa-lib =
+        pkgs.alsa-lib;
     };
+
+  crossRaspberryPi =
+    (haskellPackages pkgs.pkgsCross.raspberryPi).callCabal2nix (packageName) ./.. {};
 
   crossRaspberryPiMusl =
-    pkgs.pkgsCross.raspberryPi.pkgsMusl.haskell-nix.project' {
-      compiler-nix-name = ghcVersion;
-      src = ../.;
-      modules = [{
-        # You will need to put build fixes here.
-      }];
-    };
+    (haskellPackages pkgs.pkgsCross.raspberryPi.pkgsMusl).callCabal2nix (packageName) ./.. {};
 
   crossRaspberryPiStatic =
-    pkgs.pkgsCross.raspberryPi.pkgsStatic.haskell-nix.project' {
-      compiler-nix-name = ghcVersion;
-      src = ../.;
-      modules = [{
-        # You will need to put build fixes here.
-      }];
-    };
+    (haskellPackages pkgs.pkgsCross.raspberryPi.pkgsStatic).callCabal2nix (packageName) ./.. {};
 in
 {
-  crossRaspberryPi =
-    pkgs.pkgsCross.raspberryPi.haskell.packages.ghc965.callCabal2nix (packageName) ./.. {};
-
-  #   (crossRaspberryPi.flake {}).packages."${packageName}:exe:${packageName}";
-
-  crossRaspberryPiStatic =
-    (crossRaspberryPiStatic.flake {}).packages."${packageName}:exe:${packageName}";
-
-  crossRaspberryPiMusl =
-    (crossRaspberryPiMusl.flake {}).packages."${packageName}:exe:${packageName}";
-
-  pipewirePi =
-    pkgs.pkgsCross.raspberryPi.pipewire;
+  inherit crossRaspberryPi crossRaspberryPiStatic crossRaspberryPiMusl;
 }

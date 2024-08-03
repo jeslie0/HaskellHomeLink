@@ -1,43 +1,28 @@
 { pkgs
 , ghcVersion
 , packageName
+, extendHaskellPackages
 , ...
 }:
 let
-  crossAarch64 =
-    pkgs.pkgsCross.aarch64-multiplatform.haskell-nix.project' {
-      compiler-nix-name = ghcVersion;
-      src = ../.;
-      modules = [{
-        # You will need to put build fixes here.
-      }];
+  haskellPackages = pkgs:
+    extendHaskellPackages {
+      haskellPackages =
+        pkgs.haskell.${ghcVersion};
+
+      alsa-lib =
+        pkgs.alsa-lib;
     };
+
+  crossAarch64 =
+    (haskellPackages pkgs.pkgsCross.aarch64-multiplatform).callCabal2nix (packageName) ./.. {};
 
   crossAarch64Musl =
-    pkgs.pkgsCross.aarch64-multiplatform.pkgsMusl.haskell-nix.project' {
-      compiler-nix-name = ghcVersion;
-      src = ../.;
-      modules = [{
-        # You will need to put build fixes here.
-      }];
-    };
+    (haskellPackages pkgs.pkgsCross.aarch64-multiplatform).pkgsMusl.callCabal2nix (packageName) ./.. {};
 
   crossAarch64Static =
-    pkgs.pkgsCross.aarch64-multiplatform.pkgsStatic.haskell-nix.project' {
-      compiler-nix-name = ghcVersion;
-      src = ../.;
-      modules = [{
-        # You will need to put build fixes here.
-      }];
-    };
+    (haskellPackages pkgs.pkgsCross.aarch64-multiplatform).pkgsStatic.callCabal2nix (packageName) ./.. {};
 in
 {
-  crossAarch64 =
-    (crossAarch64.flake {}).packages."${packageName}:exe:${packageName}";
-
-  crossAarch64Static =
-    (crossAarch64Static.flake {}).packages."${packageName}:exe:${packageName}";
-
-  crossAarch64Musl =
-    (crossAarch64Musl.flake {}).packages."${packageName}:exe:${packageName}";
+  inherit crossAarch64 crossAarch64Musl crossAarch64Static;
 }

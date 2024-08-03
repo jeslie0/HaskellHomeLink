@@ -29,14 +29,14 @@ channels = 1
 bufferSize :: Word64
 bufferSize = fromIntegral sampleRate
 
-generateSineWave :: Ptr Int16 -> Word64 -> IO ()
-generateSineWave ptr size = go 0
+generateSineWave :: Int -> Ptr Int16 -> Word64 -> IO ()
+generateSineWave k ptr size = go 0
   where
     go :: Word64 -> IO ()
     go n
       | fromIntegral n == size = return ()
       | otherwise = do
-          pokeElemOff @Int16 ptr (fromIntegral n) $ round @Float $ fromIntegral amplitude * sin ((2.0 * pi * fromIntegral frequency * fromIntegral n) / fromIntegral sampleRate)
+          pokeElemOff @Int16 ptr (fromIntegral n) $ round @Float $ fromIntegral amplitude * sin ((2.0 * pi * fromIntegral frequency * fromIntegral (k `mod` 13) * fromIntegral n) / fromIntegral sampleRate)
           go (n + 1)
 
 generateWhiteNoise :: Ptr Int16 -> Word64 -> IO ()
@@ -61,15 +61,17 @@ playWhiteNoise = do
     Nothing -> return ()
     Just sr -> do
       allocaArray sr $ \ptr -> do
-        let loop = do
+        let loop n = do
+              availablePCMFrames handle >>= print
               _ <- writeBuffer handle ptr bufferSize
-              generateWhiteNoise ptr bufferSize
-              threadDelay 500000
-              loop
+              generateSineWave n ptr bufferSize
+              -- threadDelay 500000
+              print n
+              loop (n + 1)
 
         _ <- preparePCMHandle handle
         generateWhiteNoise ptr bufferSize
-        _ <- loop
+        _ <- loop 1
         _ <- drainDevice handle
         return ()
   where

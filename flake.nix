@@ -21,8 +21,20 @@
       ghcVersion =
         "ghc965";
 
+      extendHaskellPackages = { haskellPackages, alsa-lib }:
+        haskellPackages.extend (hpFinal: hpPrev: {
+          alsa =
+            hpPrev.callCabal2nix "alsa" ./libs/Alsa { inherit alsa-lib; };
+        });
+
       haskellPackages = system:
-        nixpkgsFor.${system}.haskell.packages.${ghcVersion};
+        extendHaskellPackages {
+          haskellPackages =
+            nixpkgsFor.${system}.haskell.packages.${ghcVersion};
+
+          alsa-lib =
+            nixpkgsFor.${system}.alsa-lib.dev;
+        };
 
       packageName = system: with builtins;
         let
@@ -46,10 +58,11 @@
                   nixpkgsFor.${system};
 
                 default =
-                  (haskellPackages system).callCabal2nix (packageName system) self { alsa-lib = nixpkgsFor.${system}.alsa-lib.dev;};
+                  (haskellPackages system).callCabal2nix (packageName system) self { };
               } // (
                 import ./nix/xCompiled.nix {
-                  inherit ghcVersion system nixpkgs;
+                  inherit ghcVersion system nixpkgs extendHaskellPackages;
+
                   pkgs =
                     nixpkgsFor.${system};
 
