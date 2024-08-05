@@ -8,7 +8,7 @@ let
   haskellPackages = pkgs:
     extendHaskellPackages {
       haskellPackages =
-        pkgs.haskell.${ghcVersion};
+        pkgs.haskell.packages.${ghcVersion};
 
       alsa-lib =
         pkgs.alsa-lib;

@@ -3,9 +3,13 @@
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    haskellNix = {
+      url = "github:jeslie0/haskell.nix";
+      # inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs }:
+  outputs = { self, nixpkgs, haskellNix }:
     let
       supportedSystems =
         [ "aarch64-linux" "x86_64-linux" "aarch64-darwin" "x86_64-darwin" ];
@@ -16,15 +20,16 @@
       nixpkgsFor = forAllSystems (system:
         import nixpkgs {
           inherit system;
+          overlays = [ haskellNix.overlay ];
         });
 
       ghcVersion =
         "ghc965";
 
       extendHaskellPackages = { haskellPackages, alsa-lib }:
-        haskellPackages.extend (hpFinal: hpPrev: {
-          alsa =
-            hpPrev.callCabal2nix "alsa" ./libs/Alsa { inherit alsa-lib; };
+        haskellPackages.extend ( hpFinal: hpPrev: {
+            alsa-hs =
+              hpPrev.callCabal2nix "alsa-hs" ./libs/alsa-hs { inherit alsa-lib; };
         });
 
       haskellPackages = system:
@@ -53,22 +58,22 @@
       {
         packages =
           forAllSystems (system:
-              {
-                nixpkgs =
+            {
+              nixpkgs =
+                nixpkgsFor.${system};
+
+              default =
+                (haskellPackages system).callCabal2nix (packageName system) self { };
+            } // (
+              import ./nix/xCompiled.nix {
+                inherit ghcVersion system nixpkgs extendHaskellPackages self;
+
+                pkgs =
                   nixpkgsFor.${system};
 
-                default =
-                  (haskellPackages system).callCabal2nix (packageName system) self { };
-              } // (
-                import ./nix/xCompiled.nix {
-                  inherit ghcVersion system nixpkgs extendHaskellPackages;
-
-                  pkgs =
-                    nixpkgsFor.${system};
-
-                  packageName =
-                    packageName system;
-                })
+                packageName =
+                  packageName system;
+              })
           );
 
 

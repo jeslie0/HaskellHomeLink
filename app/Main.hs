@@ -1,13 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Main where
--- import Network.Wai
--- import Network.HTTP.Types
--- import Network.Wai.Handler.Warp (run)
-import Audio
 
+module Main where
+
+import Network.Wai.Handler.Warp (run)
+import Rest.Server (app)
+import Data.Text.IO qualified as T
 
 main :: IO ()
 main = do
-    putStrLn $ "http://localhost:8080/"
-    playWhiteNoise
-    -- run 8080 app
+  T.putStrLn "http://localhost:8080/"
+  run 8080 app
