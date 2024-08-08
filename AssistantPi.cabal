@@ -70,21 +70,39 @@ executable AssistantPi
                       Rest.OS,
                       System.CPU,
                       System.OS,
-                      TinyServant
+                      TinyServant,
+                      TinyServant.API,
+                      TinyServant.API.ContentTypes,
+                      TinyServant.API.Status,
+                      TinyServant.API.UVerb,
+                      TinyServant.API.ResponseHeaders,
+                      TinyServant.API.Header,
+                      TinyServant.API.Modifiers,
+                      TinyServant.Combinators,
+                      TinyServant.Server,
+                      TinyServant.Server.UVerb,
+                      TinyServant.Union
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
 
     -- Other library packages from which modules are imported.
     build-depends:    aeson,
+                      base-compat-batteries,
+                      case-insensitive,
                       -- alsa-hs,
                       attoparsec,
                       base ^>=4.18.2.1,
                       bytestring,
+                      deepseq,
+                      http-api-data,
+                      http-media,
                       http-types,
                       random,
                       -- servant,
                       -- servant-server,
+                      sop-core,
+                      string-conversions,
                       text,
                       time,
                       wai,

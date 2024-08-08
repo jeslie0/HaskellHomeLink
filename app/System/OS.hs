@@ -4,7 +4,7 @@
 module System.OS (getOSInfo, OSInfo (..)) where
 
 import Data.Aeson (FromJSON, ToJSON)
-import Data.Attoparsec.Text (IResult (..), Parser, char, endOfInput, many', manyTill, parse, skipSpace, takeTill, string)
+import Data.Attoparsec.Text (IResult (..), Parser, char, endOfInput, manyTill, parse, takeTill, string)
 import Data.Text qualified as T
 import Data.Text.IO qualified as T
 import Error.Parser (ParserError (..))
