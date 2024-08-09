@@ -8,6 +8,7 @@ import Error (Error (..))
 data ParserError
   = ParserFailed String
   | ParserPartial
+  deriving Show
 
 
 instance Error ParserError where

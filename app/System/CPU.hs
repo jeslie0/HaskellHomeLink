@@ -1,11 +1,16 @@
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedStrings #-}
+
 module System.CPU where
 
-import Data.Aeson (FromJSON, ToJSON)
-import Data.Attoparsec.Text (IResult (..), Parser, char, endOfInput, manyTill, parse, takeTill, string, satisfy, skipSpace, many1', manyTill')
+import Data.Aeson (ToJSON)
+import Data.Attoparsec.Text (Parser, char, many1', parseOnly, skipSpace, string, takeLazyText, takeTill)
 import Data.Char (isSpace)
+import Data.List (find)
 import Data.Text qualified as T
 import Data.Text.IO qualified as T
+import Error (ErrorStack (..), ErrorType (..), fromMaybe, toEitherErrorStack)
+import Error.Generic (GenericError (..))
 import Error.Parser (ParserError (..))
 import GHC.Generics (Generic)
 
@@ -15,35 +20,30 @@ cpuDataPath = "/proc/cpuinfo"
 cpuDataText :: IO T.Text
 cpuDataText = T.readFile cpuDataPath
 
-
 keyValueParser :: Parser (T.Text, T.Text)
 keyValueParser = do
+  skipSpace
   key <- takeTill (== ':')
   _ <- char ':'
   skipSpace
   value <- takeTill (== '\n')
-  skipSpace
   return (T.filter (not . isSpace) key, T.filter (not . isSpace) value)
 
-cpuBlockParser :: Parser [(T.Text, T.Text)]
-cpuBlockParser = manyTill' keyValueParser (char '\n')
-
-cpuParser :: Parser [[(T.Text, T.Text)]]
-cpuParser = do
-  block <- cpuBlockParser
-  _ <- char '\n'
-  rest <- cpuParser
-  return $ block:rest
-
-
-cpuData :: IO [[(T.Text, T.Text)]]
-cpuData = do
+cpuDataExtract :: IO (Either ParserError [(T.Text, T.Text)])
+cpuDataExtract = do
   txt <- cpuDataText
-  let res = parse cpuParser txt
-  go res
-  where
-    go res =
-        case res of
-            Done _ lst ->  return lst
-            Partial f -> go $ f ""
-            Fail _ _ _ -> error ""
+  return $ case parseOnly (many1' keyValueParser) txt of
+    Left str -> Left . ParserFailed $ str
+    Right lsts -> Right lsts
+
+data CPUData = CPUData {modelName :: T.Text} deriving (Generic)
+
+instance ToJSON CPUData
+
+getCPUData :: IO (Either ErrorStack CPUData)
+getCPUData = do
+  extract <- cpuDataExtract
+  return $ do
+    alist <- toEitherErrorStack extract
+    (_, val) <- toEitherErrorStack $ fromMaybe FailedToFindElement $ find (\(key, _) -> key == "modelname") alist
+    return $ CPUData {modelName = val}

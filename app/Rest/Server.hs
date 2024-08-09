@@ -4,7 +4,7 @@ module Rest.Server where
 
 import Data.Text qualified as T
 import Network.Wai
-import Rest.OS (OSAPI, osServer)
+import Rest.System (SystemAPI, osServer)
 import Data.Typeable (Proxy(..))
 import TinyServant.Combinators ((:>))
 import TinyServant.Server (Server, serve)
@@ -13,7 +13,7 @@ type API =
   "api" :> "v1" :> ServiceAPI
     -- :<|> Raw
 
-type ServiceAPI = OSAPI
+type ServiceAPI = SystemAPI
 
 server :: Server API
 server =
