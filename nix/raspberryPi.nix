@@ -16,14 +16,14 @@ let
     };
 
   crossRaspberryPi =
-    (haskellPackages pkgs.pkgsCross.raspberryPi).callCabal2nix (packageName) ./.. {};
-    # ((pkgs.pkgsCross.raspberryPi.haskell-nix.project' {
-    #   compiler-nix-name = ghcVersion;
-    #   src = ./..;
-    #   modules = [{
-    #     reinstallableLibGhc = false;
-    #   }];
-    # }).flake {}).packages."${packageName}:exe:${packageName}";
+    # (haskellPackages pkgs.pkgsCross.raspberryPi).callCabal2nix (packageName) ./.. {};
+    ((pkgs.pkgsCross.raspberryPi.haskell-nix.project' {
+      compiler-nix-name = ghcVersion;
+      src = ./..;
+      modules = [{
+        reinstallableLibGhc = false;
+      }];
+    }).flake {}).packages."${packageName}:exe:${packageName}";
 
   crossRaspberryPiMusl =
     (haskellPackages pkgs.pkgsCross.raspberryPi.pkgsMusl).callCabal2nix (packageName) ./.. {};

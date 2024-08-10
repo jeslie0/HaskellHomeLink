@@ -66,6 +66,7 @@ import Data.SOP.NS
 import Data.Type.Bool (If)
 import Data.Type.Equality (type (==))
 import GHC.TypeLits
+import Data.Kind (Type)
 
 type Union = NS I
 
@@ -75,7 +76,7 @@ type Union = NS I
 --
 -- See also: 'matchUnion'.
 foldMapUnion ::
-  forall (c :: * -> Constraint) (a :: *) (as :: [*]).
+  forall (c :: Type -> Constraint) (a :: Type) (as :: [Type]).
   All c as =>
   Proxy c ->
   (forall x. c x => x -> a) ->
@@ -88,7 +89,7 @@ foldMapUnion proxy go = cfoldMap_NS proxy (go . unI)
 -- otherwise.
 --
 -- See also: 'foldMapUnion'.
-matchUnion :: forall (a :: *) (as :: [*]). (IsMember a as) => Union as -> Maybe a
+matchUnion :: forall (a :: Type) (as :: [Type]). (IsMember a as) => Union as -> Maybe a
 matchUnion = fmap unI . eject
 
 -- * Stuff stolen from 'Data.WorldPeace" but for generics-sop

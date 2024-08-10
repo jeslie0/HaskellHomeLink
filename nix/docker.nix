@@ -8,9 +8,14 @@ raspExe:
         pkgs.stdenv.mkDerivation {
           name = "${raspExe.name}-stripped";
           src = ./.;
-          buildPhase = "mkdir tmp; mkdir $out; cp -r ${raspExe}/* tmp; chmod 777 tmp/bin/${packageName}; patchelf --shrink-rpath tmp/bin/${packageName}; strip tmp/bin/${packageName}";
-          buildInputs = [pkgs.patchelf];
-          installPhase = "mkdir $out; mv tmp/* $out";
+          installPhase = ''
+            runHook preInstall
+            mkdir -p $out/bin;
+            cp -r ${raspExe}/bin/${packageName} $out/bin;
+            patchelf --shrink-rpath $out/bin/${packageName};
+            runHook postInstall
+          '';
+          nativeBuildInputs = [pkgs.patchelf];
         };
   in
     {
@@ -26,7 +31,7 @@ raspExe:
 
     config = {
       Cmd =
-        [ "${strippedExec}/bin/AssistantPi"];
+        [ "${raspExe}/bin/${packageName}" ];
     };
   };
 

@@ -1,9 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Error.Generic where
-import Error (Error(..))
+import Control.Exception (Exception(..))
+import Data.Data (Typeable)
 
 data GenericError =
   FailedToFindElement
+  | OtherError
+  deriving (Typeable, Show)
 
-instance Error GenericError where
-  errorString FailedToFindElement = "Failed to find element"
+instance Exception GenericError where
+  displayException FailedToFindElement = "Failed to find element"
+  displayException OtherError = "An unknown error occurred"

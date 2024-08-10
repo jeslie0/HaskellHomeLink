@@ -8,7 +8,7 @@ module TinyServant.API.ContentTypes where
 import Control.DeepSeq (NFData)
 import Data.Aeson (FromJSON (..), ToJSON, encode)
 import Data.Aeson.Types (parseEither)
-import Data.Aeson.Parser (value)
+import Data.Aeson.Parser (json)
 import Data.Attoparsec.ByteString.Char8
 import Data.ByteString qualified as B
 import Data.ByteString.Lazy qualified as BL
@@ -328,7 +328,7 @@ eitherDecodeLenient input =
   where
     parser =
       skipSpace
-        *> Data.Aeson.Parser.value
+        *> Data.Aeson.Parser.json
         <* skipSpace
         <* (endOfInput <?> "trailing junk after valid JSON")
 

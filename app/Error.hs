@@ -1,29 +1,36 @@
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE MonoLocalBinds #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 module Error where
 
-import Data.Text qualified as T
+import Control.Exception (Exception (..), try)
 import Data.Aeson (ToJSON)
-import Data.Aeson.Types (ToJSON(..))
+import Data.Aeson.Types (ToJSON (..))
 import GHC.Generics (Generic)
 
-class Error a where
-  errorString :: a -> T.Text
+data Error = forall a. (Exception a) => Error a
 
-data ErrorType = forall a. (Error a) => ErrorType a
+instance ToJSON Error where
+  toJSON (Error e) = toJSON $ displayException e
 
-instance ToJSON ErrorType where
-  toJSON (ErrorType a) = toJSON $ errorString a
-
-newtype ErrorStack = ErrorStack [ErrorType] deriving Generic
+newtype ErrorStack = ErrorStack [Error] deriving (Generic)
 
 instance ToJSON ErrorStack
 
-push :: forall a. (Error a) => a -> ErrorStack -> ErrorStack
-push err (ErrorStack stack) = ErrorStack (ErrorType err : stack)
+push :: forall e. (Exception e) => e -> ErrorStack -> ErrorStack
+push err (ErrorStack stack) = ErrorStack (Error err : stack)
 
-toEitherErrorStack :: (Error a) => Either a b -> Either ErrorStack b
-toEitherErrorStack (Left a) = Left $ ErrorStack [ErrorType a]
+toEitherErrorStack ::  Exception e => Either e b -> Either ErrorStack b
+toEitherErrorStack (Left e) = Left $ ErrorStack [Error e]
 toEitherErrorStack (Right b) = Right b
 
-fromMaybe :: (Error a) => a -> Maybe b -> Either a b
+fromMaybe ::  Exception e => e -> Maybe b -> Either e b
 fromMaybe err Nothing = Left err
 fromMaybe _ (Just b) = Right b
+
+tryError :: forall e a. (Exception e) => IO a -> IO (Either Error a)
+tryError io = do
+  eith <- try @e io
+  return $ case eith of
+    Left ex -> Left . Error $ ex
+    Right a -> Right a

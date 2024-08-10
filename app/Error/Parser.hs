@@ -2,15 +2,13 @@
 
 module Error.Parser (ParserError (..)) where
 
-import Data.Text qualified as T
-import Error (Error (..))
+import Control.Exception (Exception (..))
 
 data ParserError
   = ParserFailed String
   | ParserPartial
-  deriving Show
+  deriving (Show)
 
-
-instance Error ParserError where
-  errorString (ParserFailed str) = "Parser error: " <> T.pack str
-  errorString ParserPartial = "Parser partially completed text"
+instance Exception ParserError where
+  displayException (ParserFailed str) = "Parser error: " <> str
+  displayException ParserPartial = "Parser partially completed text"

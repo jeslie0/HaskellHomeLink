@@ -9,6 +9,7 @@ import Data.Text qualified as T
 import Data.Text.IO qualified as T
 import Error.Parser (ParserError (..))
 import GHC.Generics (Generic)
+import Error (tryError, Error(..))
 
 data OSInfo = OSInfo
   { name :: {-# UNPACK #-} !T.Text,
@@ -53,11 +54,11 @@ otherParser = do
 
 osReleasePath :: FilePath
 osReleasePath =
-  "/etc/os-release"
+  "/etc/os-releasefdsafdsafs"
 
-osRelease :: IO T.Text
+osRelease :: IO (Either Error T.Text)
 osRelease =
-  T.readFile osReleasePath
+  tryError @IOError $ T.readFile osReleasePath
 
 keyValueParser :: Parser (T.Text, T.Text)
 keyValueParser = do
@@ -70,18 +71,23 @@ keyValueParser = do
 assocListParser :: Parser [(T.Text, T.Text)]
 assocListParser = manyTill keyValueParser endOfInput
 
-getOSInfo :: IO (Either ParserError OSInfo)
+getOSInfo :: IO (Either Error OSInfo)
 getOSInfo = do
-  result <- parse assocListParser <$> osRelease
-  go result
+  txtEither <- osRelease
+  return $ do
+    txt <- txtEither
+    let result = parse assocListParser txt
+    case go result of
+      Left err -> Left (Error err)
+      Right a -> Right a
   where
     go result =
       case result of
-        Fail _ _ err -> return . Left . ParserFailed $ err
+        Fail _ _ err -> Left $ ParserFailed err
         Partial f -> go (f "")
         Done _ assocList ->
           let nameMaybe = lookup "NAME" assocList
               prettyNameMaybe = lookup "PRETTY_NAME" assocList
            in case (nameMaybe, prettyNameMaybe) of
-                (Just name, Just prettyName) -> return . Right $ OSInfo name prettyName
-                _ -> return . Left . ParserFailed $ "Couldn't lookup data"
+                (Just name, Just prettyName) -> Right $ OSInfo name prettyName
+                _ -> Left $ ParserFailed "Couldn't lookup data"

@@ -9,7 +9,7 @@ import Data.Char (isSpace)
 import Data.List (find)
 import Data.Text qualified as T
 import Data.Text.IO qualified as T
-import Error (ErrorStack (..), ErrorType (..), fromMaybe, toEitherErrorStack)
+import Error (ErrorStack (..), Error(..), fromMaybe, toEitherErrorStack)
 import Error.Generic (GenericError (..))
 import Error.Parser (ParserError (..))
 import GHC.Generics (Generic)
