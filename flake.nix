@@ -63,7 +63,7 @@
                 nixpkgsFor.${system};
 
               default =
-                (haskellPackages system).callCabal2nix (packageName system) self { };
+                (haskellPackages system).callCabal2nix (packageName system) self {};
             } // (
               import ./nix/xCompiled.nix {
                 inherit ghcVersion system nixpkgs extendHaskellPackages self;
@@ -93,6 +93,7 @@
                   [  haskell-language-server
                      cabal-install
                      pkgs.cmake
+                     pkgs.alsa-lib
                   ];
 
                 # Add build inputs of the following derivations.

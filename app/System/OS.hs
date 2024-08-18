@@ -4,7 +4,7 @@
 module System.OS (getOSInfo, OSInfo (..)) where
 
 import Data.Aeson (FromJSON, ToJSON)
-import Data.Attoparsec.Text (IResult (..), Parser, char, endOfInput, manyTill, parse, takeTill, string)
+import Data.Attoparsec.Text (IResult (..), Parser, char, endOfInput, manyTill, parse, takeTill)
 import Data.Text qualified as T
 import Data.Text.IO qualified as T
 import Error.Parser (ParserError (..))
@@ -20,37 +20,6 @@ data OSInfo = OSInfo
 instance ToJSON OSInfo
 
 instance FromJSON OSInfo
-
-data OSInformationType =
-  PrettyName T.Text
-  | Name T.Text
-  | Other
-
-prettyNameParser :: Parser OSInformationType
-prettyNameParser = do
-  _ <- char '"'
-  _ <- string "PRETTY_NAME"
-  _ <- char '"'
-  _ <- char '='
-  value <- takeTill ('\n' ==)
-  _ <- char '\n'
-  return . PrettyName $ T.filter (/= '"') value
-
-nameParser :: Parser OSInformationType
-nameParser = do
-  _ <- char '"'
-  _ <- string "NAME"
-  _ <- char '"'
-  _ <- char '='
-  value <- takeTill ('\n' ==)
-  _ <- char '\n'
-  return . PrettyName $ T.filter (/= '"') value
-
-otherParser :: Parser OSInformationType
-otherParser = do
-  _ <- takeTill ('\n' ==)
-  _ <- char '\n'
-  return Other
 
 osReleasePath :: FilePath
 osReleasePath =

@@ -14,7 +14,7 @@ import Network.HTTP.Types (Method, methodGet, methodHead)
 import Network.Wai (Application, Request (..), Response)
 import Text.Read (readMaybe)
 import TinyServant.API.UVerb (UVerb)
-import TinyServant.Combinators (Capture, (:<|>) (..), (:>))
+import TinyServant.Combinators (Capture, (:<|>) (..), (:>), Raw)
 import TinyServant.Union (Union)
 
 type family Server layout :: Type
@@ -28,6 +28,8 @@ type instance Server (a :<|> b) = Server a :<|> Server b
 type instance Server ((s :: Symbol) :> r) = Server r
 
 type instance Server (Capture a :> r) = a -> Server r
+
+type instance Server (Raw) = IO [T.Text]
 
 class HasServer layout where
   route :: Proxy layout -> Server layout -> [T.Text] -> Request -> Maybe (IO Response)
@@ -68,6 +70,15 @@ instance (Read a, HasServer r) => HasServer (Capture a :> r) where
     a <- readMaybe . T.unpack $ x
     route (Proxy @r) (handler a) xs req
   route _ _ _ _ = Nothing
+
+instance HasServer Raw where
+  route ::
+    Proxy Raw ->
+    IO [T.Text] ->
+    [T.Text] ->
+    Request ->
+    Maybe (IO Response)
+  rout _ handler
 
 -- * Server interpretation
 
