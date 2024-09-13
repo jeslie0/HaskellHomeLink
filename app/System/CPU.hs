@@ -4,21 +4,22 @@
 module System.CPU where
 
 import Data.Aeson (ToJSON)
-import Data.Attoparsec.Text (Parser, char, many1', parseOnly, skipSpace, string, takeLazyText, takeTill)
+import Data.Attoparsec.Text (Parser, char, many1', skipSpace, takeTill)
 import Data.Char (isSpace)
 import Data.List (find)
 import Data.Text qualified as T
 import Data.Text.IO qualified as T
-import Error (ErrorStack (..), Error(..), fromMaybe, toEitherErrorStack)
+import Error (ErrorT (..), fromMaybe, toEitherErrorStack, tryError, withErrorStack, toErrorT, withError, toError)
 import Error.Generic (GenericError (..))
-import Error.Parser (ParserError (..))
+import Error.Parser (parseOnly)
 import GHC.Generics (Generic)
 
 cpuDataPath :: FilePath
-cpuDataPath = "/proc/cpuinfo"
+cpuDataPath = "/proc/cpuinfodfads"
 
-cpuDataText :: IO T.Text
-cpuDataText = T.readFile cpuDataPath
+cpuDataText :: IO (ErrorT T.Text)
+cpuDataText =
+  toErrorT <$> (tryError @IOError . T.readFile $ cpuDataPath)
 
 keyValueParser :: Parser (T.Text, T.Text)
 keyValueParser = do
@@ -29,21 +30,16 @@ keyValueParser = do
   value <- takeTill (== '\n')
   return (T.filter (not . isSpace) key, T.filter (not . isSpace) value)
 
-cpuDataExtract :: IO (Either ParserError [(T.Text, T.Text)])
+cpuDataExtract :: IO (ErrorT [(T.Text, T.Text)])
 cpuDataExtract = do
-  txt <- cpuDataText
-  return $ case parseOnly (many1' keyValueParser) txt of
-    Left str -> Left . ParserFailed $ str
-    Right lsts -> Right lsts
+  withErrorStack (parseOnly (many1' keyValueParser)) <$> cpuDataText
 
 data CPUData = CPUData {modelName :: T.Text} deriving (Generic)
 
 instance ToJSON CPUData
 
-getCPUData :: IO (Either ErrorStack CPUData)
+getCPUData :: IO (ErrorT CPUData)
 getCPUData = do
   extract <- cpuDataExtract
-  return $ do
-    alist <- toEitherErrorStack extract
-    (_, val) <- toEitherErrorStack $ fromMaybe FailedToFindElement $ find (\(key, _) -> key == "modelname") alist
-    return $ CPUData {modelName = val}
+  return $
+    CPUData . snd <$> withErrorStack (toError . fromMaybe FailedToFindElement . find (\(key, _) -> key == "modelname")) extract

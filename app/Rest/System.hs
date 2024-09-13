@@ -4,7 +4,7 @@ module Rest.System where
 
 import Control.Monad.IO.Class (liftIO)
 import Data.Bifunctor (first)
-import Error (ErrorStack (..), toEitherErrorStack)
+import Error (ErrorStack (..), toEitherErrorStack, ErrorT, withErrorStack, toErrorT)
 import Rest.Utils (eitherErrorStackToServer)
 import System.CPU (CPUData, getCPUData)
 import System.OS (OSInfo, getOSInfo)
@@ -13,6 +13,8 @@ import TinyServant.API.ContentTypes (JSON)
 import TinyServant.API.UVerb (UVerb, WithStatus (..))
 import TinyServant.Combinators ((:<|>) (..), (:>))
 import TinyServant.Server (Server)
+
+type WithErrorStack a lst res = UVerb
 
 type SystemAPI =
   "system"
@@ -25,10 +27,12 @@ osServer =
   (handleOSInfo >>= eitherErrorStackToServer)
     :<|> (getCPUData >>= eitherErrorStackToServer)
 
-handleOSInfo :: IO (Either ErrorStack OSInfo)
+handleOSInfo :: IO (ErrorT OSInfo)
 handleOSInfo = do
   parserResult <- liftIO getOSInfo
-  return $ first (\e -> ErrorStack [e]) parserResult
+  return $ withErrorStack pure (toErrorT parserResult)
+  -- return $ first (\e -> ErrorStack [e]) parserResult
 
-handleCPUData :: IO (Either ErrorStack CPUData)
+handleCPUData :: IO (ErrorT CPUData)
 handleCPUData = getCPUData
+

@@ -71,14 +71,14 @@ instance (Read a, HasServer r) => HasServer (Capture a :> r) where
     route (Proxy @r) (handler a) xs req
   route _ _ _ _ = Nothing
 
-instance HasServer Raw where
-  route ::
-    Proxy Raw ->
-    IO [T.Text] ->
-    [T.Text] ->
-    Request ->
-    Maybe (IO Response)
-  rout _ handler
+-- instance HasServer Raw where
+--   route ::
+--     Proxy Raw ->
+--     IO [T.Text] ->
+--     [T.Text] ->
+--     Request ->
+--     Maybe (IO Response)
+--   rout _ handler
 
 -- * Server interpretation
 

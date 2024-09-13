@@ -3,13 +3,14 @@
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    ps-overlay.url = "github:thomashoneyman/purescript-overlay";
     haskellNix = {
       url = "github:jeslie0/haskell.nix";
       # inputs.nixpkgs.follows = "nixpkgs";
     };
   };
 
-  outputs = { self, nixpkgs, haskellNix }:
+  outputs = { self, nixpkgs, ps-overlay, haskellNix }:
     let
       supportedSystems =
         [ "aarch64-linux" "x86_64-linux" "aarch64-darwin" "x86_64-darwin" ];
@@ -20,7 +21,7 @@
       nixpkgsFor = forAllSystems (system:
         import nixpkgs {
           inherit system;
-          overlays = [ haskellNix.overlay ];
+          overlays = [ haskellNix.overlay ps-overlay.overlays.default ];
         });
 
       ghcVersion =
@@ -91,10 +92,17 @@
 
                 buildInputs = with (haskellPackages system);
                   [  haskell-language-server
+                     pkgs.purescript-language-server-unstable
                      cabal-install
                      pkgs.cmake
                      pkgs.alsa-lib
+                     pkgs.spago-unstable
+                     pkgs.purs-unstable
+                     pkgs.nodePackages.npm
+                     pkgs.nodejs
+                     pkgs.purs-tidy
                   ];
+
 
                 # Add build inputs of the following derivations.
                 inputsFrom = [ ];

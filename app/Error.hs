@@ -1,36 +1,100 @@
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE MonoLocalBinds #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MonoLocalBinds #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE OverloadedStrings #-}
+
 module Error where
 
-import Control.Exception (Exception (..), try)
-import Data.Aeson (ToJSON)
-import Data.Aeson.Types (ToJSON (..))
-import GHC.Generics (Generic)
+import Control.Monad.Writer qualified as W
+import Data.Functor ((<&>))
+import Data.Text qualified as T
 
-data Error = forall a. (Exception a) => Error a
+data LogLevel
+  = Emergency
+  | Alert
+  | Critical
+  | Error
+  | Warning
+  | Notice
+  | Informational
+  | Debug
+  deriving (Eq, Show, Ord)
 
-instance ToJSON Error where
-  toJSON (Error e) = toJSON $ displayException e
+-- | A class to represent an error.
+class Loggable a where
+  showLog :: a -> T.Text
+  logLevel :: LogLevel
 
-newtype ErrorStack = ErrorStack [Error] deriving (Generic)
+instance Show (Log) where
+  show (Log a) = T.unpack . showLog $ a
 
-instance ToJSON ErrorStack
+-- | An existential type to allow working with errors of different
+-- types generically.
+data Log = forall a. (Loggable a) => Log a
 
-push :: forall e. (Exception e) => e -> ErrorStack -> ErrorStack
-push err (ErrorStack stack) = ErrorStack (Error err : stack)
+newtype LogStack = LogStack [Log] deriving (Semigroup, Monoid, Show)
 
-toEitherErrorStack ::  Exception e => Either e b -> Either ErrorStack b
-toEitherErrorStack (Left e) = Left $ ErrorStack [Error e]
-toEitherErrorStack (Right b) = Right b
+type LogWriter a = W.Writer LogStack (Maybe a)
 
-fromMaybe ::  Exception e => e -> Maybe b -> Either e b
-fromMaybe err Nothing = Left err
-fromMaybe _ (Just b) = Right b
+data BasicLog = BLog T.Text
 
-tryError :: forall e a. (Exception e) => IO a -> IO (Either Error a)
-tryError io = do
-  eith <- try @e io
-  return $ case eith of
-    Left ex -> Left . Error $ ex
-    Right a -> Right a
+instance Loggable BasicLog where
+  showLog (BLog txt) = txt
+  logLevel = Informational
+
+f1 :: LogWriter Int
+f1 = do
+  W.tell $ LogStack [Log (BLog "hi")]
+  pure $ Just 1
+
+f2 :: LogWriter Int
+f2 = do
+  W.tell $ LogStack [Log (BLog "woah")]
+  pure Nothing
+
+foo :: Maybe a -> (a -> LogWriter b) -> LogWriter b
+foo (Just a) f = f a
+foo Nothing f = pure Nothing
+
+f3 :: LogWriter Int
+f3 = do
+  m1 <- f1
+  _ <- f2
+  foo m1 (\_ -> f1)
+
+
+-- instance Functor LogWriter where
+--   fmap f (LogWriter w) = LogWriter $ fmap (fmap f) w
+
+-- instance Applicative LogWriter where
+--   pure a = LogWriter $ (pure . pure) a
+
+--   (LogWriter wmf) <*> (LogWriter wma) = LogWriter $ do
+--     (mf, logs) <- W.listen wmf
+--     (ma, logs') <- W.listen wma
+--     W.writer (liftA2 ($) mf ma, logs <> logs')
+
+-- instance Monad LogWriter where
+--   LogWriter wma >>= f = LogWriter $ do
+--     (ma, logs) <- W.listen wma
+--     case ma of
+--       Nothing -> W.writer (Nothing, logs)
+--       Just a -> do
+--         W.listen
+
+-- -- | Extract a potential result and logs.
+-- runWriter :: LogWriter a -> (Maybe a, LogStack)
+-- runWriter (LogWriter logs) = W.runWriter logs
+
+-- -- | Extract the current logs.
+-- getLogStack :: LogWriter a -> LogStack
+-- getLogStack (LogWriter logs) = W.execWriter logs
+
+-- -- | Add a log and result to the log writer
+-- writer :: (a, Log) -> LogWriter a
+-- writer (a, l) = LogWriter (W.writer (Just a, LogStack [l]))
+
+-- tell :: Log -> LogWriter ()
+-- tell l = LogWriter (Just <$> W.tell (LogStack [l]))

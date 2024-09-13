@@ -1,0 +1,47 @@
+package:
+  name: web
+  dependencies:
+    - console
+    - deku-core
+    - deku-css
+    - deku-dom
+    - effect
+    - prelude
+  test:
+    main: Test.Main
+    dependencies: []
+workspace:
+  packageSet:
+    registry: 60.0.0
+  extraPackages:
+    deku-core:
+      git: https://github.com/mikesol/purescript-deku.git
+      ref: 6b7c392da7782fe0f2e34811e36b11e630e10b26
+      subdir: deku-core
+
+    deku-css:
+      git: https://github.com/mikesol/purescript-deku.git
+      ref: 6b7c392da7782fe0f2e34811e36b11e630e10b26
+      subdir: deku-css
+
+    deku-dom:
+      git: https://github.com/mikesol/purescript-deku.git
+      ref: 6b7c392da7782fe0f2e34811e36b11e630e10b26
+      subdir: deku-dom
+
+    hyrule:
+      git: "https://github.com/mikesol/purescript-hyrule.git"
+      ref: "f508363b9ad7e2389ea8b3433f7e2ee1b1f8fa25"
+      dependencies:
+        - effect
+        - js-timers
+        - web-html
+        - unsafe-reference
+        - web-uievents
+        - avar
+
+    bolson:
+      git: "https://github.com/mikesol/purescript-bolson.git"
+      ref: "d87900c"
+      dependencies:
+        - hyrule

@@ -1,0 +1,17 @@
+{
+  "name": "assistant-pi",
+  "version": "0.1.0",
+  "description": "Frontent for assistant pi",
+  "scripts": {
+    "test": "spago test",
+    "start": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "author": "James Leslie",
+  "license": "MIT",
+  "dependencies": {
+    "@patternfly/patternfly": "^5.4.0",
+    "vite": "^5.4.5"
+  }
+}
