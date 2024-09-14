@@ -12,3 +12,5 @@ generated-docs/
 .spago
 
 dist
+pure.js
+pure.js.map
