@@ -6,7 +6,9 @@ package:
     - deku-css
     - deku-dom
     - effect
+    - js-timers
     - prelude
+    - random
   test:
     main: Test.Main
     dependencies: []

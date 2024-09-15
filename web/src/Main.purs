@@ -1,7 +1,9 @@
 module Main where
 
+import Pages
 import Prelude
 
+import Control.Monad.ST.Global (toEffect)
 import Data.Tuple (Tuple(..))
 import Deku.Control as DC
 import Deku.Core (Nut)
@@ -9,6 +11,7 @@ import Deku.DOM as DD
 import Deku.DOM.Attributes as DA
 import Deku.DOM.Listeners as DL
 import Deku.Do as Deku
+import Deku.Effect as DE
 import Deku.Hooks ((<#~>))
 import Deku.Hooks as DH
 import Deku.Toplevel (runInBody)
@@ -17,11 +20,12 @@ import Effect.Console as Console
 import FRP.Event (Event)
 import FRP.Poll (Poll)
 import KlassList as DA
-import Pages
+
 
 main :: Effect Unit
 main = do
-  _ <- runInBody dekuApp
+  app <- dekuApp
+  _ <- runInBody app
   pure unit
 
 header :: Poll Page -> (Page -> Effect Unit) -> Nut
@@ -62,19 +66,23 @@ type PageStates =
   , applicationsPageState :: Poll ApplicationsPageState
   }
 
-dekuApp :: Nut
-dekuApp = Deku.do
-  Tuple setOverviewPageState overviewPageState <- DH.useHot initialOverviewPageState
-  Tuple setSystemPageState systemPageState <- DH.useHot initialSystemPageState
-  Tuple setApplicationsPageState applicationsPageState <- DH.useHot initialApplicationsPageState
 
-  Tuple setPage page <- DH.useState Overview
-  let
-    changePage newPage = do
-      Console.logShow newPage
-      setPage newPage
+dekuApp :: Effect Nut
+dekuApp = do
+  Tuple setSystemPageState systemPageState <- DE.useState initialSystemPageState
+  _ <- getAndSetSystemPageInfo setSystemPageState
 
-  DD.div [ DA.klass_ "pf-v5-c-page" ]
-    [ header page changePage
-    , pageBody page { overviewPageState, systemPageState, applicationsPageState }
-    ]
+  pure Deku.do
+    Tuple setOverviewPageState overviewPageState <- DH.useHot initialOverviewPageState
+    Tuple setApplicationsPageState applicationsPageState <- DH.useHot initialApplicationsPageState
+
+    Tuple setPage page <- DH.useState System
+    let
+      changePage newPage = do
+        Console.logShow newPage
+        setPage newPage
+
+    DD.div [ DA.klass_ "pf-v5-c-page" ]
+      [ header page changePage
+      , pageBody page { overviewPageState, systemPageState, applicationsPageState }
+      ]

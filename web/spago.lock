@@ -9,7 +9,9 @@ workspace:
           - deku-css
           - deku-dom
           - effect
+          - js-timers
           - prelude
+          - random
         build_plan:
           - aff
           - arrays
