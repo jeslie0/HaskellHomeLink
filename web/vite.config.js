@@ -1,5 +1,7 @@
 import { defineConfig } from 'vite'
 import { exec } from "child_process"
+import pluginPurgeCss from "vite-plugin-purgecss-updated-v5";
+import simpleHtmlPlugin from 'vite-plugin-simple-html';
 
 function purescriptPlugin() {
     return {
@@ -35,7 +37,7 @@ function purescriptPlugin() {
 }
 
 export default defineConfig({
-    plugins: [purescriptPlugin()],
+    plugins: [purescriptPlugin(), pluginPurgeCss()],
     server: {
         open: true
     }

@@ -1,14 +1,14 @@
 module Main where
 
-import Pages
-import Prelude
+import Pages (ApplicationsPageState, OverviewPageState, Page(..), SystemPageState, applicationsPage, getAndSetSystemPageInfo, initialApplicationsPageState, initialOverviewPageState, initialSystemPageState, overviewPage, pageList, systemPage)
+import Prelude (Unit, bind, discard, pure, show, unit, ($), (<#>), (<>), (==))
 
-import Control.Monad.ST.Global (toEffect)
+import Data.Tuple.Nested ((/\))
 import Data.Tuple (Tuple(..))
 import Deku.Control as DC
 import Deku.Core (Nut)
 import Deku.DOM as DD
-import Deku.DOM.Attributes as DA
+import Deku.DOM.Attributes (klass, klass_, role_) as DA
 import Deku.DOM.Listeners as DL
 import Deku.Do as Deku
 import Deku.Effect as DE
@@ -17,10 +17,7 @@ import Deku.Hooks as DH
 import Deku.Toplevel (runInBody)
 import Effect (Effect)
 import Effect.Console as Console
-import FRP.Event (Event)
 import FRP.Poll (Poll)
-import KlassList as DA
-
 
 main :: Effect Unit
 main = do
@@ -66,15 +63,14 @@ type PageStates =
   , applicationsPageState :: Poll ApplicationsPageState
   }
 
-
 dekuApp :: Effect Nut
 dekuApp = do
-  Tuple setSystemPageState systemPageState <- DE.useState initialSystemPageState
+  _ /\ setSystemPageState /\ systemPageState <- DE.useHot initialSystemPageState
   _ <- getAndSetSystemPageInfo setSystemPageState
 
   pure Deku.do
-    Tuple setOverviewPageState overviewPageState <- DH.useHot initialOverviewPageState
-    Tuple setApplicationsPageState applicationsPageState <- DH.useHot initialApplicationsPageState
+    Tuple _setOverviewPageState overviewPageState <- DH.useHot initialOverviewPageState
+    Tuple _setApplicationsPageState applicationsPageState <- DH.useHot initialApplicationsPageState
 
     Tuple setPage page <- DH.useState System
     let

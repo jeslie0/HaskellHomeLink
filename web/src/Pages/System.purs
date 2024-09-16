@@ -1,17 +1,18 @@
 module Pages.System (HardwareInformation, TemperatureInformation, systemPage, SystemPageState, initialSystemPageState, getAndSetSystemPageInfo) where
 
-import Effect.Timer (IntervalId, setInterval)
 import Prelude
 
 import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Number.Format (fixed, toStringWith)
 import Deku.Control as DC
 import Deku.Core (Nut)
 import Deku.DOM as DD
 import Deku.DOM.Attributes as DA
 import Effect (Effect)
+import Effect.Random (random)
+import Effect.Timer (IntervalId, setInterval)
 import FRP.Poll (Poll)
 import Patternfly (dlistGroup, gallery, galleryItem)
-import Effect.Random (random)
 
 getAndSetSystemPageInfo :: (SystemPageState -> Effect Unit) -> Effect IntervalId
 getAndSetSystemPageInfo update = do
@@ -96,7 +97,8 @@ temperatureCard tempInfoPoll =
   where
   descriptionList =
     DD.dl [ DA.klass_ "pf-v5-c-description-list pf-m-horizontal" ]
-      [ dlistGroup "CPU Temperature" $ tempInfoPoll <#> \info -> fromMaybe "-" $ info.cpuTemperatureC <#> \temp -> show temp <> " C"
+      [ dlistGroup "CPU Temperature" $ tempInfoPoll <#>
+          \info -> fromMaybe "-" $ info.cpuTemperatureC <#> \temp -> toStringWith (fixed 1) temp <> " C"
       ]
 
 systemPage :: Poll SystemPageState -> Nut

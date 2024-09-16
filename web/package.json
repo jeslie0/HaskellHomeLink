@@ -4,14 +4,16 @@
   "description": "Frontent for assistant pi",
   "scripts": {
     "test": "spago test",
-    "start": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "start": "vite src",
+    "build": "vite build src --outDir ../dist --emptyOutDir",
+    "preview": "vite preview src"
   },
   "author": "James Leslie",
   "license": "MIT",
   "dependencies": {
-    "@patternfly/patternfly": "^5.4.0",
+    "@patternfly/patternfly": "^5.4.0"
+  },
+  "devDependencies": {
     "vite": "^5.4.5"
   }
 }
