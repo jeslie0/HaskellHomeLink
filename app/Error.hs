@@ -1,14 +1,11 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MonoLocalBinds #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE OverloadedStrings #-}
 
 module Error where
 
 import Control.Monad.Writer qualified as W
-import Data.Functor ((<&>))
 import Data.Text qualified as T
 
 data LogLevel
@@ -27,7 +24,7 @@ class Loggable a where
   showLog :: a -> T.Text
   logLevel :: LogLevel
 
-instance Show (Log) where
+instance Show Log where
   show (Log a) = T.unpack . showLog $ a
 
 -- | An existential type to allow working with errors of different
@@ -38,31 +35,11 @@ newtype LogStack = LogStack [Log] deriving (Semigroup, Monoid, Show)
 
 type LogWriter a = W.Writer LogStack (Maybe a)
 
-data BasicLog = BLog T.Text
+newtype BasicLog = BLog T.Text
 
 instance Loggable BasicLog where
   showLog (BLog txt) = txt
   logLevel = Informational
-
-f1 :: LogWriter Int
-f1 = do
-  W.tell $ LogStack [Log (BLog "hi")]
-  pure $ Just 1
-
-f2 :: LogWriter Int
-f2 = do
-  W.tell $ LogStack [Log (BLog "woah")]
-  pure Nothing
-
-foo :: Maybe a -> (a -> LogWriter b) -> LogWriter b
-foo (Just a) f = f a
-foo Nothing f = pure Nothing
-
-f3 :: LogWriter Int
-f3 = do
-  m1 <- f1
-  _ <- f2
-  foo m1 (\_ -> f1)
 
 
 -- instance Functor LogWriter where

@@ -63,26 +63,29 @@ executable AssistantPi
 
 
     -- Modules included in this executable, other than Main.
-    other-modules:    Error,
-                      ErrorStack,
-                      Error.Generic,
-                      Error.Parser,
-                      Rest.Server,
-                      Rest.System,
-                      Rest.Utils,
-                      System.CPU,
-                      System.OS,
-                      TinyServant,
-                      TinyServant.API,
-                      TinyServant.API.ContentTypes,
-                      TinyServant.API.Status,
-                      TinyServant.API.UVerb,
-                      TinyServant.API.ResponseHeaders,
-                      TinyServant.API.Header,
-                      TinyServant.Combinators,
-                      TinyServant.Server,
-                      TinyServant.Server.UVerb,
-                      TinyServant.Union
+    other-modules:
+-- Error,
+                      -- ErrorStack,
+                      -- Error.Generic,
+                      -- Error.Parser,
+                      MP3,
+                      HTTP.Client,
+                      -- Rest.Server,
+                      -- Rest.System,
+                      -- Rest.Utils,
+                      -- System.CPU,
+                      -- System.OS,
+                      -- TinyServant,
+                      -- TinyServant.API,
+                      -- TinyServant.API.ContentTypes,
+                      -- TinyServant.API.Status,
+                      -- TinyServant.API.UVerb,
+                      -- TinyServant.API.ResponseHeaders,
+                      -- TinyServant.API.Header,
+                      -- TinyServant.Combinators,
+                      -- TinyServant.Server,
+                      -- TinyServant.Server.UVerb,
+                      -- TinyServant.Union
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
@@ -91,12 +94,14 @@ executable AssistantPi
     build-depends:    aeson <= 2.1.2.1,
                       base-compat-batteries,
                       case-insensitive,
-                      -- alsa-hs,
+                      alsa-hs,
                       attoparsec,
                       base ^>=4.18.2.1,
                       bytestring,
                       deepseq,
                       http-api-data,
+                      http-client,
+                      http-client-tls,
                       http-media,
                       http-types,
                       mtl,
@@ -116,3 +121,12 @@ executable AssistantPi
     default-language: GHC2021
 
     ghc-options: -O2 -threaded -with-rtsopts=-N
+
+    c-sources: cbits/my_mini.c
+
+    include-dirs: cbits
+
+    -- includes: cbits/minimp3.h
+
+    -- extra-lib-dirs: cbits
+    -- extra-libraries: mp3mini
