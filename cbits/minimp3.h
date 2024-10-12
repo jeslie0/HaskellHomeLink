@@ -39,7 +39,6 @@ int mp3dec_decode_frame(mp3dec_t *dec, const uint8_t *mp3, int mp3_bytes, mp3d_s
 }
 #endif /* __cplusplus */
 
-#endif /* MINIMP3_H */
 #if defined(MINIMP3_IMPLEMENTATION) && !defined(_MINIMP3_IMPLEMENTATION_GUARD)
 #define _MINIMP3_IMPLEMENTATION_GUARD
 
@@ -1863,3 +1862,4 @@ void mp3dec_f32_to_s16(const float *in, int16_t *out, int num_samples)
 }
 #endif /* MINIMP3_FLOAT_OUTPUT */
 #endif /* MINIMP3_IMPLEMENTATION && !_MINIMP3_IMPLEMENTATION_GUARD */
+#endif /* MINIMP3_H */
