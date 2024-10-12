@@ -125,8 +125,3 @@ executable AssistantPi
     c-sources: cbits/my_mini.c
 
     include-dirs: cbits
-
-    -- includes: cbits/minimp3.h
-
-    -- extra-lib-dirs: cbits
-    -- extra-libraries: mp3mini
