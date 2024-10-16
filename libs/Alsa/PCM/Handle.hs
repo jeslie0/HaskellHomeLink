@@ -16,10 +16,11 @@ data Snd_PCM_t
 
 newtype PCMHandle = PCMHandle (IORef (ForeignPtr Snd_PCM_t))
 
-foreign import capi unsafe "haskell_alsa.h snd_pcm_t_new" snd_pcm_t_new_c :: IO (Ptr Snd_PCM_t)
+foreign import capi safe "haskell_alsa.h snd_pcm_t_new" snd_pcm_t_new_c :: IO (Ptr Snd_PCM_t)
 
-foreign import capi unsafe "haskell_alsa.h &snd_pcm_t_free_unused" snd_pcm_t_free_unused_c :: FunPtr (Ptr Snd_PCM_t -> IO ())
+foreign import capi safe "haskell_alsa.h &snd_pcm_t_free_unused" snd_pcm_t_free_unused_c :: FunPtr (Ptr Snd_PCM_t -> IO ())
 
+{-# NOINLINE newPCMHandle #-}
 newPCMHandle :: IO PCMHandle
 newPCMHandle = do
   handlePtr <- snd_pcm_t_new_c
@@ -27,7 +28,7 @@ newPCMHandle = do
   ref <- newIORef frnPtr
   return $ PCMHandle ref
 
-foreign import capi unsafe "alsa/asoundlib.h &snd_pcm_close" snd_pcm_close_c :: FunPtr (Ptr Snd_PCM_t -> IO ())
+foreign import capi safe "alsa/asoundlib.h &snd_pcm_close" snd_pcm_close_c :: FunPtr (Ptr Snd_PCM_t -> IO ())
 
 data StreamType
   = Playback
@@ -40,8 +41,9 @@ data DeviceMode
   | PCMAsync
   deriving (Eq, Show, Enum)
 
-foreign import capi unsafe "haskell_alsa.h void_snd_pcm_open" void_snd_pcm_open_c :: Ptr (Ptr Snd_PCM_t) -> CString -> CInt -> CInt -> IO CInt
+foreign import capi safe "haskell_alsa.h void_snd_pcm_open" void_snd_pcm_open_c :: Ptr (Ptr Snd_PCM_t) -> CString -> CInt -> CInt -> IO CInt
 
+{-# NOINLINE openPCMHandle #-}
 openPCMHandle :: String -> StreamType -> DeviceMode -> PCMHandle -> IO Int
 openPCMHandle name stream mode (PCMHandle ref) = do
   frnPtr <- readIORef ref
@@ -54,24 +56,27 @@ openPCMHandle name stream mode (PCMHandle ref) = do
       writeIORef ref updatedFrnPtr
       return . fromIntegral $ rc
 
-foreign import capi unsafe "alsa/asoundlib.h snd_pcm_prepare" snd_pcm_prepare_c :: Ptr Snd_PCM_t -> IO CInt
+foreign import capi safe "alsa/asoundlib.h snd_pcm_prepare" snd_pcm_prepare_c :: Ptr Snd_PCM_t -> IO CInt
 
+{-# NOINLINE preparePCMHandle #-}
 preparePCMHandle :: PCMHandle -> IO Int
 preparePCMHandle (PCMHandle ref) = do
   frnPtr <- readIORef ref
   withForeignPtr frnPtr $ fmap fromIntegral . snd_pcm_prepare_c
 
-foreign import capi unsafe "alsa/asoundlib.h snd_pcm_avail_update" snd_pcm_avail_update_c :: Ptr Snd_PCM_t -> IO CLong
+foreign import capi safe "alsa/asoundlib.h snd_pcm_avail_update" snd_pcm_avail_update_c :: Ptr Snd_PCM_t -> IO CLong
 
 -- |Return number of frames ready to be read (capture) / written (playback)
 availablePCMFrames :: PCMHandle -> IO Int64
 availablePCMFrames (PCMHandle ref) = do
   frnPtr <- readIORef ref
   withForeignPtr frnPtr $ fmap fromIntegral . snd_pcm_avail_update_c
+{-# NOINLINE availablePCMFrames #-}
 
-foreign import capi unsafe "alsa/asoundlib.h snd_pcm_wait" snd_pcm_wait_c :: Ptr Snd_PCM_t -> CInt -> IO CInt
+foreign import capi safe "alsa/asoundlib.h snd_pcm_wait" snd_pcm_wait_c :: Ptr Snd_PCM_t -> CInt -> IO CInt
 
 waitPCM :: PCMHandle -> Int -> IO Int
 waitPCM (PCMHandle ref) n = do
   frnPtr <- readIORef ref
   withForeignPtr frnPtr $ \ptr -> fromIntegral <$> snd_pcm_wait_c ptr (fromIntegral n)
+{-# NOINLINE waitPCM #-}

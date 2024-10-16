@@ -70,7 +70,7 @@ playWhiteNoise = do
               loop (n + 1)
 
         _ <- preparePCMHandle handle
-        generateWhiteNoise ptr bufferSize
+        -- generateWhiteNoise ptr bufferSize
         _ <- loop 1
         _ <- drainDevice handle
         return ()

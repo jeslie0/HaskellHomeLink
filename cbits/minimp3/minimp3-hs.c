@@ -1,4 +1,4 @@
-#include "my_mini.h"
+#include "minimp3-hs.h"
 
 mp3dec_t* new_mp3dec_t()
 {

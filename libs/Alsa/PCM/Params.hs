@@ -11,9 +11,9 @@ import Foreign.C (CInt(..))
 
 data Snd_PCM_HW_Params_t
 
-foreign import capi unsafe "haskell_alsa.h snd_pcm_hw_params_t_new" snd_pcm_hw_params_t_new_c :: IO (Ptr Snd_PCM_HW_Params_t)
+foreign import capi safe "haskell_alsa.h snd_pcm_hw_params_t_new" snd_pcm_hw_params_t_new_c :: IO (Ptr Snd_PCM_HW_Params_t)
 
-foreign import capi unsafe "haskell_alsa.h &snd_pcm_hw_params_t_free_unused" snd_pcm_hw_params_t_free_unused_c :: FunPtr (Ptr Snd_PCM_HW_Params_t -> IO ())
+foreign import capi safe "haskell_alsa.h &snd_pcm_hw_params_t_free_unused" snd_pcm_hw_params_t_free_unused_c :: FunPtr (Ptr Snd_PCM_HW_Params_t -> IO ())
 
 newtype PCMParams = PCMParams (IORef (ForeignPtr Snd_PCM_HW_Params_t))
 
@@ -24,10 +24,11 @@ newPCMParams = do
   frnPtr <- newForeignPtr snd_pcm_hw_params_t_free_unused_c handlePtr
   ref <- newIORef frnPtr
   return $ PCMParams ref
+{-# NOINLINE newPCMParams #-}
 
-foreign import capi unsafe "haskell_alsa.h void_snd_pcm_hw_params_malloc" void_snd_pcm_hw_params_malloc_c :: Ptr (Ptr Snd_PCM_HW_Params_t) -> IO CInt
+foreign import capi safe "haskell_alsa.h void_snd_pcm_hw_params_malloc" void_snd_pcm_hw_params_malloc_c :: Ptr (Ptr Snd_PCM_HW_Params_t) -> IO CInt
 
-foreign import capi unsafe "alsa/asoundlib.h &snd_pcm_hw_params_free" snd_pcm_hw_params_free_c :: FunPtr (Ptr Snd_PCM_HW_Params_t -> IO ())
+foreign import capi safe "alsa/asoundlib.h &snd_pcm_hw_params_free" snd_pcm_hw_params_free_c :: FunPtr (Ptr Snd_PCM_HW_Params_t -> IO ())
 
 allocateParams :: PCMParams -> IO Int
 allocateParams (PCMParams ref) = do
@@ -41,7 +42,9 @@ allocateParams (PCMParams ref) = do
       writeIORef ref updatedFrnPtr
       return . fromIntegral $ rc
 
-foreign import capi unsafe "alsa/asoundlib.h snd_pcm_hw_params_any" snd_pcm_hw_params_any_c :: Ptr Snd_PCM_t -> Ptr Snd_PCM_HW_Params_t -> IO CInt
+{-# NOINLINE allocateParams #-}
+
+foreign import capi safe "alsa/asoundlib.h snd_pcm_hw_params_any" snd_pcm_hw_params_any_c :: Ptr Snd_PCM_t -> Ptr Snd_PCM_HW_Params_t -> IO CInt
 
 fillParams :: PCMHandle -> PCMParams -> IO Int
 fillParams (PCMHandle handleRef) (PCMParams paramRef) = do
@@ -49,3 +52,4 @@ fillParams (PCMHandle handleRef) (PCMParams paramRef) = do
   frnParamsPtr <- readIORef paramRef
   withForeignPtr frnHandlePtr $ \handlePtr ->
     withForeignPtr frnParamsPtr $ fmap fromIntegral . snd_pcm_hw_params_any_c handlePtr
+{-# NOINLINE fillParams #-}

@@ -7,8 +7,8 @@ import Foreign.C.ConstPtr (ConstPtr(..))
 import Foreign.C.String (peekCString)
 
 foreign import capi unsafe "alsa/error.h snd_strerror" snd_strerror_c :: CInt -> IO (ConstPtr CChar)
-
-getErrorString :: CInt -> IO String
+getErrorString :: Int -> IO String
 getErrorString n = do
-  ConstPtr cStr <- snd_strerror_c n
+  ConstPtr cStr <- snd_strerror_c . fromIntegral $ n
   peekCString cStr
+{-# NOINLINE getErrorString #-}

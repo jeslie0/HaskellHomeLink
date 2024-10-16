@@ -2,19 +2,23 @@
 
 module HTTP.Client where
 
+import Alsa.PCM.Error
 import Alsa.PCM.Handle
 import Alsa.PCM.Params
 import Alsa.PCM.Stream
+import Audio (generateSineWave)
 import Control.Concurrent
 import Control.Exception (bracket)
-import Control.Monad (unless, void, when)
+import Control.Monad (forM_, unless, void, when)
 import Data.ByteString qualified as BS
 import Data.ByteString.Internal qualified as BS
+import Data.ByteString.Lazy qualified as BL
 import Foreign (Int16, Ptr, Word8, allocaArray, withForeignPtr)
 import Foreign.Ptr (plusPtr)
-import MP3
+import Minimp3
 import Network.HTTP.Client qualified as HTTP
 import Network.HTTP.Client.TLS qualified as HTTPS
+import System.IO
 
 classicFMURL :: String
 classicFMURL = "https://media-ice.musicradio.com/ClassicFMMP3"
@@ -36,15 +40,16 @@ withAudioStream continueMvar chan = do
         writeChan chan chunk
         withBody bodyReader
 
+
 playAudio :: IO ()
 playAudio = do
   mvar <- newEmptyMVar @()
   mp3Dec <- newMP3Dec
-  chan <- newChan
+  chan <- newChan @BS.ByteString
   info <- newMP3DecFrameInfo
   _ <- forkIO $ withAudioStream mvar chan
   _ <- forkIO . allocaArray @Int16 1153 $ readChanAndPlay mp3Dec info chan
-  _ <- getLine
+  void getLine
   putMVar mvar ()
   return ()
 
@@ -52,38 +57,37 @@ newtype SR = SR Int
 
 newtype Channels = Channels Int
 
-
 -- | Given a sample rate and a number of channels, generate a
 -- PCMHandle to play mp3 data with.
 makeAudioHandle :: SR -> Channels -> IO PCMHandle
-makeAudioHandle (SR sampleRate) (Channels channels) = do
+makeAudioHandle  sr  channels = do
   handle <- newPCMHandle
   _ <- openPCMHandle "default" Playback PCMBlocking handle
-  _ <- configureDevice handle
+  _ <- configureDevice handle sr channels
   _ <- preparePCMHandle handle
   return handle
-  where
-    -- | Configure a PCMHandle with a sample rate and number of
-    -- channels for data extracted from an mp3 source.
-    configureDevice :: PCMHandle -> IO (Maybe Int)
-    configureDevice handle = do
-      params <- newPCMParams
-      _ <- allocateParams params
-      _ <- fillParams handle params
-      _ <- setAccess handle params RWInterleaved
-      _ <- setFormat handle params FormatS16LE
-      _ <- setChannels handle params channels
-      !sr <- setSampleRate handle params $ fromIntegral sampleRate
-      putStrLn $ "New sample rate = " <> show (sampleRateVal sr)
-      if errVal sr < 0
-        then putStrLn "Error: Can't set sample rate." >> return Nothing
-        else do
-          pcm' <- writeParamsToDriver handle params
-          if pcm' < 0
-            then do
-              putStrLn "Error: Can't set hardware parameters"
-              return Nothing
-            else return $ Just $ sampleRateVal sr
+
+-- | Configure a PCMHandle with a sample rate and number of
+-- channels for data extracted from an mp3 source.
+configureDevice :: PCMHandle -> SR -> Channels -> IO (Maybe Int)
+configureDevice handle (SR sampleRate) (Channels channels) = do
+    params <- newPCMParams
+    _ <- allocateParams params
+    _ <- fillParams handle params
+    _ <- setAccess handle params RWInterleaved
+    _ <- setFormat handle params FormatS16LE
+    _ <- setChannels handle params channels
+    !sr <- setSampleRate handle params $ fromIntegral sampleRate
+    putStrLn $ "New sample rate = " <> show (sampleRateVal sr)
+    if errVal sr < 0
+    then putStrLn "Error: Can't set sample rate." >> return Nothing
+    else do
+        pcm' <- writeParamsToDriver handle params
+        if pcm' < 0
+        then do
+            putStrLn "Error: Can't set hardware parameters"
+            return Nothing
+        else return $ Just $ sampleRateVal sr
 
 -- | Read the input buffer as MP3 data and play as many full frames as
 -- possible. Return the number of bytes that haven't been used.
@@ -96,23 +100,44 @@ readFramesAndPlay ::
   MP3DecFrameInfo ->
   -- | Input PCM buffer
   (Ptr Word8, Int) ->
+  -- | Buffer to store data in
   Ptr Int16 ->
   IO Int
 readFramesAndPlay handle mp3 info mp3Data pcmData =
   go mp3Data
   where
-    go (mp3Ptr, mp3Len) = do
-      samples <- decodeFrame mp3 mp3Ptr mp3Len info pcmData
-      let consumed = getFrameBytes info
-          newMP3Len = mp3Len - consumed
-      if samples == 0 && consumed == 0
-        then return mp3Len
-        else do
-          unless (samples == 0 && consumed > 0) $ void $ do
-            void . writeBuffer handle pcmData $ fromIntegral samples
-          if computeFrameSize info > newMP3Len
-            then return newMP3Len
+    go (mp3Ptr, !mp3Len) = do
+      -- The number of PCM samples extracted
+      !samples <- decodeFrame mp3 mp3Ptr mp3Len info pcmData
+      !consumed <- getFrameBytes info
+
+      let
+        -- | The number of MP3 samples taken from the buffer
+        !newMP3Len = mp3Len - consumed
+
+      putStrLn $ "decoded: " <> show samples
+
+      decide mp3Ptr newMP3Len samples consumed
+
+    decide mp3Ptr newMP3Len samples consumed
+      | samples > 0 && consumed > 0 = do
+          void . writeBuffer handle pcmData $ fromIntegral samples
+          frameSize <- computeFrameSize info
+          if frameSize > newMP3Len
+            then do
+            putStrLn $ "computed frame size is larger than remaining bytes: " <> show frameSize <> " > " <> show newMP3Len
+            return newMP3Len
             else go (mp3Ptr `plusPtr` consumed, newMP3Len)
+
+      | samples == 0 && consumed > 0 = do
+          putStrLn "Invalid data"
+          return newMP3Len
+      | samples == 0 && consumed == 0 = do
+          putStrLn "Insufficient data"
+          return newMP3Len
+      | otherwise = do
+          putStrLn "Impossible situation"
+          return 0
 
 -- | Get bytes from the channel, decode them to PCM and then play the audio.
 readChanAndPlay ::
@@ -126,21 +151,25 @@ readChanAndPlay ::
   Ptr Int16 ->
   IO ()
 readChanAndPlay mp3 info chan pcmData = do
-  bracket makePCMHandleFromStream drainDevice $ \handle -> go handle ""
+  bracket (makePCMHandleFromStream mp3 info chan pcmData) drainDevice $ \handle -> go handle ""
   where
-    go handle leftoverBytes = do
+    go handle !leftoverBytes = do
       newBytes <- readChan chan
-      let mp3Data@(BS.BS frnPtr mp3Len) = BS.append leftoverBytes newBytes
+      let mp3Data@(BS.BS !frnPtr !mp3Len) = BS.append leftoverBytes newBytes
       withForeignPtr frnPtr $ \mp3Ptr -> do
-        leftOverAmount <- readFramesAndPlay handle mp3 info (mp3Ptr, mp3Len) pcmData
+        !leftOverAmount <- readFramesAndPlay handle mp3 info (mp3Ptr, mp3Len) pcmData
+        putStrLn $ "Left over amount = " <> show leftOverAmount
         go handle $ BS.takeEnd leftOverAmount mp3Data
 
-    makePCMHandleFromStream = do
-      BS.BS frnPtr mp3Len <- readChan chan
-      withForeignPtr frnPtr $ \mp3Data -> do
-        void $ decodeFrame mp3 mp3Data mp3Len info pcmData
-        makeAudioHandle (SR $ getHz info) (Channels $ getChannels info)
+makePCMHandleFromStream :: MP3Dec -> MP3DecFrameInfo -> Chan BS.ByteString -> Ptr Int16 -> IO PCMHandle
+makePCMHandleFromStream mp3 info chan pcmData = do
+    BS.BS frnPtr mp3Len <- readChan chan
+    withForeignPtr frnPtr $ \mp3Data -> do
+      void $ decodeFrame mp3 mp3Data mp3Len info pcmData
+      freq <- getHz info
+      chans <- getChannels info
+      makeAudioHandle (SR freq ) (Channels $ chans)
 
-computeFrameSize :: MP3DecFrameInfo -> Int
+computeFrameSize :: MP3DecFrameInfo -> IO Int
 computeFrameSize info =
-  144 * (getBitrateKPBS info * 1000) `div` getHz info
+  (\bitrate hz -> 144 * (bitrate * 1000) `div` hz) <$> getBitrateKPBS info <*> getHz info

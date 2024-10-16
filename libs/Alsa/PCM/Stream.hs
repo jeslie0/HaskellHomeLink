@@ -19,8 +19,9 @@ data SndPCMAccess
   | RWNonInterleaved
   deriving (Enum, Eq, Show)
 
-foreign import capi unsafe "alsa/asoundlib.h snd_pcm_hw_params_set_access" snd_pcm_hw_params_set_access_c :: Ptr Snd_PCM_t -> Ptr Snd_PCM_HW_Params_t -> CInt -> IO CInt
+foreign import capi safe "alsa/asoundlib.h snd_pcm_hw_params_set_access" snd_pcm_hw_params_set_access_c :: Ptr Snd_PCM_t -> Ptr Snd_PCM_HW_Params_t -> CInt -> IO CInt
 
+{-# NOINLINE setAccess #-}
 setAccess :: PCMHandle -> PCMParams -> SndPCMAccess -> IO CInt
 setAccess (PCMHandle handleRef) (PCMParams paramRef) access = do
   frnHandlePtr <- readIORef handleRef
@@ -51,8 +52,9 @@ data SndPCMFormat
   | FormatFloat64BE
   deriving (Enum, Eq, Show)
 
-foreign import capi unsafe "alsa/asoundlib.h snd_pcm_hw_params_set_format" snd_pcm_hw_params_set_format_c :: Ptr Snd_PCM_t -> Ptr Snd_PCM_HW_Params_t -> CInt -> IO CInt
+foreign import capi safe "alsa/asoundlib.h snd_pcm_hw_params_set_format" snd_pcm_hw_params_set_format_c :: Ptr Snd_PCM_t -> Ptr Snd_PCM_HW_Params_t -> CInt -> IO CInt
 
+{-# NOINLINE setFormat #-}
 setFormat :: PCMHandle -> PCMParams -> SndPCMFormat -> IO CInt
 setFormat (PCMHandle handleRef) (PCMParams paramRef) format = do
   frnHandlePtr <- readIORef handleRef
@@ -61,8 +63,9 @@ setFormat (PCMHandle handleRef) (PCMParams paramRef) format = do
     withForeignPtr frnParamsPtr $ \paramsPtr ->
       fromIntegral <$> snd_pcm_hw_params_set_format_c handlePtr paramsPtr (fromIntegral . fromEnum $ format)
 
-foreign import capi unsafe "alsa/asoundlib.h snd_pcm_hw_params_set_channels" snd_pcm_hw_params_set_channels_c :: Ptr Snd_PCM_t -> Ptr Snd_PCM_HW_Params_t -> CInt -> IO CInt
+foreign import capi safe "alsa/asoundlib.h snd_pcm_hw_params_set_channels" snd_pcm_hw_params_set_channels_c :: Ptr Snd_PCM_t -> Ptr Snd_PCM_HW_Params_t -> CInt -> IO CInt
 
+{-# NOINLINE setChannels #-}
 setChannels :: PCMHandle -> PCMParams -> Int -> IO CInt
 setChannels (PCMHandle handleRef) (PCMParams paramRef) channels = do
   frnHandlePtr <- readIORef handleRef
@@ -82,8 +85,9 @@ dirVal (SampleRate (_, n, _)) = n
 sampleRateVal :: SampleRate -> Int
 sampleRateVal (SampleRate (_, n, _)) = n
 
-foreign import capi unsafe "alsa/asoundlib.h snd_pcm_hw_params_set_rate_near" snd_pcm_hw_params_set_rate_near_c :: Ptr Snd_PCM_t -> Ptr Snd_PCM_HW_Params_t -> Ptr CUInt -> Ptr CInt -> IO CInt
+foreign import capi safe "alsa/asoundlib.h snd_pcm_hw_params_set_rate_near" snd_pcm_hw_params_set_rate_near_c :: Ptr Snd_PCM_t -> Ptr Snd_PCM_HW_Params_t -> Ptr CUInt -> Ptr CInt -> IO CInt
 
+{-# NOINLINE setSampleRate #-}
 setSampleRate :: PCMHandle -> PCMParams -> Word -> IO SampleRate
 setSampleRate (PCMHandle handleRef) (PCMParams paramRef) sampleRate = do
   frnHandlePtr <- readIORef handleRef
@@ -98,8 +102,9 @@ setSampleRate (PCMHandle handleRef) (PCMParams paramRef) sampleRate = do
           dir <- peek dirPtr
           return . SampleRate $ (fromIntegral err, fromIntegral newSampleRate, fromIntegral dir)
 
-foreign import capi unsafe "alsa/asoundlib.h snd_pcm_hw_params_set_buffer_size" snd_pcm_hw_params_set_buffer_size_c :: Ptr Snd_PCM_t -> Ptr Snd_PCM_HW_Params_t -> CULong -> IO CInt
+foreign import capi safe "alsa/asoundlib.h snd_pcm_hw_params_set_buffer_size" snd_pcm_hw_params_set_buffer_size_c :: Ptr Snd_PCM_t -> Ptr Snd_PCM_HW_Params_t -> CULong -> IO CInt
 
+{-# NOINLINE setBufferSize #-}
 setBufferSize :: PCMHandle -> PCMParams -> Word64 -> IO Int
 setBufferSize (PCMHandle handleRef) (PCMParams paramRef) size = do
   frnHandlePtr <- readIORef handleRef
@@ -107,8 +112,9 @@ setBufferSize (PCMHandle handleRef) (PCMParams paramRef) size = do
   withForeignPtr frnHandlePtr $ \handlePtr ->
     withForeignPtr frnParamsPtr $ \paramsPtr -> fromIntegral <$> snd_pcm_hw_params_set_buffer_size_c handlePtr paramsPtr (fromIntegral size)
 
-foreign import capi unsafe "alsa/asoundlib.h snd_pcm_hw_params_set_period_size" snd_pcm_hw_params_set_period_size_c :: Ptr Snd_PCM_t -> Ptr Snd_PCM_HW_Params_t -> CULong -> CInt -> IO CInt
+foreign import capi safe "alsa/asoundlib.h snd_pcm_hw_params_set_period_size" snd_pcm_hw_params_set_period_size_c :: Ptr Snd_PCM_t -> Ptr Snd_PCM_HW_Params_t -> CULong -> CInt -> IO CInt
 
+{-# NOINLINE setPeriodSize #-}
 setPeriodSize :: PCMHandle -> PCMParams -> Word64 -> Int -> IO Int
 setPeriodSize (PCMHandle handleRef) (PCMParams paramRef) size dir = do
   frnHandlePtr <- readIORef handleRef
@@ -116,8 +122,9 @@ setPeriodSize (PCMHandle handleRef) (PCMParams paramRef) size dir = do
   withForeignPtr frnHandlePtr $ \handlePtr ->
     withForeignPtr frnParamsPtr $ \paramsPtr -> fromIntegral <$> snd_pcm_hw_params_set_period_size_c handlePtr paramsPtr (fromIntegral size) (fromIntegral dir)
 
-foreign import capi unsafe "alsa/asoundlib.h snd_pcm_hw_params" snd_pcm_hw_params_c :: Ptr Snd_PCM_t -> Ptr Snd_PCM_HW_Params_t -> IO CInt
+foreign import capi safe "alsa/asoundlib.h snd_pcm_hw_params" snd_pcm_hw_params_c :: Ptr Snd_PCM_t -> Ptr Snd_PCM_HW_Params_t -> IO CInt
 
+{-# NOINLINE writeParamsToDriver #-}
 writeParamsToDriver :: PCMHandle -> PCMParams -> IO Int
 writeParamsToDriver (PCMHandle handleRef) (PCMParams paramRef) = do
   frnHandlePtr <- readIORef handleRef
@@ -125,15 +132,16 @@ writeParamsToDriver (PCMHandle handleRef) (PCMParams paramRef) = do
   withForeignPtr frnHandlePtr $ \handlePtr ->
     withForeignPtr frnParamsPtr $ fmap fromIntegral . snd_pcm_hw_params_c handlePtr
 
-foreign import capi unsafe "alsa/asoundlib.h snd_pcm_writei" snd_pcm_write_i_c :: Ptr Snd_PCM_t -> Ptr () -> CULong -> IO CLong
+foreign import capi safe "alsa/asoundlib.h snd_pcm_writei" snd_pcm_write_i_c :: Ptr Snd_PCM_t -> Ptr () -> CULong -> IO CLong
 
+{-# NOINLINE writeBuffer #-}
 writeBuffer :: (Storable a) => PCMHandle -> Ptr a -> Word64 -> IO Int64
 writeBuffer (PCMHandle ref) bufferPtr size = do
   frnHandlePtr <- readIORef ref
   withForeignPtr frnHandlePtr $ \handlePtr ->
     fromIntegral <$> snd_pcm_write_i_c handlePtr (castPtr bufferPtr) (fromIntegral size)
 
-foreign import capi unsafe "alsa/asoundlib.h snd_pcm_readi" snd_pcm_readi_c :: Ptr Snd_PCM_t -> Ptr () -> CULong -> IO CLong
+foreign import capi safe "alsa/asoundlib.h snd_pcm_readi" snd_pcm_readi_c :: Ptr Snd_PCM_t -> Ptr () -> CULong -> IO CLong
 
 -- | Read interleaved frames from a PCM.  Returns a positive number of
 --  frames actually read otherwise a negative error code If the
@@ -150,7 +158,9 @@ readBuffer (PCMHandle ref) bufferPtr size = do
   withForeignPtr frnHandlePtr $ \handlePtr ->
     fromIntegral <$> snd_pcm_readi_c handlePtr (castPtr bufferPtr) (fromIntegral size)
 
-foreign import capi unsafe "alsa/asoundlib.h snd_pcm_drain" snd_pcm_drain_c :: Ptr Snd_PCM_t -> IO CInt
+{-# NOINLINE readBuffer #-}
+
+foreign import capi safe "alsa/asoundlib.h snd_pcm_drain" snd_pcm_drain_c :: Ptr Snd_PCM_t -> IO CInt
 
 -- | Block the thread until the audio device has finished playing it's
 -- queued buffers.
@@ -158,3 +168,4 @@ drainDevice :: PCMHandle -> IO Int
 drainDevice (PCMHandle ref) = do
   frnHandlePtr <- readIORef ref
   withForeignPtr frnHandlePtr $ fmap fromIntegral . snd_pcm_drain_c
+{-# NOINLINE drainDevice #-}

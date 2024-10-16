@@ -63,12 +63,11 @@ executable AssistantPi
 
 
     -- Modules included in this executable, other than Main.
-    other-modules:
+    other-modules: Audio,
 -- Error,
                       -- ErrorStack,
                       -- Error.Generic,
                       -- Error.Parser,
-                      MP3,
                       HTTP.Client,
                       -- Rest.Server,
                       -- Rest.System,
@@ -91,7 +90,7 @@ executable AssistantPi
     -- other-extensions:
 
     -- Other library packages from which modules are imported.
-    build-depends:    aeson <= 2.1.2.1,
+    build-depends:    aeson,
                       base-compat-batteries,
                       case-insensitive,
                       alsa-hs,
@@ -104,6 +103,7 @@ executable AssistantPi
                       http-client-tls,
                       http-media,
                       http-types,
+                      minimp3-hs,
                       mtl,
                       random,
                       sop-core,
@@ -122,6 +122,67 @@ executable AssistantPi
 
     ghc-options: -O2 -threaded -with-rtsopts=-N
 
-    c-sources: cbits/my_mini.c
+                 -- -fcore-constant-folding -fcase-merge -fcase-folding -fcall-arity -fexitification -fcmm-elim-common-blocks -fcmm-sink -fcmm-static-pred -fcmm-control-flow -fasm-shortcutting -fblock-layout-cfg -fcpr-anal -fcse -fstg-cse -fdicts-strict -ffloat-in -fliberate-case -floopification -fspec-constr -fspecialise -fcross-module-specialise -finline-generics -fsolve-constant-dicts -fstrictness -funbox-small-strict-fields -fworker-wrapper
+                 -- -ffull-laziness
 
-    include-dirs: cbits
+
+
+library alsa-hs
+    -- Import common warning flags.
+    import:           warnings
+
+    -- Modules exported by the library.
+    exposed-modules: Alsa.PCM.Handle,
+                     Alsa.PCM.Params,
+                     Alsa.PCM.Stream,
+                     Alsa.PCM.Error
+
+    -- Modules included in this library but not exported.
+    -- other-modules:
+
+    -- LANGUAGE extensions used by modules in this package.
+    -- other-extensions:
+
+    -- Other library packages from which modules are imported.
+    build-depends:    base
+
+    -- Directories containing source files.
+    hs-source-dirs:   libs
+
+    -- Base language which the package is written in.
+    default-language: GHC2021
+
+    c-sources: cbits/alsa-hs/haskell_alsa.c
+
+    include-dirs: cbits/alsa-hs
+
+    pkgconfig-depends: alsa
+
+
+library minimp3-hs
+    -- Import common warning flags.
+    import:           warnings
+
+    -- Modules exported by the library.
+    exposed-modules: Minimp3
+
+    -- Modules included in this library but not exported.
+    -- other-modules:
+
+    -- LANGUAGE extensions used by modules in this package.
+    -- other-extensions:
+
+    -- Other library packages from which modules are imported.
+    build-depends:    base
+
+    -- Directories containing source files.
+    hs-source-dirs:   libs/Minimp3
+
+    -- Base language which the package is written in.
+    default-language: GHC2021
+
+    c-sources: cbits/minimp3/minimp3-hs.c
+
+    include-dirs: cbits/minimp3
+
+    cc-options: -O3
