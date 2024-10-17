@@ -111,7 +111,7 @@ readFramesAndPlay handle mp3 info mp3Data pcmData =
             then return newMP3Len
             else go (mp3Ptr `plusPtr` consumed, newMP3Len)
       | samples == 0 && consumed > 0 = do
-          putStrLn "Invalid data"
+          putStrLn "Skipped ID3 or Invalid data"
           return newMP3Len
       | samples == 0 && consumed == 0 = do
           putStrLn "Insufficient data"
@@ -162,7 +162,7 @@ playAudio = do
   chan <- newChan @BS.ByteString
   info <- newMP3DecFrameInfo
   _ <- forkIO $ withAudioStream mvar (writeChan chan)
-  _ <- forkIO . allocaArray @Int16 1153 $ readChanAndPlay mp3Dec info chan
+  _ <- forkIO . allocaArray @Int16 maxSamplesPerFrame $ readChanAndPlay mp3Dec info chan
   void getLine
   putMVar mvar ()
   return ()

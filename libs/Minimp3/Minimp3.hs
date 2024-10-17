@@ -12,6 +12,7 @@ module Minimp3
     getLayer,
     getBitrateKPBS,
     decodeFrame,
+    maxSamplesPerFrame
   )
 where
 
@@ -20,7 +21,6 @@ import Foreign (ForeignPtr, FunPtr, Int16, Ptr, newForeignPtr)
 import Foreign.C (CInt (..))
 import Foreign.C.ConstPtr (ConstPtr (..))
 import Foreign.ForeignPtr (withForeignPtr)
-import System.IO.Unsafe (unsafePerformIO)
 
 data MP3Dec_t
 
@@ -117,3 +117,6 @@ decodeFrame (MP3Dec mp3DecFrnPtr) inputBuf inputLen (MP3DecFrameInfo infoFrnPtr)
             (ConstPtr inputBuf)
             (fromIntegral inputLen)
             outputBufPtr
+
+maxSamplesPerFrame :: Int
+maxSamplesPerFrame = 2 * 1152

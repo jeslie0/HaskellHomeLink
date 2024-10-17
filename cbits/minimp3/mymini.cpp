@@ -51,6 +51,11 @@ void decode(mp3dec_t &mp3dec, mp3dec_frame_info_t &info,
     } else if (samples == 0 && consumed == 0) {
       std::cout << "Insufficient data\n";
     }
+
+    if (length <= 0) {
+        length = mp3_data.size();
+        start = mp3_data.data();
+    }
   }
 
   std::cout << "Total consume == mp3 size: " << (total_consumed == mp3_data.size()) << "\n";
@@ -60,7 +65,7 @@ int main() {
   mp3dec_t mp3dec;
   mp3dec_init(&mp3dec);
   mp3dec_frame_info_t info;
-  std::vector<int16_t> pcm(MINIMP3_MAX_SAMPLES_PER_FRAME);
+  std::vector<int16_t> pcm(MINIMP3_MAX_SAMPLES_PER_FRAME / 2 );
 
   std::vector<uint8_t> mp3_data =
       read_file_data("/home/james/rats-in-ruin.mp3");
