@@ -25,7 +25,7 @@
         });
 
       ghcVersion =
-        "ghc965";
+        "ghc966";
 
       extendHaskellPackages = { haskellPackages, alsa-lib }:
         haskellPackages.extend ( hpFinal: hpPrev: {
