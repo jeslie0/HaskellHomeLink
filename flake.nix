@@ -44,15 +44,18 @@
 
       packageName = system: with builtins;
         let
+          dir =
+            "${self}/software/src";
+
           cabalFileName =
             let
               cabalFiles =
-                ((filter ((nixpkgsFor.${system}).lib.hasSuffix ".cabal")) (attrNames (readDir ./.)));
+                ((filter ((nixpkgsFor.${system}).lib.hasSuffix ".cabal")) (attrNames (readDir dir)));
             in
               head cabalFiles;
 
           matches =
-            (match "^.*name\:\ *([^[:space:]]*).*$" (readFile "${./.}\/${cabalFileName}"));
+            (match "^.*name\:\ *([^[:space:]]*).*$" (readFile "${dir}\/${cabalFileName}"));
         in
           head matches;
     in
@@ -64,7 +67,7 @@
                 nixpkgsFor.${system};
 
               default =
-                (haskellPackages system).callCabal2nix (packageName system) self {};
+                (haskellPackages system).callCabal2nix (packageName system) "${self}/software/src/" {};
             } // (
               import ./nix/xCompiled.nix {
                 inherit ghcVersion system nixpkgs extendHaskellPackages self;

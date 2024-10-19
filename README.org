@@ -1,0 +1,30 @@
+#+title: Haskell Home Link
+#+author: James Leslie
+
+Control software running in a secure environment (such as your home) from an insecure environment (such as an open WiFi network).
+
+* Table of contents :toc:
+- [[#description][Description]]
+- [[#project-status][Project status]]
+- [[#installation-and-setup][Installation and setup]]
+- [[#project-overview][Project overview]]
+
+* Description
+This project came to be to help me control various devices in my home remotely - primarily to be able to control a radio for my dog to listen to while I am at work. I don't have permissions to change my home's networking, so I came up with the idea of using a proxy on a server I do control.
+
+* Project status
+This project is currently in development, with no release schedule. The ideas and structure of it are still being developed and may change as time goes on.
+
+
+* Installation and setup
+This project is primarily packaged with Nix. As it grows, components will also be packaged as Docker Images and hopefully deb packages.
+
+* Project overview
+This project consists of several different applications that run in different locations. These are:
+- Home application (high side);
+- Proxy application (low side);
+- Web GUI (hosted on the low side, run on low side).
+
+The Home application controls various devices at the user's home, such as radios, smart lights or smart cameras. It establishes a TLS+ProtoBuf connection to the Proxy application, which is running on a remote server somewhere else. The user then communicates with the Proxy application by a Web GUI, which is served using TLS.
+
+Mutual TLS will be used for every connection, to allow each device to trust the device it is talking to.

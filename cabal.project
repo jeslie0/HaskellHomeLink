@@ -1,4 +1,4 @@
-packages: .
+packages: ./software/src/*
 
 source-repository-package
     type: git
