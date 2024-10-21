@@ -11,8 +11,8 @@ raspExe:
           installPhase = ''
             runHook preInstall
             mkdir -p $out/bin;
-            cp -r ${raspExe}/bin/${packageName} $out/bin;
-            patchelf --shrink-rpath $out/bin/${packageName};
+            cp -r ${raspExe}/bin/Home $out/bin;
+            patchelf --shrink-rpath $out/bin/Home;
             runHook postInstall
           '';
           nativeBuildInputs = [pkgs.patchelf];
@@ -31,7 +31,7 @@ raspExe:
 
     config = {
       Cmd =
-        [ "${raspExe}/bin/${packageName}" ];
+        [ "${raspExe}/bin/Home" ];
     };
   };
 

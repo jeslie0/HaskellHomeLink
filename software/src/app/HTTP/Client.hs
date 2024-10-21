@@ -13,12 +13,19 @@ import Data.ByteString.Internal qualified as BS
 import Foreign (Int16, Ptr, Word8, allocaArray, withForeignPtr)
 import Foreign.Ptr (plusPtr)
 import Minimp3
+import Network.Connection
 import Network.HTTP.Client qualified as HTTP
 import Network.HTTP.Client.TLS qualified as HTTPS
+import Data.Default.Class
 
 classicFMURL :: String
 classicFMURL =
   "https://media-ice.musicradio.com/ClassicFMMP3"
+
+unsafeTLSSettings =
+  HTTPS.mkManagerSettings tlsSettings Nothing
+  where
+    tlsSettings = TLSSettingsSimple True False False def
 
 -- | Start an audio stream and pass chunks of bytes into the callback handler.
 withAudioStream ::
@@ -28,7 +35,7 @@ withAudioStream ::
   (BS.ByteString -> IO ()) ->
   IO ()
 withAudioStream continueMvar withBytes = do
-  manager <- HTTP.newManager HTTPS.tlsManagerSettings
+  manager <- HTTP.newManager $ unsafeTLSSettings -- HTTPS.tlsManagerSettings
   let initialRequest = HTTP.parseRequest_ classicFMURL
       request = initialRequest {HTTP.method = "GET"}
   HTTP.withResponse request manager $ \rsp -> do
@@ -38,6 +45,7 @@ withAudioStream continueMvar withBytes = do
       continue <- isEmptyMVar continueMvar
       when continue $ do
         chunk <- HTTP.brRead bodyReader
+        putStrLn "got chunk"
         withBytes chunk
         withBody bodyReader
 
@@ -99,6 +107,7 @@ readFramesAndPlay handle mp3 info mp3Data pcmData =
   where
     go (mp3Ptr, !mp3Len) = do
       samples <- decodeFrame mp3 mp3Ptr mp3Len info pcmData
+      putStrLn "decoding samples"
       consumed <- getFrameBytes info
       let newMP3Len = mp3Len - consumed
       decide mp3Ptr newMP3Len samples consumed
@@ -163,6 +172,6 @@ playAudio = do
   info <- newMP3DecFrameInfo
   _ <- forkIO $ withAudioStream mvar (writeChan chan)
   _ <- forkIO . allocaArray @Int16 maxSamplesPerFrame $ readChanAndPlay mp3Dec info chan
-  void getLine
+  threadDelay 1000000000
   putMVar mvar ()
   return ()

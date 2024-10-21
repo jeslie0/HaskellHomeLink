@@ -28,9 +28,6 @@ version:            0.0.0.0
 -- A longer description of the package.
 -- description:
 
--- The license under which the package is released.
-license:            MIT NON-AI
-
 -- The package author(s).
 author:             James Leslie
 
@@ -42,7 +39,7 @@ maintainer:         jamesleslie@posteo.net
 build-type:         Simple
 
 -- Extra doc files to be distributed with the package, such as a CHANGELOG or a README.
-extra-doc-files:    ../../CHANGELOG.md
+-- extra-doc-files:    ../../CHANGELOG.md
 
 -- Extra source files to be distributed with the package, such as examples, or a tutorial module.
 -- extra-source-files:
@@ -93,6 +90,8 @@ executable Home
                       attoparsec,
                       base ^>=4.18.2.1,
                       bytestring,
+                      crypton-connection,
+                      data-default-class,
                       deepseq,
                       http-api-data,
                       http-client,
@@ -106,6 +105,7 @@ executable Home
                       string-conversions,
                       text,
                       time,
+                      tls,
                       transformers,
                       wai,
                       warp
@@ -116,7 +116,7 @@ executable Home
     -- Base language which the package is written in.
     default-language: GHC2021
 
-    ghc-options: -O2 -threaded -with-rtsopts=-N
+    ghc-options: -O2 -threaded
 
 library alsa-hs
     -- Import common warning flags.
