@@ -7,7 +7,7 @@
 }:
 let
   dir =
-    "${self}/software/src";
+    "${self}";
 
   haskellPackages = pkgs:
     extendHaskellPackages {

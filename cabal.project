@@ -1,4 +1,7 @@
-packages: ./software/src/*
+packages:
+          ./software/libs/alsa-hs/alsa-hs.cabal
+          ./software/libs/minimp3-hs/minimp3-hs.cabal
+          ./software/src/HaskellHomeLink.cabal
 
 source-repository-package
     type: git
@@ -15,3 +18,11 @@ source-repository-package
     location: https://github.com/sternenseemann/hs-memory
     tag: 2738929ce15b4c8704bbbac24a08539b5d4bf30e
     --sha256: sha256-NfeeJo8pdhuxoFOM90T7855gQpnlUP4Gu4+2ujauPbE=
+
+source-repository-package
+    type: git
+    location: https://github.com/plow-technologies/cborg
+    tag: d309da3166c1ab95506c9fabb678204ccd6670f3
+    --sha256: sha256-p3gWSHnkaEHVPYE5J/OwwQ6wAcRwOmiC+yp6nkNW+NM=
+    subdir:
+        cborg

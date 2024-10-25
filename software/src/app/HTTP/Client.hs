@@ -45,7 +45,6 @@ withAudioStream continueMvar withBytes = do
       continue <- isEmptyMVar continueMvar
       when continue $ do
         chunk <- HTTP.brRead bodyReader
-        putStrLn "got chunk"
         withBytes chunk
         withBody bodyReader
 
@@ -107,7 +106,6 @@ readFramesAndPlay handle mp3 info mp3Data pcmData =
   where
     go (mp3Ptr, !mp3Len) = do
       samples <- decodeFrame mp3 mp3Ptr mp3Len info pcmData
-      putStrLn "decoding samples"
       consumed <- getFrameBytes info
       let newMP3Len = mp3Len - consumed
       decide mp3Ptr newMP3Len samples consumed

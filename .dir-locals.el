@@ -3,7 +3,8 @@
       . "cabal build")
 
      (eglot-workspace-configuration
-      . (:haskell (:formatingProvider "floskell")
+      . (:haskell (:formatingProvider "formolu"
+                                      :plugin (:importLens (:globalOn nil)))
                   :purescript (:outputDirectory "./web/output" :formatter "purs-tidy"))
       )
      )

@@ -21,7 +21,9 @@
       nixpkgsFor = forAllSystems (system:
         import nixpkgs {
           inherit system;
-          overlays = [ haskellNix.overlay ps-overlay.overlays.default ];
+          overlays = [ haskellNix.overlay
+                       ps-overlay.overlays.default
+                     ];
         });
 
       ghcVersion =
@@ -29,8 +31,11 @@
 
       extendHaskellPackages = { haskellPackages, alsa-lib }:
         haskellPackages.extend ( hpFinal: hpPrev: {
-            alsa-hs =
-              hpPrev.callCabal2nix "alsa-hs" ./libs/alsa-hs { inherit alsa-lib; };
+          alsa-hs =
+            hpPrev.callCabal2nix "alsa-hs" ./software/libs/alsa-hs { inherit alsa-lib; };
+
+          minimp3-hs =
+            hpPrev.callCabal2nix "minimp3-hs" ./software/libs/minimp3-hs { };
         });
 
       haskellPackages = system:
@@ -39,7 +44,7 @@
             nixpkgsFor.${system}.haskell.packages.${ghcVersion};
 
           alsa-lib =
-            nixpkgsFor.${system}.alsa-lib.dev;
+            nixpkgsFor.${system}.alsa-lib;
         };
 
       packageName = system: with builtins;
@@ -67,7 +72,8 @@
                 nixpkgsFor.${system};
 
               default =
-                (haskellPackages system).callCabal2nix (packageName system) "${self}/software/src/" {};
+                self.packages.${system}.linux;
+              # (haskellPackages system).callCabal2nix (packageName system) "${self}/software/src" {};
             } // (
               import ./nix/xCompiled.nix {
                 inherit ghcVersion system nixpkgs extendHaskellPackages self;
@@ -86,32 +92,41 @@
             let
               pkgs =
                 nixpkgsFor.${system};
-            in
-              (haskellPackages system).shellFor {
-                # The packages that the shell is for.
-                packages = p: [
-                  self.packages.${system}.default
-                ];
 
-                buildInputs = with (haskellPackages system);
-                  [  haskell-language-server
-                     pkgs.purescript-language-server-unstable
-                     cabal-install
-                     pkgs.cmake
-                     pkgs.alsa-lib
-                     pkgs.spago-unstable
-                     pkgs.purs-unstable
-                     pkgs.nodePackages.npm
-                     pkgs.nodejs
-                     pkgs.purs-tidy
+              toolsShell =
+                pkgs.mkShell {
+                  # The packages that the shell is for.
+                  packages = with pkgs; [
+                    purescript-language-server-unstable
+                    cmake
+                    alsa-lib
+                    spago-unstable
+                    purs-unstable
+                    nodePackages.npm
+                    nodejs
+                    purs-tidy
                   ];
+                };
+            in
 
+              self.packages.${system}.project.shellFor {
+                withHoogle =
+                  true;
 
-                # Add build inputs of the following derivations.
-                inputsFrom = [ ];
+                # exactDeps =
+                  # true;
 
-                # Enables Hoogle for the builtin packages.
-                withHoogle = true;
+                crossPlatforms =
+                  ps: [ps.armv7l-hf-multiplatform];
+
+                inputsFrom =
+                  [toolsShell];
+
+                tools = {
+                  cabal = "latest";
+
+                  haskell-language-server = "latest";
+                };
               }
           );
       };

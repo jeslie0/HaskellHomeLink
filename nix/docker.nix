@@ -31,7 +31,7 @@ raspExe:
 
     config = {
       Cmd =
-        [ "${raspExe}/bin/Home" ];
+        [ "${raspExe}/bin/Home" "+RTS" "-N4" "-RTS"];
     };
   };
 

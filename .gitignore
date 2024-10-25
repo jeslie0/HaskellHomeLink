@@ -2,3 +2,4 @@ dist-newstyle/
 .direnv/*
 result
 *build*
+software/libs/alsa-hs/output
