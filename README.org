@@ -15,7 +15,6 @@ This project came to be to help me control various devices in my home remotely -
 * Project status
 This project is currently in development, with no release schedule. The ideas and structure of it are still being developed and may change as time goes on.
 
-
 * Installation and setup
 This project is primarily packaged with Nix. As it grows, components will also be packaged as Docker Images and hopefully deb packages.
 

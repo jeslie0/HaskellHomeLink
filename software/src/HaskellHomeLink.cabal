@@ -42,7 +42,7 @@ build-type:         Custom
 -- extra-doc-files:    ../../CHANGELOG.md
 
 -- Extra source files to be distributed with the package, such as examples, or a tutorial module.
-extra-source-files: proto/*.proto
+extra-source-files: ../proto/*.proto
 
 common warnings
     ghc-options: -Wall
@@ -51,8 +51,6 @@ custom-setup
     setup-depends: base,
                    Cabal,
                    proto-lens-setup
-
-
 
 executable Home
     -- Import common warning flags.

@@ -1,0 +1,58 @@
+:PROPERTIES:
+:CATEGORY: Project Management
+:END:
+#+title: Project Manager - Haskell Home Link
+#+author: James Leslie
+#+TODO: TODO IN-PROGRESS WAITING POSTPONED | DONE CANCELLED
+
+* [0/4] Tasks
+
+** TODO [#A] Implement client TLS connection controller
+:PROPERTIES:
+:type:     task
+:priority: high
+:ID:       74bae23a-bd5d-46f0-91f1-a13027ee84df
+:component: backend
+:END:
+The Home application will act as a TLS client and try to connect to the Remote application. We will have a "TlsClient" type that will hook into an event loop.
+
+
+** TODO [#A] Create event loop structure
+:PROPERTIES:
+:type:     task
+:ID:       407cc33b-9382-467e-a6be-7d856fdd14c5
+:component: backend
+:END:
+Each island's core processes will be managed by an event loop. This loop will run in a single thread, but could cause actions to run on their own thread, potentially (might be simpler to just have one thread in the event loop).
+
+
+** IN-PROGRESS [#B] Create detailed design documentation
+:PROPERTIES:
+:component: documentation
+:type:     task
+:END:
+I need to create a document explaining how the pieces of this project work. Realistically, this will be a constantly updated document and will never be "finished".
+
+** TODO [#B] Rework Nix structure
+:PROPERTIES:
+:type:     packaging
+:END:
+Currently, the nix structure of this project is a real mess. This should be tidied up and organised.
+
+* Bugs
+
+* Milestones
+** v0.0.1.0 - MVP
+:PROPERTIES:
+:type:     milestone
+:END:
+We will have a minimal viable product when we have the following built:
+1. Home application that can play a radio stream and be remotely controlled.
+2. Proxy application that hosts the frontend and establishes a connection with the Home application.
+3. A simple frontend that allows can be used to toggle the radio on the Home application.
+
+
+
+# Local Variables:
+# visual-fill-column-width: 80
+# End:
