@@ -117,15 +117,17 @@
                   # true;
 
                 crossPlatforms =
-                  ps: [ps.armv7l-hf-multiplatform];
+                  ps: [ ps.armv7l-hf-multiplatform ];
 
                 inputsFrom =
-                  [toolsShell];
+                  [ toolsShell ];
 
                 tools = {
-                  cabal = "latest";
+                  cabal =
+                    "latest";
 
-                  haskell-language-server = "latest";
+                  haskell-language-server =
+                    "latest";
                 };
               }
           );

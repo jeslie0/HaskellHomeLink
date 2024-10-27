@@ -61,43 +61,30 @@ executable Home
 
 
     -- Modules included in this executable, other than Main.
-    other-modules:    Proto.Person, Proto.Person_Fields
-                      -- Error,
-                      -- ErrorStack,
-                      -- Error.Generic,
-                      -- Error.Parser,
-                      -- -- HTTP.Client,
-                      -- Rest.Server,
-                      -- Rest.System,
-                      -- Rest.Utils,
-                      -- System.CPU,
-                      -- System.OS,
-                      -- TinyServant,
-                      -- TinyServant.API,
-                      -- TinyServant.API.ContentTypes,
-                      -- TinyServant.API.Status,
-                      -- TinyServant.API.UVerb,
-                      -- TinyServant.API.ResponseHeaders,
-                      -- TinyServant.API.Header,
-                      -- TinyServant.Combinators,
-                      -- TinyServant.Server,
-                      -- TinyServant.Server.UVerb,
-                      -- TinyServant.Union
-
+    other-modules:    Msg,
+                      Port,
+                      Socket,
+                      Handler
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
 
     -- Other library packages from which modules are imported.
     build-depends:    alsa-hs,
                       base ^>=4.18.2.1,
+                      cereal,
+                      bytestring,
+                      microlens,
+                      microlens-th,
+                      minimp3-hs,
+                      network,
                       proto-lens,
                       proto-lens-runtime,
-                      microlens,
-                      microlens-th
+                      text,
+                      tls,
+                      vector
 
 
     build-tool-depends: proto-lens-protoc:proto-lens-protoc ^>= 0.8.0.1
-
 
     -- Directories containing source files.
     hs-source-dirs:   app

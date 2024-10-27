@@ -13,13 +13,6 @@ data Atom = Atom {_element :: String, _point :: Point}
 
 data Point = Point {_x :: Double, _y :: Double}
 
-person :: P.Person
-person =
-  defMessage
-    & P.name .~ "James"
-    & P.age .~ 29
-    & P.addresses .~ []
-
 makeLenses ''Atom
 makeLenses ''Point
 
