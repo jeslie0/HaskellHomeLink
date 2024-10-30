@@ -62,25 +62,38 @@ executable Home
 
     -- Modules included in this executable, other than Main.
     other-modules:    EventLoop,
+                      Constraints,
+                      Home.Handler,
+                      Home.Env,
+                      Home.Main,
                       Msg,
                       Port,
+                      Proto.Person,
+                      Proto.Person_Fields,
+                      Proto.Radio,
+                      Proto.Radio_Fields,
                       Socket,
-                      Handler
+                      Socket.TCP,
+                      TH,
+                      Handlable
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
 
     -- Other library packages from which modules are imported.
     build-depends:    alsa-hs,
                       base ^>=4.18.2.1,
-                      cereal,
                       bytestring,
+                      cereal,
+                      lifted-base,
                       microlens,
                       microlens-th,
                       minimp3-hs,
+                      monad-control,
                       mtl,
                       network,
                       proto-lens,
                       proto-lens-runtime,
+                      template-haskell,
                       text,
                       tls,
                       vector

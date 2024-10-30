@@ -3,7 +3,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Msg (Msg (..), AllHasMsg, MsgType(..), MaybeDecode(..)) where
+module Msg (Msg (..), AllHasMsg, MsgType (..), MaybeDecode (..)) where
 
 import Data.ByteString qualified as B
 import Data.Kind (Constraint, Type)

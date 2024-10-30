@@ -27,7 +27,7 @@ let
       }
       {
         packages = {
-          ${packageName}.components.exes.Home.build-tools = [ pkgs.protobuf_26 ];
+          ${packageName}.components.exes.Home.build-tools = [ pkgs.protobuf ];
         };
       }];
     }).flake {}).packages."${packageName}:exe:Home";

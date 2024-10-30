@@ -113,8 +113,8 @@
                 withHoogle =
                   true;
 
-                # exactDeps =
-                  # true;
+                exactDeps =
+                  false;
 
                 crossPlatforms =
                   ps: [ ps.armv7l-hf-multiplatform ];
@@ -123,8 +123,8 @@
                   [ toolsShell ];
 
                 tools = {
-                  cabal =
-                    "latest";
+                  # cabal =
+                  #   "latest";
 
                   haskell-language-server =
                     "latest";

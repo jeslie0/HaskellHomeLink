@@ -1,0 +1,14 @@
+syntax="proto3";
+
+message StartRadio {
+}
+
+message StopRadio {
+}
+
+message Envelope {
+  oneof payload {
+    StartRadio m1 = 1;
+    StopRadio m2 = 2;
+  }
+}

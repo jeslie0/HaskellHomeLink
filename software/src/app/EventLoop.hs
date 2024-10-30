@@ -1,29 +1,44 @@
 {-# LANGUAGE MonoLocalBinds #-}
 
-module EventLoop (EventLoop(..), mkEventLoop) where
+module EventLoop (EventLoop (..), addMsg, killEventLoop, mkEventLoop) where
 
-import Control.Concurrent (forkIO, killThread, newChan, readChan, writeChan)
-import Handler (HasHandler, HandleableMsg (..), handle)
-import Msg (Msg)
+import Control.Concurrent (killThread, newChan, readChan, writeChan)
+import Control.Concurrent.Lifted (fork)
+import Control.Monad.IO.Class
+import Control.Monad.Trans.Control (MonadBaseControl)
 
--- | A single threaded event loop that can have messages added to it
--- from another thread.
-data EventLoop = EventLoop
-  { addMsg :: forall msg. (HasHandler msg, Msg msg) => msg -> IO (),
-    killEventLoop :: IO ()
-  }
+{- | A single threaded event loop that can have messages added to it
+from another thread.
+-}
+data EventLoop msg = EventLoop
+    { _addMsg :: msg -> IO ()
+    , _killEventLoop :: IO ()
+    }
 
-mkEventLoop :: IO EventLoop
-mkEventLoop = do
-  chan <- newChan @HandleableMsg
-  threadId <- forkIO $ actOnChan chan
-  return $
-    EventLoop
-      { addMsg = writeChan chan . HandleableMsg,
-        killEventLoop = killThread threadId
-      }
+-- | Add a new message to be handled.
+addMsg :: (MonadIO m) => EventLoop msg -> msg -> m ()
+addMsg loop = liftIO . _addMsg loop
+
+-- | Stop the event loop.
+killEventLoop :: (MonadIO m) => EventLoop msg -> m ()
+killEventLoop = liftIO . _killEventLoop
+
+-- | Create an event loop.
+mkEventLoop ::
+    forall msg m.
+    (MonadIO m, MonadBaseControl IO m) =>
+    (msg -> m ())
+    -> m (EventLoop msg)
+mkEventLoop handle = do
+    chan <- liftIO $ newChan @msg
+    threadId <- fork $ actOnChan chan
+    return $
+        EventLoop
+            { _addMsg = writeChan chan
+            , _killEventLoop = killThread threadId
+            }
   where
     actOnChan chan = do
-      (HandleableMsg msg) <- readChan chan
-      handle msg
-      actOnChan chan
+        msg <- liftIO $ readChan chan
+        handle msg
+        actOnChan chan

@@ -5,9 +5,34 @@
 #+author: James Leslie
 #+TODO: TODO IN-PROGRESS WAITING POSTPONED | DONE CANCELLED
 
-* [0/4] Tasks
+* [0/5] Tasks
 
-** TODO [#A] Implement client TLS connection controller
+** IN-PROGRESS Use Template Haskell to extract the desired protobuf message
+:PROPERTIES:
+:type:     task
+:component: backend
+:END:
+The =proto-lens= package auto generates types for us, however; for it's ~oneOf~ types, these are implemented as a union type. Our project structure tries to use open types and type classes, so this closed union type makes it hard to extend. The solution is to invoke Template Haskell to automate some pattern matching for us.
+
+** IN-PROGRESS Create event loop structure
+:PROPERTIES:
+:type:     task
+:ID:       407cc33b-9382-467e-a6be-7d856fdd14c5
+:component: backend
+:END:
+:LOGBOOK:
+CLOCK: [2024-10-27 Sun 19:38]--[2024-10-27 Sun 20:38] =>  1:00
+:END:
+Each island's core processes will be managed by an event loop. This loop will run in a single thread, but could cause actions to run on their own thread, potentially (might be simpler to just have one thread in the event loop).
+
+** IN-PROGRESS Create detailed design documentation
+:PROPERTIES:
+:component: documentation
+:type:     task
+:END:
+I need to create a document explaining how the pieces of this project work. Realistically, this will be a constantly updated document and will never be "finished".
+
+** TODO Implement client TLS connection controller
 :PROPERTIES:
 :type:     task
 :priority: high
@@ -16,30 +41,13 @@
 :END:
 The Home application will act as a TLS client and try to connect to the Remote application. We will have a "TlsClient" type that will hook into an event loop.
 
-
-** TODO [#A] Create event loop structure
-:PROPERTIES:
-:type:     task
-:ID:       407cc33b-9382-467e-a6be-7d856fdd14c5
-:component: backend
-:END:
-Each island's core processes will be managed by an event loop. This loop will run in a single thread, but could cause actions to run on their own thread, potentially (might be simpler to just have one thread in the event loop).
-
-
-** IN-PROGRESS [#B] Create detailed design documentation
-:PROPERTIES:
-:component: documentation
-:type:     task
-:END:
-I need to create a document explaining how the pieces of this project work. Realistically, this will be a constantly updated document and will never be "finished".
-
-** TODO [#B] Rework Nix structure
+** TODO Rework Nix structure
 :PROPERTIES:
 :type:     packaging
 :END:
 Currently, the nix structure of this project is a real mess. This should be tidied up and organised.
 
-* Bugs
+* [0/0] Bugs
 
 * Milestones
 ** v0.0.1.0 - MVP

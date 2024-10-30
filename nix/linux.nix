@@ -24,7 +24,10 @@ let
       src = dir;
       modules = [{
         packages = {
-          ${packageName}.components.exes.Home.build-tools = [ pkgs.protobuf_26 pkgs.haskellPackages.proto-lens-protoc ];
+          ${packageName}.components.exes.Home.build-tools =
+            [ pkgs.protobuf
+              pkgs.haskellPackages.proto-lens-protoc
+            ];
         };
       }];
     };

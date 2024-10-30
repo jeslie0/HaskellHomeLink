@@ -12,3 +12,10 @@ message Address {
   string street = 1;
   string zip_code = 2;
 }
+
+message WrapperMsg {
+  oneof msg {
+    Person m1 = 1;
+    Address m2 = 2;
+  }
+}
