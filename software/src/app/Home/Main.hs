@@ -22,7 +22,6 @@ main = do
     action = do
         evLoop <- mkEventLoop @(ExHomeHandler Env) homeHandler
         addMsg evLoop $ ExHomeHandler start
-        liftIO $ threadDelay 1000000
+        liftIO $ threadDelay 10000000
         addMsg evLoop $ ExHomeHandler stop
-        liftIO $ print "STOPPING"
         liftIO $ threadDelay 10000000

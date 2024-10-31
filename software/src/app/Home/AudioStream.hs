@@ -7,7 +7,7 @@ import Alsa.PCM.Params
 import Alsa.PCM.Stream
 import Control.Concurrent
 import Control.Exception (bracket)
-import Control.Monad (unless, void, when, (>=>))
+import Control.Monad (unless, void, when)
 import Data.ByteString qualified as BS
 import Data.ByteString.Internal qualified as BS
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
@@ -48,6 +48,7 @@ withAudioStream continueMvar withBytes = do
             chunk <- HTTP.brRead bodyReader
             withBytes chunk
             withBody bodyReader
+        withBytes ""
 
 newtype SR = SR Int
 
@@ -76,7 +77,7 @@ configureDevice handle (SR sampleRate) (Channels channels) = do
     _ <- setFormat handle params FormatS16LE
     _ <- setChannels handle params channels
     !sr <- setSampleRate handle params $ fromIntegral sampleRate
-    putStrLn $ "New sample rate = " <> show (sampleRateVal sr)
+    -- putStrLn $ "New sample rate = " <> show (sampleRateVal sr)
     if errVal sr < 0
         then putStrLn "Error: Can't set sample rate." >> return Nothing
         else do
@@ -119,13 +120,13 @@ readFramesAndPlay handle mp3 info mp3Data pcmData =
                 then return newMP3Len
                 else go (mp3Ptr `plusPtr` consumed, newMP3Len)
         | samples == 0 && consumed > 0 = do
-            putStrLn "Skipped ID3 or Invalid data"
+            -- putStrLn "Skipped ID3 or Invalid data"
             return newMP3Len
         | samples == 0 && consumed == 0 = do
-            putStrLn "Insufficient data"
+            -- putStrLn "Insufficient data"
             return newMP3Len
         | otherwise = do
-            putStrLn "Impossible situation"
+            -- putStrLn "Impossible situation"
             return 0
 
 -- | Get bytes from the channel, decode them to PCM and then play the audio.
@@ -144,14 +145,13 @@ readChanAndPlay continueMvar mp3 info chan pcmData = do
     newBytes <- readChan chan
     bracket
         (makePCMHandleFromStream newBytes)
-        (dropDevice >=> \n -> print $ "CODE: " <> show n)
+        dropDevice
         $ \handle -> go handle ""
   where
     go handle !leftoverBytes = do
         continue <- isEmptyMVar continueMvar
         when continue $ do
             newBytes <- readChan chan
-            print "read bytes"
             let mp3Data@(BS.BS !frnPtr !mp3Len) = BS.append leftoverBytes newBytes
             withForeignPtr frnPtr $ \mp3Ptr -> do
                 !leftOverAmount <- readFramesAndPlay handle mp3 info (mp3Ptr, mp3Len) pcmData
@@ -189,7 +189,7 @@ isPlaying (AudioStream _ _ _playing) = readIORef _playing
 mkAudioStream :: IO AudioStream
 mkAudioStream = do
     isPlaying' <- newIORef False
-    mvar <- newMVar ()
+    continueMvar <- newMVar ()
 
     httpThreadMVar <- newEmptyMVar
     alsaThreadMVar <- newEmptyMVar
@@ -198,26 +198,28 @@ mkAudioStream = do
             isCurrPlaying <- readIORef isPlaying'
             unless isCurrPlaying $ do
                 writeIORef isPlaying' True
-                _ <- takeMVar mvar
+                _ <- takeMVar continueMvar
                 mp3Dec <- newMP3Dec
                 chan <- newChan @BS.ByteString
                 info <- newMP3DecFrameInfo
-                httpThread <- forkIO $ withAudioStream mvar (writeChan chan)
+                httpThread <- forkIO $ withAudioStream continueMvar (writeChan chan)
                 putMVar httpThreadMVar httpThread
+
                 alsaThread <-
                     forkIO . allocaArray @Int16 maxSamplesPerFrame $
-                        readChanAndPlay mvar mp3Dec info chan
+                        readChanAndPlay continueMvar mp3Dec info chan
 
                 putMVar alsaThreadMVar alsaThread
     let stop' = do
             isCurrPlaying <- readIORef isPlaying'
             when isCurrPlaying $ do
                 writeIORef isPlaying' False
-                putMVar mvar ()
-                httpThread <- takeMVar httpThreadMVar
+                putMVar continueMvar ()
                 alsaThread <- takeMVar alsaThreadMVar
-                killThread httpThread
                 killThread alsaThread
+
+                httpThread <- takeMVar httpThreadMVar
+                killThread httpThread
     pure $
         AudioStream
             { _start = start'

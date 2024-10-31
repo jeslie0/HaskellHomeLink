@@ -176,5 +176,5 @@ foreign import capi safe "alsa/asoundlib.h snd_pcm_drop" snd_pcm_drop_c :: Ptr S
 dropDevice :: PCMHandle -> IO Int
 dropDevice (PCMHandle ref) = do
   frnHandlePtr <- readIORef ref
-  withForeignPtr frnHandlePtr $ fmap fromIntegral . snd_pcm_drain_c
+  withForeignPtr frnHandlePtr $ fmap fromIntegral . snd_pcm_drop_c
 {-# NOINLINE dropDevice #-}
