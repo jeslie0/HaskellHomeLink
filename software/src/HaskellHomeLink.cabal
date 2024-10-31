@@ -93,10 +93,12 @@ executable Home
                       monad-control,
                       mtl,
                       network,
+                      pqueue,
                       proto-lens,
                       proto-lens-runtime,
                       template-haskell,
                       text,
+                      time,
                       tls,
                       vector
 
