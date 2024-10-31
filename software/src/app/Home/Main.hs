@@ -1,9 +1,18 @@
 module Home.Main where
 
 import Control.Monad.Reader
-import EventLoop
-import Home.Env
-import Home.Handler
+import EventLoop (mkEventLoop, addMsg)
+import Home.Env (Env, mkEnv)
+import Home.Handler (ExHomeHandler(..), homeHandler)
+import Proto.Radio qualified as Radio
+import Data.ProtoLens (defMessage)
+import Control.Concurrent (threadDelay)
+
+start :: Radio.StartRadio
+start = defMessage
+
+stop :: Radio.StopRadio
+stop = defMessage
 
 main :: IO ()
 main = do
@@ -12,14 +21,8 @@ main = do
   where
     action = do
         evLoop <- mkEventLoop @(ExHomeHandler Env) homeHandler
-        addMsg evLoop $ ExHomeHandler Foo1
-        addMsg evLoop $ ExHomeHandler Foo1
-        addMsg evLoop $ ExHomeHandler Foo1
-        addMsg evLoop $ ExHomeHandler Foo1
-        addMsg evLoop $ ExHomeHandler Foo1
-        addMsg evLoop $ ExHomeHandler Foo1
-        addMsg evLoop $ ExHomeHandler Foo1
-        addMsg evLoop $ ExHomeHandler Foo1
-        addMsg evLoop $ ExHomeHandler Foo1
-        addMsg evLoop $ ExHomeHandler Foo1
-        addMsg evLoop $ ExHomeHandler Foo1
+        addMsg evLoop $ ExHomeHandler start
+        liftIO $ threadDelay 1000000
+        addMsg evLoop $ ExHomeHandler stop
+        liftIO $ print "STOPPING"
+        liftIO $ threadDelay 10000000

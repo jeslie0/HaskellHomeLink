@@ -8,13 +8,13 @@ handled by the Home application.
 -}
 module Home.Handler (
     HomeHandler (..),
-    ExHomeHandler(..),
-    Foo1(..)
+    ExHomeHandler (..),
 ) where
 
 import Control.Monad.Reader
-import Data.IORef.Lifted
+import Home.AudioStream (start, stop)
 import Home.Env (Env (..))
+import Proto.Radio qualified as Radio
 
 class HomeHandler env a where
     homeHandler :: a -> ReaderT env IO ()
@@ -24,10 +24,14 @@ data ExHomeHandler env = forall a. (HomeHandler env a) => ExHomeHandler a
 instance HomeHandler env (ExHomeHandler env) where
     homeHandler (ExHomeHandler a) = homeHandler a
 
-data Foo1 = Foo1
-instance HomeHandler Env Foo1 where
+-- * Message instances
+
+instance HomeHandler Env Radio.StartRadio where
     homeHandler _ = do
-        env <- ask
-        !x <- readIORef (_count env)
-        liftIO . putStrLn $ "current state = " <> show x
-        writeIORef (_count env) (x + 1)
+        Env {_audioStream} <- ask
+        liftIO $ start _audioStream
+
+instance HomeHandler Env Radio.StopRadio where
+    homeHandler _ = do
+        Env {_audioStream} <- ask
+        liftIO $ stop _audioStream

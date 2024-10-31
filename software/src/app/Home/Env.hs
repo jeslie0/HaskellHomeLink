@@ -1,10 +1,12 @@
 module Home.Env (Env (..), mkEnv) where
 
 import Data.IORef (IORef, newIORef)
+import Home.AudioStream
 
-data Env = Env {_count :: IORef Int}
+data Env = Env {_audioStream :: AudioStream}
 
 mkEnv :: IO Env
 mkEnv = do
     ref <- newIORef 0
-    return $ Env {_count = ref}
+    audioStream <- mkAudioStream
+    return $ Env {_audioStream = audioStream}

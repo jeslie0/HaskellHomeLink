@@ -169,3 +169,12 @@ drainDevice (PCMHandle ref) = do
   frnHandlePtr <- readIORef ref
   withForeignPtr frnHandlePtr $ fmap fromIntegral . snd_pcm_drain_c
 {-# NOINLINE drainDevice #-}
+
+foreign import capi safe "alsa/asoundlib.h snd_pcm_drop" snd_pcm_drop_c :: Ptr Snd_PCM_t -> IO CInt
+
+-- | Stop the PCM Immediately. Pending frames are ignored.
+dropDevice :: PCMHandle -> IO Int
+dropDevice (PCMHandle ref) = do
+  frnHandlePtr <- readIORef ref
+  withForeignPtr frnHandlePtr $ fmap fromIntegral . snd_pcm_drain_c
+{-# NOINLINE dropDevice #-}

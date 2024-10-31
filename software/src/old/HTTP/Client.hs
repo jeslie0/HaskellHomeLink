@@ -140,7 +140,7 @@ readChanAndPlay ::
   IO ()
 readChanAndPlay mp3 info chan pcmData = do
   newBytes <- readChan chan
-  bracket (makePCMHandleFromStream newBytes) drainDevice $ \handle -> writeChan chan newBytes >> go handle ""
+  bracket (makePCMHandleFromStream newBytes) drainDevice $ \handle -> go handle ""
   where
     go handle !leftoverBytes = do
       newBytes <- readChan chan

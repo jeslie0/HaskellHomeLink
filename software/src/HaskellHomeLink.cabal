@@ -57,25 +57,23 @@ executable Home
     import:           warnings
 
     -- .hs or .lhs file containing the Main module.
-    main-is:          Main.hs
+    main-is:          Home/Main.hs
 
 
     -- Modules included in this executable, other than Main.
     other-modules:    EventLoop,
                       Constraints,
+                      Home.AudioStream,
                       Home.Handler,
                       Home.Env,
-                      Home.Main,
-                      Msg,
-                      Port,
-                      Proto.Person,
-                      Proto.Person_Fields,
+                      -- Msg,
+                      -- Port,
+                      -- Proto.Person,
+                      -- Proto.Person_Fields,
                       Proto.Radio,
                       Proto.Radio_Fields,
-                      Socket,
-                      Socket.TCP,
-                      TH,
-                      Handlable
+                      -- Socket,
+                      -- Socket.TCP,
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
 
@@ -84,7 +82,11 @@ executable Home
                       base ^>=4.18.2.1,
                       bytestring,
                       cereal,
+                      connection,
+                      data-default,
                       lifted-base,
+                      http-client,
+                      http-client-tls,
                       microlens,
                       microlens-th,
                       minimp3-hs,
@@ -107,4 +109,4 @@ executable Home
     -- Base language which the package is written in.
     default-language: GHC2021
 
-    ghc-options: -O2 -threaded
+    ghc-options: -main-is Home.Main -O2 -threaded
