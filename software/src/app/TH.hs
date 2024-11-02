@@ -1,79 +1,101 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module TH where
+module TH (
+    makeInstance,
+) where
 
-import Data.Kind (Constraint, Type)
-import Data.Maybe (catMaybes)
+import Control.Monad (forM)
 import Language.Haskell.TH
 
--- | Goal - Make this geneated function return Either String HandleableMsg
-generateHandler :: Name -> Name -> [Name] -> Q [Dec]
-generateHandler typeName outputName allowedTypes = do
-  TyConI (DataD _ _ _ _ constructors _) <- reify typeName -- Maybe
-  -- change to
-  let isAllowedType t = t `elem` allowedTypes
-  let mkClause :: Con -> Q (Maybe Clause)
-      mkClause (NormalC conName [(_, innerType)]) = do
-        case innerType of
-          ConT t | isAllowedType t -> do
-            x <- newName "x"
-            let ptrn = conP conName [varP x]
-            let body = normalB [|HandleableMsg $(varE x)|]
-            Just <$> clause [ptrn] body []
-          _ -> pure Nothing
-      mkClause _ = pure Nothing
-  clauses <- catMaybes <$> mapM mkClause constructors
-  let funName = mkName "envelopeToHandleable"
-  let typeSig = SigD funName (AppT (AppT ArrowT (ConT typeName)) (ConT outputName))
-  let function = FunD funName clauses
-  return [typeSig, function]
+getClassMethodNames :: Name -> Q [Name]
+getClassMethodNames className = do
+    info <- reify className
+    case info of
+        ClassI (ClassD _ _ _ _ methods) _ ->
+            forM methods $ \case
+                SigD methodName _ -> pure methodName
+                _ -> fail "This should't happen."
+        _ -> fail "Input name must be a class name."
 
--- Our goal is to make a function that forms a sort of existential
--- type. Instead of having just one constructor, the existential type
--- might have many, for example:
---
--- data Foo
---   = forall a. (Show a) => Foo1 a
---   | forall a. (Show a) => Foo2 a
---   | forall a. (Show a) => Foo3 a
---
--- We also want to be able to specify the constraint
+getConstructorNames :: Name -> Q [Name]
+getConstructorNames typeName = do
+    info <- reify typeName
+    case info of
+        TyConI (DataD _ _ _ _ constructors _) ->
+            forM constructors $ \case
+                (NormalC name _) -> pure name
+                _ -> fail "Data type must have normal constructors"
+        _ -> fail "Input name must be a data type"
 
--- class CoreHandlable_ a where
---   coreHandle :: a -> IO ()
+{- | The purpose of this is to derive an instance declaration for
+envelope types. It should only compile if there are instance
+declarations for each of the types in the payload.
 
--- data CoreHandlable = forall a. (CoreHandlable_ a) => CoreHandlable a
+An example useage should generate an instance of the form:
 
--- generate ::
---   -- | The name of the resulting function
---   String ->
---   -- | Name of the Protobuf envelope type
---   Name ->
---   -- | Name of the existential output type
---   Name ->
---   -- | A sublist of the wrapped protobuf types that we want to allow
---   -- in the generated function.
---   [Name] ->
---   Q [Dec]
--- generate fnName pbTypeName outputTypeName [] = pure []
--- generate fnName pbTypeName outputTypeName allowedTypes =
---   let funName = mkName fnName
---    in do
---         functionImpl <- funImpl funName
---         pure [funSig funName, functionImpl]
---   where
---     funSig name =
---       SigD name (AppT (AppT ArrowT (ConT pbTypeName)) (ConT outputTypeName))
 
---     funImpl name =
---       FunD name <$> clauses
+\$(makeInstance ''HomeHandler ''Env ''Radio.Envelope 'Radio.maybe'payload ''Radio.Envelope'Payload)
 
---     clauses = do
---       -- Get List of constructors for PB envelope.
---       TyConI (DataD _ _ _ _ constructors _) <- reify pbTypeName
---       pure $ concatMap mkClause constructors
+instance HomeHandler Env Radio.Envelope where
+  homeHandler envelope =
+    case envelope ^. Radio.maybe'payload of
+      Just (Radio.Envelope'M1 x) -> homeHandler x
+      Just (Radio.Envelope'M2 x) -> homeHandler x
+      _ -> fail "Pattern match failure on envelope."
+-}
+makeInstance ::
+    Name
+    -- ^ Class name
+    -> Name
+    -- ^ Env name
+    -> Name
+    -- ^ Envelope type name
+    -> Name
+    -- ^ Payload constructor name
+    -> Name
+    -- ^ Payload type name
+    -> Q [Dec]
+makeInstance className envName typeName payloadConstructorName payloadType = do
+    decs <- mkDecs
+    let inst =
+            InstanceD
+                Nothing
+                []
+                (AppT (AppT (ConT className) (ConT envName)) (ConT typeName))
+                decs
+    pure [inst]
+  where
+    mkDecs :: Q [Dec]
+    mkDecs = do
+        classMethodNames <- getClassMethodNames className
+        forM classMethodNames $ \methodName -> do
+            instanceClause <- mkClause methodName
+            pure $ FunD methodName [instanceClause]
+      where
+        mkClause methodName = do
+            envelopeName <- newName "variable"
+            matches <- mkMatches methodName
+            let caseExpression =
+                    UInfixE (VarE envelopeName) (VarE $ mkName "^.") (VarE payloadConstructorName)
+            let bodyExpression =
+                    CaseE caseExpression matches
+            pure $ Clause [VarP envelopeName] (NormalB bodyExpression) []
 
---     mkClause :: Con -> [Clause]
---     mkClause (NormalC cName [(_, ConT innerType)]) =
---       if innerType `notElem` allowedTypes then [] else _
---     mkClause _ = []
+        mkMatches methodName = do
+            constructorNames <- getConstructorNames payloadType
+            constructors <- forM constructorNames $ \constructorName -> do
+                varName <- newName "variable"
+                pure $
+                    Match
+                        (ConP 'Just [] [ConP constructorName [] [VarP varName]])
+                        (NormalB $ AppE (VarE methodName) (VarE varName))
+                        []
+            let failCase =
+                    Match
+                        WildP
+                        ( NormalB $
+                            AppE (VarE $ mkName "fail") (LitE $ StringL "Pattern match failure on envelope")
+                        )
+                        []
+            pure $ constructors <> [failCase]

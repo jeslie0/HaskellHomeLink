@@ -25,6 +25,12 @@ data Atom = Atom {_element :: String, _point :: Point}
 
 data Point = Point {_x :: Double, _y :: Double}
 
+makeLenses ''Atom
+makeLenses ''Point
+
+shiftAtomX :: Atom -> Atom
+shiftAtomX = (point . x) %~ (+ 1)
+
 person :: P.Person
 person =
     defMessage
@@ -43,42 +49,30 @@ address =
         & P.zipCode
         .~ "EH3 0SE"
 
-envelope :: P.WrapperMsg
-envelope =
+pEnv :: P.WrapperMsg
+pEnv =
     defMessage
         & P.m1
         .~ person
 
-makeLenses ''Atom
-makeLenses ''Point
+aEnv :: P.WrapperMsg
+aEnv =
+    defMessage
+        & P.m2
+        .~ address
 
-shiftAtomX :: Atom -> Atom
-shiftAtomX = (point . x) %~ (+ 1)
 
 type Messages = '[P.Person]
 
-main :: IO ()
-main = do
-    loop@(EventLoop addMsg killLoop) <- mkEventLoop
-    go loop
-  where
-    go = undefined
+foo :: P.WrapperMsg -> ExCoreHandlable
+foo (P.Envelope'M1 person) = handle person
 
--- where
---   mDecodeAndAdd ::
---     forall (xs :: [Type]).
---     (AllHaveHandler xs, MaybeDecodeHandleable xs) =>
---     (forall msg. (HasHandler msg, Msg msg) => msg -> IO ()) ->
---     B.ByteString ->
---     IO ()
---   mDecodeAndAdd addMsg bytes =
---     case maybeDecodeH @xs bytes of
---       Nothing -> putStrLn "failed to decode bytes!"
---       Just (HandleableMsg msg) -> addMsg msg
-
---   go loop@(EventLoop addMsg killLoop) = do
---     let pBytes = toBytes person
---     mDecodeAndAdd @Messages addMsg pBytes
-
---     let aBytes = toBytes address
---     mDecodeAndAdd @Messages addMsg aBytes
+$(generateHandler )
+-- main :: IO ()
+-- main =
+foo =
+  let
+    personBytes = toBytes pEnv
+    addrBytes = toBytes aEnv
+  in
+    maybeDecode @Messages addrBytes

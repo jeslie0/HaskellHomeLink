@@ -1,5 +1,4 @@
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 {-|
 Module : Home.Handler
@@ -15,6 +14,9 @@ import Control.Monad.Reader
 import Home.AudioStream (start, stop)
 import Home.Env (Env (..))
 import Proto.Radio qualified as Radio
+import Proto.Radio_Fields qualified as Radio
+import TH
+import Lens.Micro
 
 class HomeHandler env a where
     homeHandler :: a -> ReaderT env IO ()
@@ -35,3 +37,6 @@ instance HomeHandler Env Radio.StopRadio where
     homeHandler _ = do
         Env {_audioStream} <- ask
         liftIO $ stop _audioStream
+
+
+$(makeInstance ''HomeHandler ''Env ''Radio.Envelope 'Radio.maybe'payload ''Radio.Envelope'Payload)

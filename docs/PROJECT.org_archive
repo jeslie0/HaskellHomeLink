@@ -1,0 +1,39 @@
+#    -*- mode: org -*-
+
+
+Archived entries from file /home/james/workspaces/Haskell/AssistantPi/docs/PROJECT.org
+
+
+* DONE Create event loop structure
+:PROPERTIES:
+:type:     task
+:ID:       407cc33b-9382-467e-a6be-7d856fdd14c5
+:component: backend
+:ARCHIVE_TIME: 2024-11-02 Sat 20:14
+:ARCHIVE_FILE: ~/workspaces/Haskell/AssistantPi/docs/PROJECT.org
+:ARCHIVE_OLPATH: Tasks
+:ARCHIVE_CATEGORY: Project Management
+:ARCHIVE_TODO: DONE
+:END:
+:LOGBOOK:
+CLOCK: [2024-10-27 Sun 19:38]--[2024-10-27 Sun 20:38] =>  1:00
+:END:
+Each island's core processes will be managed by an event loop. This loop will run in a single thread, but could cause actions to run on their own thread, potentially (might be simpler to just have one thread in the event loop).
+
+** Update
+This is mostly done now. There are some small tweaks to be made to allow for intervals and timeouts, but the main structure is there.
+
+* DONE Use Template Haskell to extract the desired protobuf message
+:PROPERTIES:
+:type:     task
+:component: backend
+:ARCHIVE_TIME: 2024-11-02 Sat 20:16
+:ARCHIVE_FILE: ~/workspaces/Haskell/AssistantPi/docs/PROJECT.org
+:ARCHIVE_OLPATH: Tasks
+:ARCHIVE_CATEGORY: Project Management
+:ARCHIVE_TODO: DONE
+:END:
+The =proto-lens= package auto generates types for us, however; for it's ~oneOf~ types, these are implemented as a union type. Our project structure tries to use open types and type classes, so this closed union type makes it hard to extend. The solution is to invoke Template Haskell to automate some pattern matching for us.
+
+** Complete!
+This is now complete. The envelope types can be made instances of Handler classes now. This allows them to be added straight to the event loop.

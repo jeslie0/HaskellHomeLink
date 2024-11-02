@@ -66,6 +66,7 @@ executable Home
                       Home.AudioStream,
                       Home.Handler,
                       Home.Env,
+                      Msg,
                       -- Msg,
                       -- Port,
                       -- Proto.Person,
@@ -74,6 +75,7 @@ executable Home
                       Proto.Radio_Fields,
                       -- Socket,
                       -- Socket.TCP,
+                      TH
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
 
