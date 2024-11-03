@@ -3,6 +3,7 @@
 
 module TH (
     makeInstance,
+    makeToEnvelopeInstances,
 ) where
 
 import Control.Monad (forM)
@@ -99,3 +100,67 @@ makeInstance className envName typeName payloadConstructorName payloadType = do
                         )
                         []
             pure $ constructors <> [failCase]
+
+-- | This lets us generate instances to wrap protobuf messages into
+-- their respective envelopes. A user of this must define a class such
+-- as:
+-- class ToEnvelope msg where
+--     toEnvelope :: msg -> Radio.Envelope
+--
+-- The following use will then create the required instances for each
+-- part of the payload:
+-- $(makeToEnvelopeInstances ''ToEnvelope ''Radio.Envelope ''Radio.Envelope'Payload 'Radio.maybe'payload)
+--
+-- instance ToEnvelope StartRadio where
+--   toEnvelope msg_aa9hv
+--     = (maybe'payload ?~ Envelope'M1 msg_aa9hv) defMessage
+-- instance ToEnvelope StopRadio where
+--   toEnvelope msg_aa9hw
+--     = (maybe'payload ?~ Envelope'M2 msg_aa9hw) defMessage
+makeToEnvelopeInstances ::
+    Name
+    -- ^ ToEnvelope class name
+    -> Name
+    -- ^ Envelope type name
+    -> Name
+    -- ^ Payload type name
+    -> Name
+    -- ^ Envelop Payload lens setter
+    -> Q [Dec]
+makeToEnvelopeInstances className typeName payloadTypeName payloadConslensSetter = do
+    classMethodNames <- getClassMethodNames className
+    info <- reify payloadTypeName
+    case info of
+        TyConI (DataD _ _ _ _ constructors _) -> do
+            forM constructors $ \con -> mkInstanceDec classMethodNames con
+        _ -> fail "Couldn't match on data type"
+  where
+    mkInstanceDec classMethodNames con@(NormalC conName _) = do
+        conInputType <- getNameOfConInputType con
+        decs <- mkDecs conName classMethodNames
+        pure $
+            InstanceD
+                Nothing
+                []
+                (AppT (ConT className) (ConT conInputType))
+                decs
+    mkInstanceDec _ _ = fail "Couldn't match constructor"
+
+    mkDecs constructorName classMethodNames = do
+        forM classMethodNames $ \method -> do
+            msgName <- newName "msg"
+            let body =
+                    AppE
+                        ( UInfixE
+                            (VarE payloadConslensSetter)
+                            (VarE $ mkName "?~")
+                            (AppE (ConE constructorName) (VarE msgName))
+                        )
+                        (VarE $ mkName "defMessage")
+            let methodClause = Clause [VarP msgName] (NormalB body) []
+            pure $ FunD method [methodClause]
+
+--
+getNameOfConInputType :: Con -> Q Name
+getNameOfConInputType (NormalC _ [(_, ConT typeName)]) = pure typeName
+getNameOfConInputType _ = fail "Couldn't match conInputType"

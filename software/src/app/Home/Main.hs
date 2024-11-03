@@ -42,5 +42,5 @@ main = do
                     Left err -> putStrLn err
                     Right msg -> addMsg loop msg
         liftIO $ addSubscriber sockHandler sub
-        liftIO getLine
+        _ <- liftIO getLine
         liftIO $ killSocketHandler sockHandler

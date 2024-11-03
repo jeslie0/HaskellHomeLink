@@ -8,15 +8,17 @@ handled by the Home application.
 module Home.Handler (
     HomeHandler (..),
     ExHomeHandler (..),
+    ToEnvelope (..),
 ) where
 
 import Control.Monad.Reader
+import Data.ProtoLens (defMessage)
 import Home.AudioStream (start, stop)
 import Home.Env (Env (..))
+import Lens.Micro
 import Proto.Radio qualified as Radio
 import Proto.Radio_Fields qualified as Radio
 import TH
-import Lens.Micro
 
 class HomeHandler env a where
     homeHandler :: a -> ReaderT env IO ()
@@ -38,5 +40,20 @@ instance HomeHandler Env Radio.StopRadio where
         Env {_audioStream} <- ask
         liftIO $ stop _audioStream
 
+$( makeInstance
+    ''HomeHandler
+    ''Env
+    ''Radio.Envelope
+    'Radio.maybe'payload
+    ''Radio.Envelope'Payload
+ )
 
-$(makeInstance ''HomeHandler ''Env ''Radio.Envelope 'Radio.maybe'payload ''Radio.Envelope'Payload)
+--
+class ToEnvelope msg where
+    toEnvelope :: msg -> Radio.Envelope
+$( makeToEnvelopeInstances
+    ''ToEnvelope
+    ''Radio.Envelope
+    ''Radio.Envelope'Payload
+    'Radio.maybe'payload
+ )
