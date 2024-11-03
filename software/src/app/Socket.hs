@@ -5,12 +5,14 @@ module Socket (
     sendAll,
     readHeader,
     makeClientSocketHandler,
+    makeServerSocketHandler,
     SocketHandler (),
     sendMsg,
     addSubscriber,
     killSocketHandler,
 ) where
 
+import Data.Serialize qualified as Binary
 import Control.Concurrent (
     Chan,
     MVar,
@@ -31,7 +33,7 @@ import Data.Serialize qualified as Binary
 import Data.Word (Word32)
 import Network.Socket (HostName, ServiceName, Socket)
 import Network.Socket.ByteString (recv, sendAll)
-import Socket.TCP (runTCPClient)
+import Socket.TCP (runTCPClient, runTCPServer)
 
 recvNBytes :: Socket -> Int -> IO B.ByteString
 recvNBytes sock n = do
@@ -51,7 +53,7 @@ readHeader :: Socket -> IO Word32
 readHeader sock = do
     hdr <- recvNBytes sock 4
     case Binary.runGet Binary.getWord32le hdr of
-        Left str -> putStrLn str >> pure 0
+        Left str -> putStrLn ("Error: " <> str) >> pure 0
         Right n -> pure n
 
 data SocketHandler = SocketHandler
@@ -69,12 +71,11 @@ addSubscriber :: SocketHandler -> (B.ByteString -> IO ()) -> IO ()
 addSubscriber (SocketHandler _ _ _ subscribers _) newSub = do
     modifyMVar_ subscribers $ \subs -> pure (newSub : subs)
 
-makeClientSocketHandler ::
-    HostName -> ServiceName -> IO SocketHandler
-makeClientSocketHandler hostname port = do
+makeGenericSocketHandler ::  ((Socket -> IO ()) -> IO ()) -> IO SocketHandler
+makeGenericSocketHandler  withSocket = do
     sockMVar <- newEmptyMVar @Socket
     killMVar <- newMVar ()
-    clientThread <- forkIO $ runTCPClient hostname port $ \socket -> do
+    clientThread <- forkIO $ withSocket $ \socket -> do
         putMVar sockMVar socket
         putMVar killMVar ()
     socket <- takeMVar sockMVar
@@ -93,7 +94,6 @@ makeClientSocketHandler hostname port = do
   where
     recvThreadAction subscribers socket = do
         hdr <- readHeader socket
-        print hdr
         bytes <- recvNBytes socket (fromIntegral hdr)
         print bytes
         withMVar subscribers $ \subList -> forM_ subList ($ bytes)
@@ -103,3 +103,14 @@ makeClientSocketHandler hostname port = do
         bytes <- readChan sendChan
         sendAll socket bytes
         senderThreadAction sendChan socket
+
+
+makeClientSocketHandler ::
+    HostName -> ServiceName -> IO SocketHandler
+makeClientSocketHandler hostname port = do
+  makeGenericSocketHandler $ runTCPClient hostname port
+
+
+makeServerSocketHandler :: ServiceName -> IO SocketHandler
+makeServerSocketHandler port =
+  makeGenericSocketHandler $ runTCPServer Nothing port
