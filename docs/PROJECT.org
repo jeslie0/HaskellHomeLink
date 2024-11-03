@@ -5,7 +5,7 @@
 #+author: James Leslie
 #+TODO: TODO IN-PROGRESS WAITING ONGOING POSTPONED | DONE CANCELLED
 
-* [0/3] Tasks
+* [0/5] Tasks
 
 ** ONGOING Create detailed design documentation
 :PROPERTIES:
@@ -14,6 +14,16 @@
 :END:
 I need to create a document explaining how the pieces of this project work. Realistically, this will be a constantly updated document and will never be "finished".
 
+** TODO Implement a Message dispatcher
+:PROPERTIES:
+:type:     task
+:component: backend
+:priority: high
+:END:
+Some kind of data type needs to manage the connections and routing of messages. It should be abstract enough to be able to deal with different types communication (channels/sockets). Each event handler should have access to this.
+
+** TODO Make all events have a source
+This should make replying to an event a bit easier to manage.
 ** WAITING Implement client TLS connection controller
 :PROPERTIES:
 :type:     task
@@ -24,6 +34,8 @@ I need to create a document explaining how the pieces of this project work. Real
 The Home application will act as a TLS client and try to connect to the Remote application. We will have a "TlsClient" type that will hook into an event loop.
 
 This will depend on completing a basic TCP connection first, since that is simpler.
+
+A basic TCP client has been implemented. It needs to be refined. It should try to connect to the given destination every 2 seconds, and then keep trying to reconnect when there is a connection break.
 
 ** TODO Rework Nix structure
 :PROPERTIES:

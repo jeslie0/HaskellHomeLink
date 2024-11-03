@@ -1,12 +1,14 @@
 module Home.Env (Env (..), mkEnv) where
 
-import Data.IORef (IORef, newIORef)
 import Home.AudioStream
+import Socket (SocketHandler)
 
-data Env = Env {_audioStream :: AudioStream}
+data Env = Env
+    { _audioStream :: AudioStream
+    , _socketHandler :: SocketHandler
+    }
 
-mkEnv :: IO Env
-mkEnv = do
-    ref <- newIORef 0
+mkEnv :: SocketHandler -> IO Env
+mkEnv socketHandler = do
     audioStream <- mkAudioStream
-    return $ Env {_audioStream = audioStream}
+    return $ Env {_audioStream = audioStream, _socketHandler = socketHandler}
