@@ -25,7 +25,7 @@ import Control.Concurrent (
     putMVar,
     readChan,
     takeMVar,
-    writeChan, withMVar,
+    writeChan, withMVar, killThread,
  )
 import Control.Monad (forM_)
 import Data.ByteString qualified as B
@@ -89,7 +89,9 @@ makeGenericSocketHandler  withSocket = do
             , recvThread = recvThread
             , sendChan = sendChan
             , subscribers = subscribers
-            , killSocketHandler = takeMVar killMVar
+            , killSocketHandler = do
+                takeMVar killMVar
+                forM_ [clientThread, sendThread, recvThread] killThread
             }
   where
     recvThreadAction subscribers socket = do

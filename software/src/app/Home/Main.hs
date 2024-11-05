@@ -13,7 +13,7 @@ import Proto.Radio qualified as Radio
 import Proto.Radio_Fields qualified as Radio
 import Socket (addSubscriber, makeClientSocketHandler, killSocketHandler, makeServerSocketHandler, sendMsg)
 import Control.Monad (void)
-import Control.Concurrent (forkIO)
+import Control.Concurrent (forkIO, killThread)
 import Control.Concurrent.Lifted (threadDelay)
 import Data.Word (Word32)
 import Data.ProtoLens.Encoding
@@ -40,14 +40,14 @@ envelopeStop =
 
 main :: IO ()
 main = do
-    forkIO $ void $ do
-      serverSockHand <- makeServerSocketHandler "3005"
-      threadDelay 2000000
-      let bytes = encodeMessage envelopeStart
-          bytesSize = fromIntegral @_ @Word32 $ B.length bytes
-      putStrLn $ "msg length: " <> show (B.length bytes)
-      sendMsg serverSockHand $ Binary.runPut $ Binary.putWord32le bytesSize
-      sendMsg serverSockHand $ bytes
+    -- serverThread <- forkIO $ void $ do
+    --   serverSockHand <- makeServerSocketHandler "3005"
+    --   threadDelay 2000000
+    --   let bytes = encodeMessage envelopeStart
+    --       bytesSize = fromIntegral @_ @Word32 $ B.length bytes
+    --   putStrLn $ "msg length: " <> show (B.length bytes)
+    --   sendMsg serverSockHand $ Binary.runPut $ Binary.putWord32le bytesSize
+    --   sendMsg serverSockHand $ bytes
     threadDelay 1000000
     sockHandler <- makeClientSocketHandler "127.0.0.1" "3005"
     env <- mkEnv sockHandler
@@ -64,4 +64,3 @@ main = do
         liftIO $ addSubscriber sockHandler sub
         _ <- liftIO getLine
         liftIO $ killSocketHandler sockHandler
-
