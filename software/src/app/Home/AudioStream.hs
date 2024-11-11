@@ -6,7 +6,7 @@ import Alsa.PCM.Handle
 import Alsa.PCM.Params
 import Alsa.PCM.Stream
 import Control.Concurrent
-import Control.Exception (bracket)
+import Control.Exception (bracket, bracket_)
 import Control.Monad (unless, void, when)
 import Data.ByteString qualified as BS
 import Data.ByteString.Internal qualified as BS
@@ -175,6 +175,8 @@ data AudioStream = AudioStream
     { _start :: IO ()
     , _stop :: IO ()
     , _playing :: IORef Bool
+    , _alsaThreadMVar :: MVar ThreadId
+    , _httpThreadMVar :: MVar ThreadId
     }
 
 start :: AudioStream -> IO ()
@@ -184,7 +186,7 @@ stop :: AudioStream -> IO ()
 stop = _stop
 
 isPlaying :: AudioStream -> IO Bool
-isPlaying (AudioStream _ _ _playing) = readIORef _playing
+isPlaying (AudioStream _ _ _playing _ _) = readIORef _playing
 
 mkAudioStream :: IO AudioStream
 mkAudioStream = do
@@ -225,4 +227,6 @@ mkAudioStream = do
             { _start = start'
             , _stop = stop'
             , _playing = isPlaying'
+            , _httpThreadMVar = httpThreadMVar
+            , _alsaThreadMVar = alsaThreadMVar
             }

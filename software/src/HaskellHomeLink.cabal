@@ -61,14 +61,17 @@ executable Home
 
 
     -- Modules included in this executable, other than Main.
-    other-modules:    EventLoop,
+    other-modules:    Connection,
+                      EventLoop,
                       Home.AudioStream,
                       Home.Handler,
                       Home.Env,
+                      Island,
                       Msg,
                       -- Port,
                       Proto.Radio,
                       Proto.Radio_Fields,
+                      Router,
                       Socket,
                       Socket.TCP,
                       TH
@@ -81,6 +84,7 @@ executable Home
                       bytestring,
                       cereal,
                       connection,
+                      containers,
                       data-default,
                       lifted-base,
                       http-client,
@@ -98,6 +102,8 @@ executable Home
                       text,
                       time,
                       tls,
+                      transformers,
+                      unordered-containers,
                       vector
 
 

@@ -17,7 +17,7 @@ getClassMethodNames className = do
             forM methods $ \case
                 SigD methodName _ -> pure methodName
                 _ -> fail "This should't happen."
-        _ -> fail "Input name must be a class name."
+        _ -> fail $ "Input name must be a class name." <> (show info)
 
 getConstructorNames :: Name -> Q [Name]
 getConstructorNames typeName = do
@@ -49,21 +49,19 @@ makeInstance ::
     Name
     -- ^ Class name
     -> Name
-    -- ^ Env name
-    -> Name
     -- ^ Envelope type name
     -> Name
     -- ^ Payload constructor name
     -> Name
     -- ^ Payload type name
     -> Q [Dec]
-makeInstance className envName typeName payloadConstructorName payloadType = do
+makeInstance className typeName payloadConstructorName payloadType = do
     decs <- mkDecs
     let inst =
             InstanceD
                 Nothing
                 []
-                (AppT (AppT (ConT className) (ConT envName)) (ConT typeName))
+                (AppT (ConT className) (ConT typeName))
                 decs
     pure [inst]
   where
@@ -75,22 +73,23 @@ makeInstance className envName typeName payloadConstructorName payloadType = do
             pure $ FunD methodName [instanceClause]
       where
         mkClause methodName = do
-            envelopeName <- newName "variable"
-            matches <- mkMatches methodName
+            envelopeName <- newName "envelope"
+            loopName <- newName "loop"
+            matches <- mkMatches methodName loopName
             let caseExpression =
                     UInfixE (VarE envelopeName) (VarE $ mkName "^.") (VarE payloadConstructorName)
             let bodyExpression =
                     CaseE caseExpression matches
-            pure $ Clause [VarP envelopeName] (NormalB bodyExpression) []
+            pure $ Clause [VarP loopName, VarP envelopeName] (NormalB bodyExpression) []
 
-        mkMatches methodName = do
+        mkMatches methodName loopName = do
             constructorNames <- getConstructorNames payloadType
             constructors <- forM constructorNames $ \constructorName -> do
                 varName <- newName "variable"
                 pure $
                     Match
                         (ConP 'Just [] [ConP constructorName [] [VarP varName]])
-                        (NormalB $ AppE (VarE methodName) (VarE varName))
+                        (NormalB $ AppE (AppE (VarE methodName) (VarE loopName)) (VarE varName))
                         []
             let failCase =
                     Match
@@ -101,22 +100,26 @@ makeInstance className envName typeName payloadConstructorName payloadType = do
                         []
             pure $ constructors <> [failCase]
 
--- | This lets us generate instances to wrap protobuf messages into
--- their respective envelopes. A user of this must define a class such
--- as:
--- class ToEnvelope msg where
---     toEnvelope :: msg -> Radio.Envelope
---
--- The following use will then create the required instances for each
--- part of the payload:
--- $(makeToEnvelopeInstances ''ToEnvelope ''Radio.Envelope ''Radio.Envelope'Payload 'Radio.maybe'payload)
---
--- instance ToEnvelope StartRadio where
---   toEnvelope msg_aa9hv
---     = (maybe'payload ?~ Envelope'M1 msg_aa9hv) defMessage
--- instance ToEnvelope StopRadio where
---   toEnvelope msg_aa9hw
---     = (maybe'payload ?~ Envelope'M2 msg_aa9hw) defMessage
+{- | This lets us generate instances to wrap protobuf messages into
+their respective envelopes. A user of this must define a class such
+as:
+class ToEnvelope msg where
+    toEnvelope :: msg -> Radio.Envelope
+
+The following use will then create the required instances for each
+part of the payload:
+-}
+
+{- $(makeToEnvelopeInstances ''ToEnvelope ''Radio.Envelope ''Radio.Envelope'Payload 'Radio.maybe'payload)
+
+instance ToEnvelope StartRadio where
+  toEnvelope msg_aa9hv
+    = (maybe'payload ?~ Envelope'M1 msg_aa9hv) defMessage
+instance ToEnvelope StopRadio where
+  toEnvelope msg_aa9hw
+    = (maybe'payload ?~ Envelope'M2 msg_aa9hw) defMessage
+-}
+
 makeToEnvelopeInstances ::
     Name
     -- ^ ToEnvelope class name

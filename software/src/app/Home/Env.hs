@@ -1,14 +1,27 @@
-module Home.Env (Env (..), mkEnv) where
+module Home.Env (EnvT, Env (..), mkEnv) where
 
+import Connection
+import Control.Concurrent (MVar, ThreadId, newEmptyMVar, newMVar)
+import Control.Monad.Reader (ReaderT)
 import Home.AudioStream
-import Socket (SocketHandler)
 
 data Env = Env
     { _audioStream :: AudioStream
-    , _socketHandler :: SocketHandler
+    , _conn :: MVar Connection
+    , _connThread :: (MVar ThreadId, MVar ())
     }
 
-mkEnv :: SocketHandler -> IO Env
-mkEnv socketHandler = do
+type EnvT = ReaderT Env IO
+
+mkEnv :: IO Env
+mkEnv = do
     audioStream <- mkAudioStream
-    return $ Env {_audioStream = audioStream, _socketHandler = socketHandler}
+    connMVar <- newEmptyMVar
+    connThread <-
+        newEmptyMVar >>= \threadMVar -> newMVar () >>= \blockMVar -> pure (threadMVar, blockMVar)
+    return $
+        Env
+            { _audioStream = audioStream
+            , _conn = connMVar
+            , _connThread = connThread
+            }
