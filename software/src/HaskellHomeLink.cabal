@@ -68,13 +68,13 @@ executable Home
                       Home.Env,
                       Island,
                       Msg,
-                      -- Port,
                       Proto.Radio,
                       Proto.Radio_Fields,
                       Router,
                       Socket,
                       Socket.TCP,
-                      TH
+                      TH,
+                      ThreadPool
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
 
@@ -94,6 +94,7 @@ executable Home
                       minimp3-hs,
                       monad-control,
                       mtl,
+                      mutable-containers,
                       network,
                       pqueue,
                       proto-lens,

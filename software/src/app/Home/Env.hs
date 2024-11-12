@@ -4,24 +4,22 @@ import Connection
 import Control.Concurrent (MVar, ThreadId, newEmptyMVar, newMVar)
 import Control.Monad.Reader (ReaderT)
 import Home.AudioStream
+import ThreadPool (ThreadPool, mkThreadPool)
 
 data Env = Env
     { _audioStream :: AudioStream
-    , _conn :: MVar Connection
-    , _connThread :: (MVar ThreadId, MVar ())
+    , _threadPool :: ThreadPool
     }
 
 type EnvT = ReaderT Env IO
 
 mkEnv :: IO Env
 mkEnv = do
-    audioStream <- mkAudioStream
-    connMVar <- newEmptyMVar
-    connThread <-
-        newEmptyMVar >>= \threadMVar -> newMVar () >>= \blockMVar -> pure (threadMVar, blockMVar)
+    _threadPool <- mkThreadPool 8
+    _audioStream <- mkAudioStream
+
     return $
         Env
-            { _audioStream = audioStream
-            , _conn = connMVar
-            , _connThread = connThread
+            { _audioStream
+            , _threadPool
             }
