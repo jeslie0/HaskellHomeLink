@@ -11,20 +11,19 @@ module Home.Handler (
     ToEnvelope (..),
 ) where
 
-import Connection (Connection (..), mkConnection)
-import Control.Concurrent (forkIO, isEmptyMVar, newEmptyMVar, putMVar, takeMVar)
-import Control.Concurrent.Lifted (fork)
-import Control.Monad (void)
+import Connection (mkConnection)
+import Control.Concurrent (isEmptyMVar)
+import Control.Exception (SomeException (..), displayException)
 import Control.Monad.Reader
 import Data.ProtoLens (defMessage)
-import EventLoop (EventLoop (..))
+import EventLoop (EventLoop)
 import Home.AudioStream (start, stop)
 import Home.Env (Env (..), EnvT)
 import Lens.Micro
-import Msg (Msg (..))
 import Proto.Radio qualified as Radio
 import Proto.Radio_Fields qualified as Radio
 import TH
+import ThreadPool (addTask)
 
 class HomeHandler msg where
     homeHandler ::
@@ -50,15 +49,15 @@ instance HomeHandler Radio.StopRadio where
 instance HomeHandler Radio.ConnectTCP where
     homeHandler loop _ = do
         env <- ask
-        let (threadMVar, blockMVar) = _connThread env
-        threadMVarEmpty <- liftIO $ isEmptyMVar threadMVar
-        blockMVarFull <- liftIO $ not <$> isEmptyMVar blockMVar
-        if threadMVarEmpty && blockMVarFull
-            then do
-                threadID <- fork $ do
-                    void . liftIO $ mkConnection loop blockMVar "127.0.0.1" "3000"
-                liftIO $ putMVar threadMVar threadID
-                void . liftIO $ takeMVar blockMVar
+        let connectionMVar = _connectionMVar env
+            threadPool = _threadPool env
+        connectionExists <- liftIO $ isEmptyMVar connectionMVar
+        if not connectionExists
+            then liftIO
+                $ addTask
+                    threadPool
+                    (mkConnection loop threadPool connectionMVar "127.0.0.1" "3000")
+                $ \(SomeException err) -> putStrLn $ displayException err
             else do
                 liftIO $ putStrLn "Connection thread already exists!"
                 pure ()

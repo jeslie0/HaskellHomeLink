@@ -21,12 +21,14 @@ import Control.Exception (
     throwIO,
  )
 import Control.Monad (forever, void)
+import Control.Monad.IO.Class (MonadIO)
 import Data.ByteString qualified as B
-import EventLoop (EventLoop (..))
+import EventLoop (EventLoop, addMsg)
 import Msg (Msg (..))
 import Network.Socket
 import Network.Socket.ByteString (sendAll)
 import Socket (readHeader, recvNBytes)
+import ThreadPool (ThreadPool, addTask)
 
 data Connection = Connection
     { trySendMsg :: B.ByteString -> IO Bool
@@ -60,52 +62,59 @@ that the threads need to be cleaned up by the caller in the
 presence of exceptions.
 -}
 establishSocketComms ::
-    Socket
+    ThreadPool
+    -> Socket
     -> Chan B.ByteString
     -> (B.ByteString -> IO ())
-    -> IO (ThreadId, ThreadId)
-establishSocketComms sock sendChan recvHandler = do
-    sendThread <- forkIO . forever $ do
-        bytes <- readChan sendChan
-        sendAll sock bytes
+    -> IO ()
+establishSocketComms threadPool sock sendChan recvHandler = do
+    addTask threadPool sendFunc sendErrHandle
+    addTask threadPool recvFunc recvErrHandle
+  where
+    sendFunc =
+        forever $ do
+            bytes <- readChan sendChan
+            sendAll sock bytes
 
-    recvThread <- forkIO . forever $ do
-        mMsg <- recvMsg sock
-        case mMsg of
-            Nothing ->
-                -- Socket dead
-                throwIO SocketClosedException
-            Just msg -> recvHandler msg
+    sendErrHandle (SomeException err) = putStrLn $ displayException err
 
-    return (sendThread, recvThread)
+    recvFunc =
+        forever $ do
+            mMsg <- recvMsg sock
+            case mMsg of
+                Nothing ->
+                    -- Socket dead
+                    throwIO SocketClosedException
+                Just msg -> recvHandler msg
+
+    recvErrHandle (SomeException err) = putStrLn $ displayException err
 
 -- | Establish the required threads and connect to the server.
 withSocket ::
-    MVar ()
+    ThreadPool
+    -> MVar ()
     -> SockAddr
     -> Chan B.ByteString
     -> (B.ByteString -> IO ())
     -> Socket
     -> IO ()
-withSocket blockMVar sockAddr sendChan recvHandler sock =
+withSocket threadPool blockMVar sockAddr sendChan recvHandler sock =
     handleSocket `catch` retryConnect
   where
     handleSocket = do
         putStrLn "Connecting to Socket"
         connect sock sockAddr `catch` failedToConnectHandle
         putStrLn "Connected to Socket"
-        bracket
-            (establishSocketComms sock sendChan recvHandler)
-            ( \(th1, th2) -> killThread th1 >> killThread th2
-            )
-            $ \_ -> void $ readMVar blockMVar
+        establishSocketComms threadPool sock sendChan recvHandler
+        readMVar blockMVar
 
-    retryConnect = handleErr (withSocket blockMVar sockAddr sendChan recvHandler sock)
+    retryConnect =
+        handleErr (withSocket threadPool blockMVar sockAddr sendChan recvHandler sock)
 
     failedToConnectHandle (SomeException err) = do
-      putStrLn "Failed to connect to server. Retrying in 2s..."
-      threadDelay 2000000
-      handleSocket
+        putStrLn "Failed to connect to server. Retrying in 2s..."
+        threadDelay 2000000
+        handleSocket
 
 data SocketClosedException = SocketClosedException deriving (Show)
 
@@ -121,19 +130,27 @@ handleErr retry (SomeException ex) = do
     retry
 
 mkConnection ::
-    (Msg msg) => EventLoop m msg -> MVar () -> HostName -> ServiceName -> IO ()
-mkConnection loop blockMVar host port = do
+    forall msg m.
+    (Msg msg, MonadIO m) =>
+    EventLoop m msg
+    -> ThreadPool
+    -> MVar ()
+    -> HostName
+    -> ServiceName
+    -> IO ()
+mkConnection loop threadPool blockMVar host port = do
     addrInfo <- mkAddrInfo host port
     sendChan <- newChan @B.ByteString
     runSocket addrInfo $
         withSocket
+            threadPool
             blockMVar
             (addrAddress addrInfo)
             sendChan
             ( \bytes ->
-                case fromBytes bytes of
+                case fromBytes @msg bytes of
                     Left err -> putStrLn err
-                    Right msg -> _addMsg loop msg
+                    Right msg -> addMsg loop msg
             )
 
 -- | Receive a message from the socket.

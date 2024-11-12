@@ -7,9 +7,9 @@ import Control.Concurrent (
     killThread,
     newMVar,
     putMVar,
-    takeMVar,
+    takeMVar, forkIOWithUnmask,
  )
-import Control.Exception (bracket_)
+import Control.Exception (bracket_, Exception, mask_, catch)
 import Data.Foldable (forM_, for_)
 import Data.Mutable (Deque, newColl, popFront, pushBack)
 import Data.Vector.Mutable qualified as V
@@ -21,15 +21,15 @@ data ThreadPool = ThreadPool
     , _activeThreadCount :: MVar Int
     }
 
-addTask :: ThreadPool -> IO () -> IO ()
-addTask pool@(ThreadPool _tasksMVar _maxThreadCount _threadPool _activeThreadCount) task = do
+addTask :: Exception e => ThreadPool -> IO () -> (e -> IO ()) -> IO ()
+addTask pool@(ThreadPool _tasksMVar _maxThreadCount _threadPool _activeThreadCount) task handler = do
     activeThreadCount <- takeMVar _activeThreadCount
     threadPool@(currentThreads, currentThreadsSize) <- takeMVar _threadPool
 
     -- Extend the thread pool if required.
     if currentThreadsSize < _maxThreadCount && activeThreadCount < _maxThreadCount
         then do
-            newThread <- forkIO $ mainThread pool
+            newThread <- mask_ $ forkIOWithUnmask $ \unmask -> catch (unmask $ mainThread pool) handler
             let !newLen = currentThreadsSize + 1
             putMVar _threadPool (newThread : currentThreads, newLen)
         else putMVar _threadPool threadPool

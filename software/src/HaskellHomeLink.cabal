@@ -70,7 +70,7 @@ executable Home
                       Msg,
                       Proto.Radio,
                       Proto.Radio_Fields,
-                      Router,
+                      -- Router,
                       Socket,
                       Socket.TCP,
                       TH,
