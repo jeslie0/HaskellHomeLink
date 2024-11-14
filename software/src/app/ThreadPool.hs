@@ -1,13 +1,12 @@
-module ThreadPool (ThreadPool, addTask, mkThreadPool, killThreadPool) where
+module ThreadPool (ThreadPool, addTask, addTaskUnmasked, mkThreadPool, killThreadPool) where
 
 import Control.Concurrent (
     MVar,
     ThreadId,
-    forkIO,
     killThread,
     newMVar,
     putMVar,
-    takeMVar, forkIOWithUnmask,
+    takeMVar, forkIOWithUnmask, forkIO,
  )
 import Control.Exception (bracket_, Exception, mask_, catch)
 import Data.Foldable (forM_, for_)
@@ -20,6 +19,24 @@ data ThreadPool = ThreadPool
     , _threadPool :: MVar ([ThreadId], Int)
     , _activeThreadCount :: MVar Int
     }
+
+addTaskUnmasked :: ThreadPool -> IO () -> IO ()
+addTaskUnmasked pool@(ThreadPool _tasksMVar _maxThreadCount _threadPool _activeThreadCount) task = do
+    activeThreadCount <- takeMVar _activeThreadCount
+    threadPool@(currentThreads, currentThreadsSize) <- takeMVar _threadPool
+
+    -- Extend the thread pool if required.
+    if currentThreadsSize < _maxThreadCount && activeThreadCount < _maxThreadCount
+        then do
+            newThread <- forkIO $ mainThread pool
+            let !newLen = currentThreadsSize + 1
+            putMVar _threadPool (newThread : currentThreads, newLen)
+        else putMVar _threadPool threadPool
+    putMVar _activeThreadCount activeThreadCount
+
+    deque <- takeMVar _tasksMVar
+    pushBack deque task
+    putMVar _tasksMVar deque
 
 addTask :: Exception e => ThreadPool -> IO () -> (e -> IO ()) -> IO ()
 addTask pool@(ThreadPool _tasksMVar _maxThreadCount _threadPool _activeThreadCount) task handler = do
@@ -48,11 +65,13 @@ mainThread pool@(ThreadPool _tasksMVar _ _ _activeThreadCount) = do
     mainThread pool
   where
     incrementActiveThreadCount = do
+        putStrLn "Increment"
         threadCount <- takeMVar _activeThreadCount
         let !newThreadCount = threadCount + 1
         putMVar _activeThreadCount newThreadCount
 
     decrementActiveThreadCount = do
+        putStrLn "Decrement"
         threadCount <- takeMVar _activeThreadCount
         let !newThreadCount = threadCount - 1
         putMVar _activeThreadCount newThreadCount

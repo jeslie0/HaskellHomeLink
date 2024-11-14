@@ -1,4 +1,11 @@
-module EventLoop (EventLoop, mkEventLoop, addMsg, run, killEventLoop) where
+module EventLoop (
+    EventLoop,
+    mkEventLoop,
+    addMsg,
+    setTimeout,
+    run,
+    killEventLoop,
+) where
 
 import Control.Concurrent (
     MVar,
@@ -14,14 +21,14 @@ import Control.Monad (unless, when)
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.PQueue.Prio.Min qualified as PQueue
-import Data.Time.Clock.System (SystemTime, getSystemTime)
+import Data.Time.Clock (UTCTime, addUTCTime, getCurrentTime)
 
 {- | A single threaded event loop that can have messages added to it
 from another thread.
 -}
 data EventLoop m msg = EventLoop
     { _keepLoopAliveMVar :: MVar ()
-    , _pqueueMVar :: MVar (PQueue.MinPQueue SystemTime msg)
+    , _pqueueMVar :: MVar (PQueue.MinPQueue UTCTime msg)
     }
 
 -- | Create an event loop.
@@ -44,14 +51,20 @@ mkEventLoop = do
             }
 
 addMsg :: (MonadIO m, MonadIO m1) => EventLoop m1 msg -> msg -> m ()
-addMsg (EventLoop {_keepLoopAliveMVar, _pqueueMVar}) msg = do
-    time <- liftIO getSystemTime
+addMsg loop msg = setTimeout loop msg 0
+
+setTimeout :: (MonadIO m, MonadIO m1) => EventLoop m1 msg -> msg -> Int -> m ()
+setTimeout (EventLoop {_keepLoopAliveMVar, _pqueueMVar}) msg timeoutMs = do
+    time <- liftIO getCurrentTime
     -- Insert the messaage into the priority queue with
     -- current time.
     mPQueue <- liftIO $ tryTakeMVar _pqueueMVar
     case mPQueue of
         Nothing -> liftIO $ putMVar _pqueueMVar $ PQueue.singleton time msg
-        Just queue -> liftIO $ putMVar _pqueueMVar $ (time, msg) PQueue.:< queue
+        Just queue ->
+            liftIO $
+                putMVar _pqueueMVar $
+                    (addUTCTime (fromIntegral timeoutMs) time, msg) PQueue.:< queue
 
 killEventLoop :: (MonadIO m) => EventLoop m msg -> m ()
 killEventLoop (EventLoop {_keepLoopAliveMVar, _pqueueMVar}) = do
@@ -74,9 +87,9 @@ run loop@(EventLoop {_keepLoopAliveMVar, _pqueueMVar}) handle =
             case queue of
                 PQueue.Empty -> do
                     liftIO $ putStrLn "This should never happen"
-                    liftIO . throwIO $ userError "Empty event lopp queue detected"
+                    liftIO . throwIO $ userError "Empty event loop queue detected"
                 (PQueue.:<) (msgTime, msg) remQueue -> do
-                    curTime <- liftIO getSystemTime
+                    curTime <- liftIO getCurrentTime
                     if msgTime <= curTime
                         then do
                             -- If the remaning queue is empty, don't put it

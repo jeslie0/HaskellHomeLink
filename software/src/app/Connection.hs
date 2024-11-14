@@ -5,10 +5,12 @@ module Connection (Connection (..), mkConnection) where
 import Control.Concurrent (
     Chan,
     MVar,
-    ThreadId,
-    forkIO,
+    isEmptyMVar,
     killThread,
+    myThreadId,
     newChan,
+    newEmptyMVar,
+    putMVar,
     readChan,
     readMVar,
     threadDelay,
@@ -20,7 +22,7 @@ import Control.Exception (
     catch,
     throwIO,
  )
-import Control.Monad (forever, void)
+import Control.Monad (when)
 import Control.Monad.IO.Class (MonadIO)
 import Data.ByteString qualified as B
 import EventLoop (EventLoop, addMsg)
@@ -59,7 +61,8 @@ runSocket addrInfo socketHandler = do
 function will throw an exception if no bytes are received from the
 socket (ie, it has been closed by the server.) This is unsafe, in
 that the threads need to be cleaned up by the caller in the
-presence of exceptions.
+presence of exceptions. If this throws, it is because the connection
+has been severed. The socket needs to be remade from scratch.
 -}
 establishSocketComms ::
     ThreadPool
@@ -68,63 +71,68 @@ establishSocketComms ::
     -> (B.ByteString -> IO ())
     -> IO ()
 establishSocketComms threadPool sock sendChan recvHandler = do
-    addTask threadPool sendFunc sendErrHandle
-    addTask threadPool recvFunc recvErrHandle
+    connectionIsAliveMVar <- newEmptyMVar @()
+    sendThreadMVar <- newEmptyMVar
+    addTask threadPool (sendFunc sendThreadMVar connectionIsAliveMVar) sendErrHandle
+    recvFunc sendThreadMVar connectionIsAliveMVar
   where
-    sendFunc =
-        forever $ do
-            bytes <- readChan sendChan
-            sendAll sock bytes
+    sendFunc sendThreadMVar connectionIsAliveMVar = do
+        myThreadId >>= putMVar sendThreadMVar
+        sendFuncImpl
+      where
+        sendFuncImpl = do
+            connectionIsAlive <- isEmptyMVar connectionIsAliveMVar
+            when connectionIsAlive $ do
+                bytes <- readChan sendChan
+                sendAll sock bytes
+                sendFuncImpl
 
-    sendErrHandle (SomeException err) = putStrLn $ displayException err
+    sendErrHandle ex@(SomeException err) = do
+        putStrLn $ "AAA Thread Error!: " <> displayException err
+        throwIO ex
 
-    recvFunc =
-        forever $ do
+    recvFunc sendThreadMVar connectionIsAliveMVar = do
+        connectionIsAlive <- isEmptyMVar connectionIsAliveMVar
+        when connectionIsAlive $ do
             mMsg <- recvMsg sock
             case mMsg of
-                Nothing ->
+                Nothing -> do
                     -- Socket dead
-                    throwIO SocketClosedException
-                Just msg -> recvHandler msg
-
-    recvErrHandle (SomeException err) = putStrLn $ displayException err
+                    putMVar connectionIsAliveMVar ()
+                    readMVar sendThreadMVar >>= killThread
+                    throwIO $ userError "BBB Connection is dead"
+                Just msg -> do
+                  recvHandler msg
+                  recvFunc sendThreadMVar connectionIsAliveMVar
 
 -- | Establish the required threads and connect to the server.
 withSocket ::
     ThreadPool
-    -> MVar ()
     -> SockAddr
     -> Chan B.ByteString
     -> (B.ByteString -> IO ())
     -> Socket
     -> IO ()
-withSocket threadPool blockMVar sockAddr sendChan recvHandler sock =
-    handleSocket `catch` retryConnect
+withSocket threadPool sockAddr sendChan recvHandler sock = do
+    tryConnect `catch` retryConnect
+    establishSocketComms threadPool sock sendChan recvHandler
   where
-    handleSocket = do
-        putStrLn "Connecting to Socket"
-        connect sock sockAddr `catch` failedToConnectHandle
-        putStrLn "Connected to Socket"
-        establishSocketComms threadPool sock sendChan recvHandler
-        readMVar blockMVar
+    -- Attempt to connect to the socket. Return if the
+    -- connection is successful, otherwise throw.
+    tryConnect = do
+        connect sock sockAddr
+        putStrLn $ "Connected to server at: " <> show sockAddr
 
+    -- If connection fails, try to connect again on the existing socket
     retryConnect =
-        handleErr (withSocket threadPool blockMVar sockAddr sendChan recvHandler sock)
-
-    failedToConnectHandle (SomeException err) = do
-        putStrLn "Failed to connect to server. Retrying in 2s..."
-        threadDelay 2000000
-        handleSocket
+        handleErr tryConnect
 
 data SocketClosedException = SocketClosedException deriving (Show)
 
 instance Exception SocketClosedException
 
-data SocketFailedToConnect
-
-handleErr :: IO () -> SomeException -> IO ()
-handleErr retry (SomeException ex) = do
-    putStrLn $ "Exception occured: " <> displayException ex
+handleErr :: IO a -> SomeException -> IO a
+handleErr retry (SomeException _) = do
     putStrLn "Connection to server failed. Trying again in 2s..."
     threadDelay 2000000
     retry
@@ -134,24 +142,30 @@ mkConnection ::
     (Msg msg, MonadIO m) =>
     EventLoop m msg
     -> ThreadPool
-    -> MVar ()
     -> HostName
     -> ServiceName
     -> IO ()
-mkConnection loop threadPool blockMVar host port = do
+mkConnection loop threadPool host port = do
     addrInfo <- mkAddrInfo host port
     sendChan <- newChan @B.ByteString
-    runSocket addrInfo $
-        withSocket
-            threadPool
-            blockMVar
-            (addrAddress addrInfo)
-            sendChan
-            ( \bytes ->
-                case fromBytes @msg bytes of
-                    Left err -> putStrLn err
-                    Right msg -> addMsg loop msg
-            )
+    executeSock addrInfo sendChan `catch` handleConnectionBreak
+  where
+    executeSock addrInfo sendChan =
+        runSocket addrInfo $
+            withSocket
+                threadPool
+                (addrAddress addrInfo)
+                sendChan
+                ( \bytes ->
+                    case fromBytes @msg bytes of
+                        Left err -> putStrLn err
+                        Right msg -> addMsg loop msg
+                )
+
+    handleConnectionBreak (SomeException _) = do
+        putStrLn "Failed to connect to server. Retrying in 2s..."
+        threadDelay 2000000
+        mkConnection loop threadPool host port
 
 -- | Receive a message from the socket.
 recvMsg :: Socket -> IO (Maybe B.ByteString)

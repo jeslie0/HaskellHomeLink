@@ -7,12 +7,12 @@ handled by the Home application.
 -}
 module Home.Handler (
     HomeHandler (..),
-    ExHomeHandler (..),
+    -- ExHomeHandler (..),
     ToEnvelope (..),
 ) where
 
 import Connection (mkConnection)
-import Control.Concurrent (isEmptyMVar)
+import Control.Concurrent (isEmptyMVar, myThreadId, killThread)
 import Control.Exception (SomeException (..), displayException)
 import Control.Monad.Reader
 import Data.ProtoLens (defMessage)
@@ -23,13 +23,13 @@ import Lens.Micro
 import Proto.Radio qualified as Radio
 import Proto.Radio_Fields qualified as Radio
 import TH
-import ThreadPool (addTask)
+import ThreadPool (addTask, addTaskUnmasked)
 
 class HomeHandler msg where
     homeHandler ::
         EventLoop EnvT Radio.Envelope -> msg -> EnvT ()
 
-data ExHomeHandler env = forall a. (HomeHandler a) => ExHomeHandler a
+-- data ExHomeHandler = forall a. (HomeHandler a) => ExHomeHandler a
 
 -- instance HomeHandler (ExHomeHandler msg) where
 --     homeHandler loop (ExHomeHandler msg) = homeHandler loop msg
@@ -54,10 +54,13 @@ instance HomeHandler Radio.ConnectTCP where
         connectionExists <- liftIO $ isEmptyMVar connectionMVar
         if not connectionExists
             then liftIO
-                $ addTask
+                $ addTaskUnmasked
                     threadPool
-                    (mkConnection loop threadPool connectionMVar "127.0.0.1" "3000")
-                $ \(SomeException err) -> putStrLn $ displayException err
+                    (mkConnection loop threadPool "127.0.0.1" "3000")
+                -- $ \(SomeException err) -> do
+                --     thisThread <- myThreadId
+                --     putStrLn $ "ZZZZZ" <> displayException err
+                --     killThread thisThread
             else do
                 liftIO $ putStrLn "Connection thread already exists!"
                 pure ()

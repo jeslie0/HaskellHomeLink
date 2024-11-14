@@ -12,14 +12,20 @@ import Proto.Radio qualified as Radio
 import Proto.Radio_Fields qualified as Radio
 import ThreadPool (killThreadPool)
 
-envelopeStart :: Radio.Envelope
-envelopeStart =
+startConnection :: Radio.Envelope
+startConnection =
+    defMessage
+        & Radio.maybe'payload
+        ?~ Radio.Envelope'M3 defMessage
+
+startRadio :: Radio.Envelope
+startRadio =
     defMessage
         & Radio.maybe'payload
         ?~ Radio.Envelope'M1 defMessage
 
-envelopeStop :: Radio.Envelope
-envelopeStop =
+stopRadio :: Radio.Envelope
+stopRadio =
     defMessage
         & Radio.maybe'payload
         ?~ Radio.Envelope'M2 defMessage
@@ -31,7 +37,8 @@ main = do
   where
     action = do
         loop <- mkEventLoop @Radio.Envelope
-        addMsg loop envelopeStart
+        addMsg loop startConnection
+        addMsg loop startRadio
         run loop homeHandler
 
     cleanupEnv env = do
