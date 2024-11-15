@@ -12,8 +12,15 @@ module Home.Handler (
 ) where
 
 import Connection (mkConnection)
-import Control.Concurrent (isEmptyMVar, myThreadId, killThread)
+import Control.Concurrent (
+    isEmptyMVar,
+    newMVar,
+    putMVar,
+    tryPutMVar,
+    tryTakeMVar, takeMVar,
+ )
 import Control.Exception (SomeException (..), displayException)
+import Control.Monad (void)
 import Control.Monad.Reader
 import Data.ProtoLens (defMessage)
 import EventLoop (EventLoop)
@@ -23,7 +30,7 @@ import Lens.Micro
 import Proto.Radio qualified as Radio
 import Proto.Radio_Fields qualified as Radio
 import TH
-import ThreadPool (addTask, addTaskUnmasked)
+import ThreadPool (addTask, addTaskUnmasked, spawnAsyncComputation, spawnAsyncComputationWithNotify)
 
 class HomeHandler msg where
     homeHandler ::
@@ -50,20 +57,10 @@ instance HomeHandler Radio.ConnectTCP where
     homeHandler loop _ = do
         env <- ask
         let connectionMVar = _connectionMVar env
-            threadPool = _threadPool env
-        connectionExists <- liftIO $ isEmptyMVar connectionMVar
-        if not connectionExists
-            then liftIO
-                $ addTaskUnmasked
-                    threadPool
-                    (mkConnection loop threadPool "127.0.0.1" "3000")
-                -- $ \(SomeException err) -> do
-                --     thisThread <- myThreadId
-                --     putStrLn $ "ZZZZZ" <> displayException err
-                --     killThread thisThread
-            else do
-                liftIO $ putStrLn "Connection thread already exists!"
-                pure ()
+        asyncConnection <-
+            liftIO . spawnAsyncComputationWithNotify (mkConnection loop "127.0.0.1" "3000") $
+                liftIO . void $ takeMVar connectionMVar
+        liftIO $ putMVar connectionMVar asyncConnection
 
 $( makeInstance
     ''HomeHandler

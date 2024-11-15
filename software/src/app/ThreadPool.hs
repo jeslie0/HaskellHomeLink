@@ -1,14 +1,36 @@
-module ThreadPool (ThreadPool, addTask, addTaskUnmasked, mkThreadPool, killThreadPool) where
+module ThreadPool (
+    ThreadPool,
+    addTask,
+    addTaskUnmasked,
+    mkThreadPool,
+    killThreadPool,
+    AsyncComputation,
+    spawnAsyncComputation,
+    spawnAsyncComputationWithNotify,
+    isAsyncComputationRunning,
+    killAsyncComputation,
+) where
 
 import Control.Concurrent (
     MVar,
     ThreadId,
+    forkIO,
+    forkIOWithUnmask,
+    isEmptyMVar,
     killThread,
+    newEmptyMVar,
     newMVar,
     putMVar,
-    takeMVar, forkIOWithUnmask, forkIO,
+    takeMVar,
+    tryPutMVar,
  )
-import Control.Exception (bracket_, Exception, mask_, catch)
+import Control.Exception (
+    Exception,
+    bracket_,
+    catch,
+    mask_,
+ )
+import Control.Monad (void)
 import Data.Foldable (forM_, for_)
 import Data.Mutable (Deque, newColl, popFront, pushBack)
 import Data.Vector.Mutable qualified as V
@@ -38,7 +60,7 @@ addTaskUnmasked pool@(ThreadPool _tasksMVar _maxThreadCount _threadPool _activeT
     pushBack deque task
     putMVar _tasksMVar deque
 
-addTask :: Exception e => ThreadPool -> IO () -> (e -> IO ()) -> IO ()
+addTask :: (Exception e) => ThreadPool -> IO () -> (e -> IO ()) -> IO ()
 addTask pool@(ThreadPool _tasksMVar _maxThreadCount _threadPool _activeThreadCount) task handler = do
     activeThreadCount <- takeMVar _activeThreadCount
     threadPool@(currentThreads, currentThreadsSize) <- takeMVar _threadPool
@@ -101,3 +123,35 @@ killThreadPool (ThreadPool _tasksMVar _ _threadPool _activeThreadCount) = do
     putMVar _tasksMVar emptyDeque
     putMVar _threadPool ([], 0)
     putMVar _activeThreadCount 0
+
+data AsyncComputation = AsyncComputation
+    { threadId :: ThreadId
+    , isRunningMVar :: MVar ()
+    }
+
+spawnAsyncComputation ::
+    IO () -> IO AsyncComputation
+spawnAsyncComputation task =
+    spawnAsyncComputationWithNotify task (pure ())
+
+spawnAsyncComputationWithNotify ::
+    IO () -> IO () -> IO AsyncComputation
+spawnAsyncComputationWithNotify task onFinish = do
+    isRunningMVar <- newEmptyMVar
+    threadId <- forkIO $ task >> tryPutMVar isRunningMVar () >> onFinish
+    -- threadId <- mask_ $ forkIOWithUnmask $ \restore -> do
+    --     catch (restore task >> tryPutMVar isRunningMVar () >> onFinish) handler
+    pure $
+        AsyncComputation
+            { threadId
+            , isRunningMVar
+            }
+
+isAsyncComputationRunning :: AsyncComputation -> IO Bool
+isAsyncComputationRunning (AsyncComputation _ isRunningMVar) = do
+    isEmptyMVar isRunningMVar
+
+killAsyncComputation :: AsyncComputation -> IO ()
+killAsyncComputation (AsyncComputation threadId isRunningMVar) = do
+    killThread threadId
+    void $ tryPutMVar isRunningMVar ()

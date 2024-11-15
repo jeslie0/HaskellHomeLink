@@ -10,7 +10,9 @@ import Home.Handler (homeHandler)
 import Lens.Micro
 import Proto.Radio qualified as Radio
 import Proto.Radio_Fields qualified as Radio
-import ThreadPool (killThreadPool)
+import ThreadPool (killThreadPool, killAsyncComputation)
+import Control.Concurrent (isEmptyMVar, takeMVar)
+import Control.Monad (unless)
 
 startConnection :: Radio.Envelope
 startConnection =
@@ -38,9 +40,15 @@ main = do
     action = do
         loop <- mkEventLoop @Radio.Envelope
         addMsg loop startConnection
-        addMsg loop startRadio
+        -- addMsg loop startRadio
         run loop homeHandler
 
     cleanupEnv env = do
+        putStrLn "Running cleanup"
         stop . _audioStream $ env
-        killThreadPool . _threadPool $ env
+        putStrLn "1"
+        isConnectionDead <- isEmptyMVar $  _connectionMVar env
+        putStrLn "3"
+        unless isConnectionDead $ do
+          takeMVar (_connectionMVar env) >>= killAsyncComputation
+        putStrLn "Cleanup successful"
