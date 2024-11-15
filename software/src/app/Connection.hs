@@ -6,28 +6,18 @@ module Connection (Connection (..), mkConnection) where
 import Control.Concurrent (
     Chan,
     MVar,
-    isEmptyMVar,
-    myThreadId,
     newChan,
-    newEmptyMVar,
-    newMVar,
-    putMVar,
     readChan,
-    readMVar,
     threadDelay,
-    tryPutMVar,
-    tryTakeMVar,
-    writeChan,
  )
 import Control.Exception (
     Exception (..),
-    AsyncException(..),
-    SomeException (SomeException),
+    IOException,
+    SomeAsyncException (..),
     bracket,
     catch,
-    throwIO, SomeAsyncException (..),
+    throwIO,
  )
-import Control.Monad (unless, void, when)
 import Control.Monad.IO.Class (MonadIO)
 import Data.ByteString qualified as B
 import EventLoop (EventLoop, addMsg)
@@ -35,9 +25,7 @@ import Msg (Msg (..))
 import Network.Socket
 import Network.Socket.ByteString (sendAll)
 import Socket (readHeader, recvNBytes)
-import ThreadPool (
-    ThreadPool,
-    addTask,
+import Threads (
     killAsyncComputation,
     spawnAsyncComputation,
  )
@@ -115,7 +103,12 @@ withSocket sockAddr sendChan recvHandler sock = do
   where
     -- If connection fails, try to connect again on the existing socket
     safeConnect = do
-        tryConnect `catch` handleErr safeConnect
+        tryConnect `catch` handleConnectionFail
+
+    handleConnectionFail (_ :: IOException) = do
+        putStrLn "Could not connect to server. Trying again in 2s..."
+        threadDelay 2000000
+        safeConnect
 
     -- Attempt to connect to the socket. Return if the
     -- connection is successful, otherwise throw.
@@ -126,12 +119,6 @@ withSocket sockAddr sendChan recvHandler sock = do
 data SocketClosedException = SocketClosedException deriving (Show)
 
 instance Exception SocketClosedException
-
-handleErr :: IO a -> SomeException -> IO a
-handleErr retry (SomeException err) = do
-    putStrLn "Could not connect to server. Trying again in 2s..."
-    threadDelay 2000000
-    retry
 
 mkConnection ::
     forall msg m.
@@ -166,8 +153,8 @@ mkConnection loop host port =
         threadDelay 2000000
         mkConnection loop host port
 
-    asyncExceptionHandler (SomeAsyncException err)= do
-      putStrLn "Async exception caught. Thread dying.."
+    asyncExceptionHandler (SomeAsyncException _) = do
+        putStrLn "Async exception caught. Thread dying.."
 
 -- | Receive a message from the socket.
 recvMsg :: Socket -> IO (Maybe B.ByteString)

@@ -16,8 +16,9 @@ import Control.Concurrent (
     isEmptyMVar,
     newMVar,
     putMVar,
+    takeMVar,
     tryPutMVar,
-    tryTakeMVar, takeMVar,
+    tryTakeMVar,
  )
 import Control.Exception (SomeException (..), displayException)
 import Control.Monad (void)
@@ -29,8 +30,8 @@ import Home.Env (Env (..), EnvT)
 import Lens.Micro
 import Proto.Radio qualified as Radio
 import Proto.Radio_Fields qualified as Radio
-import TH
-import ThreadPool (addTask, addTaskUnmasked, spawnAsyncComputation, spawnAsyncComputationWithNotify)
+import TH (makeInstance, makeToEnvelopeInstances)
+import Threads (spawnAsyncComputation, spawnAsyncComputationWithNotify)
 
 class HomeHandler msg where
     homeHandler ::
@@ -59,7 +60,8 @@ instance HomeHandler Radio.ConnectTCP where
         let connectionMVar = _connectionMVar env
         asyncConnection <-
             liftIO . spawnAsyncComputationWithNotify (mkConnection loop "127.0.0.1" "3000") $
-                liftIO . void $ takeMVar connectionMVar
+                liftIO . void $
+                    takeMVar connectionMVar
         liftIO $ putMVar connectionMVar asyncConnection
 
 $( makeInstance
