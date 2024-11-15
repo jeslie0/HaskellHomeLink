@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Home.Main where
 
 import Control.Concurrent (isEmptyMVar, takeMVar)
@@ -7,30 +8,34 @@ import Control.Monad.Reader
 import Data.ProtoLens (defMessage)
 import EventLoop (addMsg, mkEventLoop, run)
 import Home.AudioStream (stop)
-import Home.Env (Env (..), mkEnv)
+import Home.Env (mkEnv, audioStream, connectionMVar)
 import Home.Handler (homeHandler)
 import Lens.Micro
-import Proto.Radio qualified as Radio
-import Proto.Radio_Fields qualified as Radio
+import Proto.Home qualified as Home
+import Proto.Home_Fields qualified as Home
 import Threads (killAsyncComputation)
 
-startConnection :: Radio.Envelope
+startConnection :: Home.Envelope
 startConnection =
     defMessage
-        & Radio.maybe'payload
-        ?~ Radio.Envelope'M3 defMessage
+        & Home.maybe'payload
+        ?~ Home.Envelope'M3
+            ( defMessage
+                & Home.host .~ "127.0.0.1"
+                & Home.port .~ "3000"
+            )
 
-startRadio :: Radio.Envelope
+startRadio :: Home.Envelope
 startRadio =
     defMessage
-        & Radio.maybe'payload
-        ?~ Radio.Envelope'M1 defMessage
+        & Home.maybe'payload
+        ?~ Home.Envelope'M1 defMessage
 
-stopRadio :: Radio.Envelope
+stopRadio :: Home.Envelope
 stopRadio =
     defMessage
-        & Radio.maybe'payload
-        ?~ Radio.Envelope'M2 defMessage
+        & Home.maybe'payload
+        ?~ Home.Envelope'M2 defMessage
 
 main :: IO ()
 main = do
@@ -38,13 +43,13 @@ main = do
         runReaderT action env
   where
     action = do
-        loop <- mkEventLoop @Radio.Envelope
+        loop <- mkEventLoop @Home.Envelope
         addMsg loop startConnection
         -- addMsg loop startRadio
         run loop homeHandler
 
     cleanupEnv env = do
-        stop . _audioStream $ env
-        isConnectionDead <- isEmptyMVar $ _connectionMVar env
+        stop $ env ^. audioStream
+        isConnectionDead <- isEmptyMVar $ env ^. connectionMVar
         unless isConnectionDead $ do
-            takeMVar (_connectionMVar env) >>= killAsyncComputation
+            takeMVar (env ^. connectionMVar) >>= killAsyncComputation

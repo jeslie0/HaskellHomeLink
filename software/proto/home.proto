@@ -7,6 +7,8 @@ message StopRadio {
 }
 
 message ConnectTCP {
+  string host = 1;
+  string port = 2;
 }
 
 
