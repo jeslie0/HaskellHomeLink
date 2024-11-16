@@ -17,7 +17,7 @@ getClassMethodNames className = do
             forM methods $ \case
                 SigD methodName _ -> pure methodName
                 _ -> fail "This should't happen."
-        _ -> fail $ "Input name must be a class name." <> (show info)
+        _ -> fail $ "Input name must be a class name." <> show info
 
 getConstructorNames :: Name -> Q [Name]
 getConstructorNames typeName = do
@@ -130,7 +130,7 @@ makeToEnvelopeInstances ::
     -> Name
     -- ^ Envelop Payload lens setter
     -> Q [Dec]
-makeToEnvelopeInstances className typeName payloadTypeName payloadConslensSetter = do
+makeToEnvelopeInstances className _typeName payloadTypeName payloadConslensSetter = do
     classMethodNames <- getClassMethodNames className
     info <- reify payloadTypeName
     case info of

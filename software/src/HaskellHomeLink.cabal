@@ -70,9 +70,7 @@ executable Home
                       Msg,
                       Proto.Home,
                       Proto.Home_Fields,
-                      -- Router,
                       Socket,
-                      Socket.TCP,
                       TH,
                       Threads
     -- LANGUAGE extensions used by modules in this package.

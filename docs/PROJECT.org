@@ -22,6 +22,8 @@ I need to create a document explaining how the pieces of this project work. Real
 :END:
 Some kind of data type needs to manage the connections and routing of messages. It should be abstract enough to be able to deal with different types communication (channels/sockets). Each event handler should have access to this.
 
+I think that the Home island will be the core island that everything talks to directly, bar the proxy. The Home island will serve up some data to the frontend, but also send that data to the proxy.
+
 ** TODO Make all events have a source
 This should make replying to an event a bit easier to manage.
 ** WAITING Implement client TLS connection controller

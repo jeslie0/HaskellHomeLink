@@ -5,8 +5,8 @@ module Home.AudioStream (AudioStream, mkAudioStream, start, stop, isPlaying) whe
 import Alsa.PCM.Handle
 import Alsa.PCM.Params
 import Alsa.PCM.Stream
-import Control.Concurrent
-import Control.Exception (bracket, bracket_)
+import Control.Concurrent (MVar, Chan, ThreadId, newMVar, newEmptyMVar, takeMVar, newChan, forkIO, writeChan, putMVar, killThread, isEmptyMVar, readChan)
+import Control.Exception (bracket)
 import Control.Monad (unless, void, when)
 import Data.ByteString qualified as BS
 import Data.ByteString.Internal qualified as BS
