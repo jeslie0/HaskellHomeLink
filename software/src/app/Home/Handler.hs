@@ -15,7 +15,8 @@ module Home.Handler (
 import Connection (mkConnection)
 import Control.Concurrent (
     putMVar,
-    takeMVar, tryTakeMVar,
+    takeMVar,
+    tryTakeMVar,
  )
 import Control.Monad (void)
 import Control.Monad.Reader
@@ -28,7 +29,7 @@ import Lens.Micro
 import Proto.Home qualified as Home
 import Proto.Home_Fields qualified as Home
 import TH (makeInstance, makeToEnvelopeInstances)
-import Threads (spawnAsyncComputationWithNotify, killAsyncComputation)
+import Threads (killAsyncComputation, spawnAsyncComputationWithNotify)
 
 class HomeHandler msg where
     homeHandler ::
@@ -41,29 +42,34 @@ class HomeHandler msg where
 
 -- * Message instances
 
+{- | Try to make a new asynchronous audio stream in a separate
+thread. If one exists, report the error.
+-}
 instance HomeHandler Home.StartRadio where
     homeHandler _ _ = do
         env <- ask
         mAudioStream <- liftIO $ tryTakeMVar (env ^. audioStreamMVar)
         case mAudioStream of
-          Just _ -> liftIO $ putStrLn "Audio stream already exists"
-          Nothing -> do
-            asyncAudioStream <- liftIO mkAsyncAudioStream
-            asyncComputation <-
-                liftIO $
-                    spawnAsyncComputationWithNotify
-                        (start asyncAudioStream)
-                        (void . takeMVar $ env ^. audioStreamMVar)
-            liftIO $ putMVar (env ^. audioStreamMVar) asyncComputation
+            Just _ -> liftIO $ putStrLn "Audio stream already exists"
+            Nothing -> do
+                asyncAudioStream <- liftIO mkAsyncAudioStream
+                asyncComputation <-
+                    liftIO $
+                        spawnAsyncComputationWithNotify
+                            (start asyncAudioStream)
+                            (void . tryTakeMVar $ env ^. audioStreamMVar)
+                liftIO $ putMVar (env ^. audioStreamMVar) asyncComputation
 
+-- | Stop playing an audio stream if one is playing.
 instance HomeHandler Home.StopRadio where
     homeHandler _ _ = do
         env <- ask
         mAudioStream <- liftIO $ tryTakeMVar (env ^. audioStreamMVar)
         case mAudioStream of
-          Just audioStream -> liftIO . killAsyncComputation $ audioStream
-          Nothing -> liftIO $ putStrLn "Radio not playing"
+            Just audioStream -> liftIO . killAsyncComputation $ audioStream
+            Nothing -> liftIO $ putStrLn "Radio not playing"
 
+-- | Spawn a new thread and try to connect to the given TCP server.
 instance HomeHandler Home.ConnectTCP where
     homeHandler loop msg = do
         env <- ask

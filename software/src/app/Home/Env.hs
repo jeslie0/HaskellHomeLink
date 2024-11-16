@@ -5,7 +5,8 @@ module Home.Env (
     EnvT,
     mkEnv,
     audioStreamMVar,
-    connectionMVar
+    connectionMVar,
+    httpServerMVar
 ) where
 
 import Control.Concurrent (MVar, newEmptyMVar)
@@ -16,6 +17,7 @@ import Threads (AsyncComputation)
 data Env = Env
     { _audioStreamMVar :: MVar AsyncComputation
     , _connectionMVar :: MVar AsyncComputation
+    , _httpServerMVar :: MVar AsyncComputation
     }
 
 $(makeLenses ''Env)
@@ -26,8 +28,10 @@ mkEnv :: IO Env
 mkEnv = do
     _audioStreamMVar <- newEmptyMVar
     _connectionMVar <- newEmptyMVar
+    _httpServerMVar <- newEmptyMVar
     pure $
         Env
             { _audioStreamMVar
             , _connectionMVar
+            , _httpServerMVar
             }

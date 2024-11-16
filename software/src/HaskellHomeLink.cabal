@@ -70,6 +70,9 @@ executable Home
                       Msg,
                       Proto.Home,
                       Proto.Home_Fields,
+                      REST.Api,
+                      REST.Servant,
+                      REST.HomeServer,
                       Socket,
                       TH,
                       Threads
@@ -97,13 +100,17 @@ executable Home
                       pqueue,
                       proto-lens,
                       proto-lens-runtime,
+                      servant,
+                      servant-server,
                       template-haskell,
                       text,
                       time,
                       tls,
                       transformers,
                       unordered-containers,
-                      vector
+                      vector,
+                      wai,
+                      warp
 
 
     build-tool-depends: proto-lens-protoc:proto-lens-protoc ^>= 0.8.0.1
