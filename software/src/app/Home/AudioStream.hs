@@ -1,22 +1,37 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Home.AudioStream (AudioStream, mkAudioStream, start, stop, isPlaying) where
+module Home.AudioStream (AsyncAudioStream, mkAsyncAudioStream, start, stop, isPlaying) where
 
 import Alsa.PCM.Handle
 import Alsa.PCM.Params
 import Alsa.PCM.Stream
-import Control.Concurrent (MVar, Chan, ThreadId, newMVar, newEmptyMVar, takeMVar, newChan, forkIO, writeChan, putMVar, killThread, isEmptyMVar, readChan)
-import Control.Exception (bracket)
-import Control.Monad (unless, void, when)
+import Control.Concurrent (
+    Chan,
+    MVar,
+    newChan,
+    newEmptyMVar,
+    putMVar,
+    readChan,
+    tryTakeMVar,
+    writeChan,
+ )
+import Control.Exception (SomeAsyncException, bracket, catch, displayException)
+import Control.Monad (void)
 import Data.ByteString qualified as BS
 import Data.ByteString.Internal qualified as BS
-import Data.IORef (IORef, newIORef, readIORef, writeIORef)
+import Data.Foldable (for_)
 import Foreign (Int16, Ptr, Word8, allocaArray, withForeignPtr)
 import Foreign.Ptr (plusPtr)
 import Minimp3
 import Network.Connection
 import Network.HTTP.Client qualified as HTTP
 import Network.HTTP.Client.TLS qualified as HTTPS
+import Threads (
+    AsyncComputation,
+    isAsyncComputationRunning,
+    killAsyncComputation,
+    spawnAsyncComputation,
+ )
 
 classicFMURL :: String
 classicFMURL =
@@ -29,13 +44,11 @@ unsafeTLSSettings =
     tlsSettings = TLSSettingsSimple True False False
 
 -- | Start an audio stream and pass chunks of bytes into the callback handler.
-withAudioStream ::
-    MVar ()
-    -- ^ Control MVar
-    -> (BS.ByteString -> IO ())
+withAsyncAudioStream ::
+    (BS.ByteString -> IO ())
     -- ^ Callback to use the bytes
     -> IO ()
-withAudioStream continueMvar withBytes = do
+withAsyncAudioStream withBytes = do
     manager <- HTTP.newManager unsafeTLSSettings -- HTTPS.tlsManagerSettings
     let initialRequest = HTTP.parseRequest_ classicFMURL
         request = initialRequest {HTTP.method = "GET"}
@@ -43,12 +56,9 @@ withAudioStream continueMvar withBytes = do
         withBody $ HTTP.responseBody rsp
   where
     withBody bodyReader = do
-        continue <- isEmptyMVar continueMvar
-        when continue $ do
-            chunk <- HTTP.brRead bodyReader
-            withBytes chunk
-            withBody bodyReader
-        withBytes ""
+        chunk <- HTTP.brRead bodyReader
+        withBytes chunk
+        withBody bodyReader
 
 newtype SR = SR Int
 
@@ -131,8 +141,7 @@ readFramesAndPlay handle mp3 info mp3Data pcmData =
 
 -- | Get bytes from the channel, decode them to PCM and then play the audio.
 readChanAndPlay ::
-    MVar ()
-    -> MP3Dec
+    MP3Dec
     -- ^ MP3 object
     -> MP3DecFrameInfo
     -- ^ Frame info object
@@ -141,21 +150,22 @@ readChanAndPlay ::
     -> Ptr Int16
     -- ^ Buffer to store PCM data in
     -> IO ()
-readChanAndPlay continueMvar mp3 info chan pcmData = do
-    newBytes <- readChan chan
-    bracket
-        (makePCMHandleFromStream newBytes)
-        dropDevice
-        $ \handle -> go handle ""
+readChanAndPlay mp3 info chan pcmData = do
+    readChanAndPlayImpl `catch` asyncErrHandler
   where
+    readChanAndPlayImpl = do
+        newBytes <- readChan chan
+        bracket
+            (makePCMHandleFromStream newBytes)
+            dropDevice
+            $ \handle -> go handle mempty
+
     go handle !leftoverBytes = do
-        continue <- isEmptyMVar continueMvar
-        when continue $ do
-            newBytes <- readChan chan
-            let mp3Data@(BS.BS !frnPtr !mp3Len) = BS.append leftoverBytes newBytes
-            withForeignPtr frnPtr $ \mp3Ptr -> do
-                !leftOverAmount <- readFramesAndPlay handle mp3 info (mp3Ptr, mp3Len) pcmData
-                go handle $ BS.takeEnd leftOverAmount mp3Data
+        newBytes <- readChan chan
+        let mp3Data@(BS.BS !frnPtr !mp3Len) = BS.append leftoverBytes newBytes
+        withForeignPtr frnPtr $ \mp3Ptr -> do
+            !leftOverAmount <- readFramesAndPlay handle mp3 info (mp3Ptr, mp3Len) pcmData
+            go handle $ BS.takeEnd leftOverAmount mp3Data
 
     makePCMHandleFromStream (BS.BS frnPtr mp3Len) = do
         withForeignPtr frnPtr $ \mp3Data -> do
@@ -164,6 +174,9 @@ readChanAndPlay continueMvar mp3 info chan pcmData = do
             chans <- getChannels info
             makeAudioHandle (SR freq) (Channels chans)
 
+    asyncErrHandler (err :: SomeAsyncException) =
+        putStrLn $ "Async error caught: " <> displayException err
+
 -- | Compute the size of an MP3 frame from the given info.
 computeFrameSize :: MP3DecFrameInfo -> IO Int
 computeFrameSize info =
@@ -171,62 +184,52 @@ computeFrameSize info =
         <$> getBitrateKPBS info
         <*> getHz info
 
-data AudioStream = AudioStream
-    { _start :: IO ()
-    , _stop :: IO ()
-    , _playing :: IORef Bool
-    , _alsaThreadMVar :: MVar ThreadId
-    , _httpThreadMVar :: MVar ThreadId
-    }
+newtype AsyncAudioStream = AsyncAudioStream
+    {_streamAsyncMVar :: MVar AsyncComputation}
 
-start :: AudioStream -> IO ()
-start = _start
+start :: AsyncAudioStream -> IO ()
+start (AsyncAudioStream _streamAsyncMVar) = do
+    mAsyncStream <- tryTakeMVar _streamAsyncMVar
+    case mAsyncStream of
+        Just _ -> putStrLn "Stream already in progress"
+        Nothing -> startImpl `catch` asyncErrHandler
+  where
+    startImpl = do
+        mp3Dec <- newMP3Dec
+        chan <- newChan @BS.ByteString
+        info <- newMP3DecFrameInfo
 
-stop :: AudioStream -> IO ()
-stop = _stop
+        asyncStream <-
+            spawnAsyncComputation $
+                allocaArray @Int16 maxSamplesPerFrame $
+                    readChanAndPlay mp3Dec info chan
 
-isPlaying :: AudioStream -> IO Bool
-isPlaying (AudioStream _ _ _playing _ _) = readIORef _playing
+        putMVar _streamAsyncMVar asyncStream
 
-mkAudioStream :: IO AudioStream
-mkAudioStream = do
-    isPlaying' <- newIORef False
-    continueMvar <- newMVar ()
+        withAsyncAudioStream (writeChan chan)
 
-    httpThreadMVar <- newEmptyMVar
-    alsaThreadMVar <- newEmptyMVar
+    asyncErrHandler (_ :: SomeAsyncException) = do
+      mAsyncStream <- tryTakeMVar _streamAsyncMVar
+      for_ mAsyncStream killAsyncComputation
 
-    let start' = do
-            isCurrPlaying <- readIORef isPlaying'
-            unless isCurrPlaying $ do
-                writeIORef isPlaying' True
-                _ <- takeMVar continueMvar
-                mp3Dec <- newMP3Dec
-                chan <- newChan @BS.ByteString
-                info <- newMP3DecFrameInfo
-                httpThread <- forkIO $ withAudioStream continueMvar (writeChan chan)
-                putMVar httpThreadMVar httpThread
 
-                alsaThread <-
-                    forkIO . allocaArray @Int16 maxSamplesPerFrame $
-                        readChanAndPlay continueMvar mp3Dec info chan
 
-                putMVar alsaThreadMVar alsaThread
-    let stop' = do
-            isCurrPlaying <- readIORef isPlaying'
-            when isCurrPlaying $ do
-                writeIORef isPlaying' False
-                putMVar continueMvar ()
-                alsaThread <- takeMVar alsaThreadMVar
-                killThread alsaThread
+stop :: AsyncAudioStream -> IO ()
+stop (AsyncAudioStream _streamAsyncMVar) = do
+    mAsyncStream <- tryTakeMVar _streamAsyncMVar
+    for_ mAsyncStream killAsyncComputation
 
-                httpThread <- takeMVar httpThreadMVar
-                killThread httpThread
+isPlaying :: AsyncAudioStream -> IO Bool
+isPlaying (AsyncAudioStream _streamAsyncMVar) = do
+    mAsyncStream <- tryTakeMVar _streamAsyncMVar
+    case mAsyncStream of
+        Nothing -> pure False
+        Just asyncStream -> isAsyncComputationRunning asyncStream
+
+mkAsyncAudioStream :: IO AsyncAudioStream
+mkAsyncAudioStream = do
+    _streamAsyncMVar <- newEmptyMVar
     pure $
-        AudioStream
-            { _start = start'
-            , _stop = stop'
-            , _playing = isPlaying'
-            , _httpThreadMVar = httpThreadMVar
-            , _alsaThreadMVar = alsaThreadMVar
+        AsyncAudioStream
+            { _streamAsyncMVar
             }
