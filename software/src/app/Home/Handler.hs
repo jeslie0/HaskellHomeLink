@@ -8,7 +8,7 @@ handled by the Home application.
 -}
 module Home.Handler (
     HomeHandler (..),
-    -- ExHomeHandler (..),
+    ExHomeHandler (..),
     ToEnvelope (..),
 ) where
 
@@ -22,10 +22,11 @@ import Control.Monad (void)
 import Control.Monad.Reader
 import Data.ProtoLens (defMessage)
 import Data.Text qualified as T
-import EventLoop (EventLoop)
+import EventLoop (EventLoop, addMsg)
 import Home.AudioStream (mkAsyncAudioStream, start)
 import Home.Env (EnvT, audioStreamMVar, connectionMVar)
 import Lens.Micro
+import Msg (Msg (..))
 import Proto.Home qualified as Home
 import Proto.Home_Fields qualified as Home
 import TH (makeInstance, makeToEnvelopeInstances)
@@ -33,14 +34,22 @@ import Threads (killAsyncComputation, spawnAsyncComputationWithNotify)
 
 class HomeHandler msg where
     homeHandler ::
-        EventLoop EnvT Home.Envelope -> msg -> EnvT ()
+        EventLoop EnvT ExHomeHandler -> msg -> EnvT ()
 
--- data ExHomeHandler = forall a. (HomeHandler a) => ExHomeHandler a
+data ExHomeHandler = forall a. (HomeHandler a) => ExHomeHandler a
 
--- instance HomeHandler (ExHomeHandler msg) where
---     homeHandler loop (ExHomeHandler msg) = homeHandler loop msg
+instance HomeHandler ExHomeHandler where
+    homeHandler loop (ExHomeHandler msg) = homeHandler loop msg
 
 -- * Message instances
+
+-- Make HomeHandler Home.Envelope instance.
+$( makeInstance
+    ''HomeHandler
+    ''Home.Envelope
+    'Home.maybe'payload
+    ''Home.Envelope'Payload
+ )
 
 {- | Try to make a new asynchronous audio stream in a separate
 thread. If one exists, report the error.
@@ -77,19 +86,19 @@ instance HomeHandler Home.ConnectTCP where
             liftIO $
                 spawnAsyncComputationWithNotify
                     ( mkConnection
-                        loop
                         (T.unpack $ msg ^. Home.host)
                         (T.unpack $ msg ^. Home.port)
+                        withBytes
                     )
                     (void . takeMVar $ env ^. connectionMVar)
         liftIO $ putMVar (env ^. connectionMVar) asyncConnection
-
-$( makeInstance
-    ''HomeHandler
-    ''Home.Envelope
-    'Home.maybe'payload
-    ''Home.Envelope'Payload
- )
+      where
+        -- | Receive a Home.Envelope and add, parse and add to the
+        -- event loop.
+        withBytes bytes =
+            case fromBytes @Home.Envelope bytes of
+                Left err -> putStrLn err
+                Right envelope -> addMsg loop $ ExHomeHandler envelope
 
 --
 class ToEnvelope msg where

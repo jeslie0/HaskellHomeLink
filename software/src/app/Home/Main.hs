@@ -9,7 +9,7 @@ import Data.Foldable (for_)
 import Data.ProtoLens (defMessage)
 import EventLoop (addMsg, mkEventLoop, run)
 import Home.Env (audioStreamMVar, connectionMVar, httpServerMVar, mkEnv)
-import Home.Handler (homeHandler, toEnvelope)
+import Home.Handler (homeHandler, toEnvelope, ExHomeHandler)
 import Lens.Micro
 import Proto.Home qualified as Home
 import Proto.Home_Fields qualified as Home
@@ -40,7 +40,7 @@ main = do
         runReaderT (action env) env
   where
     action env = do
-        loop <- mkEventLoop @Home.Envelope
+        loop <- mkEventLoop @ExHomeHandler
         httpServerAsyncComp <- liftIO . spawnAsyncComputation $ runApp (addMsg loop)
         liftIO . putMVar (env ^. httpServerMVar) $ httpServerAsyncComp
         run loop homeHandler

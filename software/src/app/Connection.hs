@@ -18,10 +18,7 @@ import Control.Exception (
     catch,
     throwIO,
  )
-import Control.Monad.IO.Class (MonadIO)
 import Data.ByteString qualified as B
-import EventLoop (EventLoop, addMsg)
-import Msg (Msg (..))
 import Network.Socket
 import Network.Socket.ByteString (sendAll)
 import Socket (readHeader, recvNBytes)
@@ -120,14 +117,17 @@ data SocketClosedException = SocketClosedException deriving (Show)
 
 instance Exception SocketClosedException
 
+{- | Create a connection to the given host and port, using the passed
+in function to handle received bytes. The bytes received must
+follow the connection protocol - a 4byte Word32 (le) of a message
+size, followed by the message.
+-}
 mkConnection ::
-    forall msg m.
-    (Msg msg, MonadIO m) =>
-    EventLoop m msg
-    -> HostName
+    HostName
     -> ServiceName
+    -> (B.ByteString -> IO ())
     -> IO ()
-mkConnection loop host port =
+mkConnection host port withBytes =
     mkConnectionImpl `catch` asyncExceptionHandler
   where
     mkConnectionImpl = do
@@ -142,16 +142,12 @@ mkConnection loop host port =
             withSocket
                 (addrAddress addrInfo)
                 sendChan
-                ( \bytes ->
-                    case fromBytes @msg bytes of
-                        Left err -> putStrLn err
-                        Right msg -> addMsg loop msg
-                )
+                withBytes
 
     handleConnectionBreak SocketClosedException = do
         putStrLn "Connection to server terminated. Retrying in 2s..."
         threadDelay 2000000
-        mkConnection loop host port
+        mkConnection host port withBytes
 
     asyncExceptionHandler (SomeAsyncException _) = do
         putStrLn "Async exception caught. Thread dying.."

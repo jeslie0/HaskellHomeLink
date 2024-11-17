@@ -3,27 +3,24 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Msg (Msg (..), ExMsg (..), MaybeDecode(..)) where
+module Msg (Msg (..), ExMsg (..), MaybeDecode (..)) where
 
 import Data.ByteString qualified as B
 import Data.Kind (Type)
 import Data.ProtoLens (Message)
 import Data.ProtoLens.Encoding (decodeMessage, encodeMessage)
 
-class Show msg => Msg msg where
+class Msg msg where
     toBytes :: msg -> B.ByteString
 
     fromBytes :: B.ByteString -> Either String msg
 
-instance (Show msg,  Message msg) => Msg msg where
+instance (Message msg) => Msg msg where
     toBytes = encodeMessage
 
     fromBytes = decodeMessage
 
 data ExMsg = forall msg. (Msg msg) => ExMsg msg
-
-instance Show ExMsg where
-    show (ExMsg msg) = show msg
 
 {- | This class gives us the ability to try to decode a bytestring to
 any of the types listed in xs.
