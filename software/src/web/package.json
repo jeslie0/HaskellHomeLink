@@ -4,7 +4,7 @@
   "description": "Frontent for assistant pi",
   "scripts": {
     "test": "spago test",
-    "start": "vite src",
+    "start": "vite src --config ./vite.config.js",
     "build": "vite build src --outDir ../dist --emptyOutDir",
     "preview": "vite preview src"
   },

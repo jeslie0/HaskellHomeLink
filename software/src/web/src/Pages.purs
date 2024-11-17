@@ -8,9 +8,9 @@ module Pages
 
 import Prelude
 
-import Pages.Applications
-import Pages.Overview
-import Pages.System
+import Pages.Applications (ApplicationsPageState, applicationsPage, initialApplicationsPageState)
+import Pages.Overview (OverviewPageState, overviewPage)
+import Pages.System (HardwareInformation, SystemPageState, TemperatureInformation, getAndSetSystemPageInfo, initialSystemPageState, systemPage)
 
 data Page
   = Overview
@@ -18,7 +18,7 @@ data Page
   | Applications
 
 pageList :: Array Page
-pageList = [ Overview, System, Applications ]
+pageList = [ Overview, Applications, System ]
 
 derive instance eqPages :: Eq Page
 

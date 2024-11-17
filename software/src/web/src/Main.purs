@@ -1,10 +1,7 @@
 module Main where
 
-import Pages (ApplicationsPageState, OverviewPageState, Page(..), SystemPageState, applicationsPage, getAndSetSystemPageInfo, initialApplicationsPageState, initialOverviewPageState, initialSystemPageState, overviewPage, pageList, systemPage)
-import Prelude (Unit, bind, discard, pure, show, unit, ($), (<#>), (<>), (==))
-
-import Data.Tuple.Nested ((/\))
 import Data.Tuple (Tuple(..))
+import Data.Tuple.Nested ((/\))
 import Deku.Control as DC
 import Deku.Core (Nut)
 import Deku.DOM as DD
@@ -17,7 +14,11 @@ import Deku.Hooks as DH
 import Deku.Toplevel (runInBody)
 import Effect (Effect)
 import Effect.Console as Console
+import Effect.Timer (setInterval)
 import FRP.Poll (Poll)
+import Pages (ApplicationsPageState, OverviewPageState, Page(..), SystemPageState, applicationsPage, getAndSetSystemPageInfo, initialApplicationsPageState, initialSystemPageState, overviewPage, pageList, systemPage)
+import Pages.Overview (fetchStreamStatus)
+import Prelude (Unit, bind, discard, pure, show, unit, ($), (<#>), (<>), (==))
 
 main :: Effect Unit
 main = do
@@ -68,11 +69,15 @@ dekuApp = do
   _ /\ setSystemPageState /\ systemPageState <- DE.useHot initialSystemPageState
   _ <- getAndSetSystemPageInfo setSystemPageState
 
+  _ /\ setStreamActivePoll /\ streamActivePoll <- DE.useHot false
+  _ <- setInterval 2000 $ fetchStreamStatus setStreamActivePoll
+
+  let overviewPageState = pure {setStreamActivePoll, streamActivePoll}
+
   pure Deku.do
-    Tuple _setOverviewPageState overviewPageState <- DH.useHot initialOverviewPageState
     Tuple _setApplicationsPageState applicationsPageState <- DH.useHot initialApplicationsPageState
 
-    Tuple setPage page <- DH.useState System
+    Tuple setPage page <- DH.useState Overview
     let
       changePage newPage = do
         Console.logShow newPage

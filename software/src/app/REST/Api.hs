@@ -7,6 +7,7 @@ module REST.Api (Api, Radio, RadioCommand (..), Connection) where
 import Servant (
     Capture,
     FromHttpApiData (..),
+    Get,
     JSON,
     Put,
     (:<|>) (..),
@@ -15,7 +16,12 @@ import Servant (
 
 type Api = "api" :> "v1" :> (Radio :<|> Connection)
 
-type Radio = "radio" :> Capture "command" RadioCommand :> Put '[JSON] Bool
+type Radio =
+    "radio"
+        :> ( Get '[JSON] Bool
+                :<|> "start" :> Put '[JSON] Bool
+                :<|> "stop" :> Put '[JSON] Bool
+           )
 
 data RadioCommand = Start | Stop
 
@@ -25,4 +31,3 @@ instance FromHttpApiData RadioCommand where
     parseUrlPiece other = Left $ "Incorrect path piece: " <> other
 
 type Connection = "connection" :> Put '[JSON] Bool
-

@@ -6,10 +6,12 @@ package:
     - deku-css
     - deku-dom
     - effect
+    - fetch
     - js-timers
     - numbers
     - prelude
     - random
+    - yoga-json
   test:
     main: Test.Main
     dependencies: []

@@ -13,7 +13,7 @@ import Home.Handler (homeHandler, toEnvelope, ExHomeHandler)
 import Lens.Micro
 import Proto.Home qualified as Home
 import Proto.Home_Fields qualified as Home
-import REST.HomeServer (runApp)
+import REST.HomeServer qualified as HomeServer (runApp, mkEnv)
 import Threads (killAsyncComputation, spawnAsyncComputation)
 
 startConnection :: Home.Envelope
@@ -41,7 +41,7 @@ main = do
   where
     action env = do
         loop <- mkEventLoop @ExHomeHandler
-        httpServerAsyncComp <- liftIO . spawnAsyncComputation $ runApp (addMsg loop)
+        httpServerAsyncComp <- liftIO . spawnAsyncComputation $ HomeServer.runApp (HomeServer.mkEnv env) (addMsg loop)
         liftIO . putMVar (env ^. httpServerMVar) $ httpServerAsyncComp
         run loop homeHandler
 
