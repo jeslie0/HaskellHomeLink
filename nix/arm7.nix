@@ -23,11 +23,13 @@ let
       compiler-nix-name = ghcVersion;
       src = dir;
       modules = [{
-        reinstallableLibGhc = false;
       }
       {
         packages = {
-          ${packageName}.components.exes.Home.build-tools = [ pkgs.protobuf ];
+          ${packageName}.components.exes.Home = {
+            build-tools = [ pkgs.protobuf ];
+            dontStrip = false;
+          };
         };
       }];
     }).flake {}).packages."${packageName}:exe:Home";

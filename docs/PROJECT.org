@@ -47,6 +47,12 @@ Currently, the nix structure of this project is a real mess. This should be tidi
 
 * [0/0] Bugs
 
+
+** TODO Fix audio deadlock issue
+:PROPERTIES:
+:type:     bug
+:END:
+It seems like it is possible to get into a bad state by spamming start and stop radio requests. There is probably an issue with the thread access which to  resolved. I think that making sure the audio socket gets safely made and not interrupted by an async exception is key.
 * Milestones
 ** v0.0.1.0 - MVP
 :PROPERTIES:

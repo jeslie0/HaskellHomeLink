@@ -4,13 +4,18 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     ps-overlay.url = "github:thomashoneyman/purescript-overlay";
+    mkSpagoDerivation = {
+      url = "github:jeslie0/mkSpagoDerivation";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.ps-overlay.follows = "ps-overlay";
+    };
     haskellNix = {
       url = "github:jeslie0/haskell.nix";
       # inputs.nixpkgs.follows = "nixpkgs";
     };
   };
 
-  outputs = { self, nixpkgs, ps-overlay, haskellNix }:
+  outputs = { self, nixpkgs, ps-overlay, mkSpagoDerivation, haskellNix }:
     let
       supportedSystems =
         [ "aarch64-linux" "x86_64-linux" "aarch64-darwin" "x86_64-darwin" ];
@@ -23,6 +28,7 @@
           inherit system;
           overlays = [ haskellNix.overlay
                        ps-overlay.overlays.default
+                       mkSpagoDerivation.overlays.default
                      ];
         });
 
@@ -67,6 +73,10 @@
       {
         packages =
           forAllSystems (system:
+            let
+              pkgs =
+                nixpkgsFor.${system};
+            in
             {
               nixpkgs =
                 nixpkgsFor.${system};
@@ -76,13 +86,27 @@
               # (haskellPackages system).callCabal2nix (packageName system) "${self}/software/src" {};
             } // (
               import ./nix/xCompiled.nix {
-                inherit ghcVersion system nixpkgs extendHaskellPackages self;
+                inherit ghcVersion system nixpkgs pkgs extendHaskellPackages self;
 
-                pkgs =
-                  nixpkgsFor.${system};
 
                 packageName =
                   packageName system;
+
+                webSrc =
+                  "${self}/software/src/web";
+
+                mkSpagoDerivation =
+                  pkgs.mkSpagoDerivation;
+
+                purs-unstable = pkgs.purs-unstable;
+
+                spago-unstable = pkgs.spago-unstable;
+
+                esbuild = pkgs.esbuild;
+
+                buildNpmPackage = pkgs.buildNpmPackage;
+
+                mkDerivation = pkgs.stdenv.mkDerivation;
               })
           );
 

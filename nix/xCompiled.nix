@@ -9,3 +9,4 @@
 // (import ./arm7.nix args)
 // (import ./linux.nix args)
 // (import ./docker.nix args (import ./arm7.nix args).crossArmv7l)
+// (import ./web.nix args)

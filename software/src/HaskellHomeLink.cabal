@@ -110,6 +110,7 @@ executable Home
                       unordered-containers,
                       vector,
                       wai,
+                      wai-app-static,
                       warp
 
 

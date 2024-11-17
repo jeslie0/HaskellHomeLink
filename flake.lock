@@ -444,6 +444,31 @@
         "type": "github"
       }
     },
+    "mkSpagoDerivation": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "ps-overlay": [
+          "ps-overlay"
+        ],
+        "registry": "registry",
+        "registry-index": "registry-index"
+      },
+      "locked": {
+        "lastModified": 1731808722,
+        "narHash": "sha256-E8nmtDrin6/boo0hsA/GGkstUqhu+rCiRhYgzop+Oao=",
+        "owner": "jeslie0",
+        "repo": "mkSpagoDerivation",
+        "rev": "6d1556f2fbeb3acf12331fc1a33f63ebe9dfd949",
+        "type": "github"
+      },
+      "original": {
+        "owner": "jeslie0",
+        "repo": "mkSpagoDerivation",
+        "type": "github"
+      }
+    },
     "nix": {
       "inputs": {
         "lowdown-src": "lowdown-src",
@@ -710,9 +735,42 @@
         "type": "github"
       }
     },
+    "registry": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1731569329,
+        "narHash": "sha256-MQIBYgTXfqbEU5PCSEF1pbY85sXjQ91LrC5biFSdZFA=",
+        "owner": "purescript",
+        "repo": "registry",
+        "rev": "2f1c9a9b823c87a65663bfbc15e5d5b01e0f6a2f",
+        "type": "github"
+      },
+      "original": {
+        "owner": "purescript",
+        "repo": "registry",
+        "type": "github"
+      }
+    },
+    "registry-index": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1731529486,
+        "narHash": "sha256-5r+2Vy+n+Ki9b05YXRmKsIjN2YM+hvjN4u8fufFOqnA=",
+        "owner": "purescript",
+        "repo": "registry-index",
+        "rev": "131fe5e6f8695e7618a2c52883c680d592d99a1d",
+        "type": "github"
+      },
+      "original": {
+        "owner": "purescript",
+        "repo": "registry-index",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "haskellNix": "haskellNix",
+        "mkSpagoDerivation": "mkSpagoDerivation",
         "nixpkgs": "nixpkgs_2",
         "ps-overlay": "ps-overlay"
       }

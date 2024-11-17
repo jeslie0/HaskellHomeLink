@@ -2,23 +2,26 @@
 , packageName
 , system
 , ...
-}:
+}@args:
 raspExe:
-  let strippedExec =
-        pkgs.stdenv.mkDerivation {
-          name = "${raspExe.name}-stripped";
-          src = ./.;
-          installPhase = ''
-            runHook preInstall
-            mkdir -p $out/bin;
-            cp -r ${raspExe}/bin/Home $out/bin;
-            patchelf --shrink-rpath $out/bin/Home;
+let strippedExec =
+      pkgs.stdenv.mkDerivation {
+        name = "${raspExe.name}-stripped";
+        src = ./.;
+        installPhase = ''
+            mkdir $out;
+            cp -r ${raspExe}/* $out
+            chmod -R u+w $out
             runHook postInstall
           '';
-          nativeBuildInputs = [pkgs.patchelf];
-        };
-  in
-    {
+        postInstall =
+          ''
+           remove-references-to -t /nix/store/*-warp-lib-warp-armv7l-* $out/bin/Home
+          '';
+        nativeBuildInputs = [pkgs.removeReferencesTo];
+      };
+in
+{
   dockerImage = pkgs.dockerTools.buildImage {
     name =
       packageName;
@@ -26,12 +29,21 @@ raspExe:
     tag =
       "latest";
 
-    architecture =
-      "arm";
+    # architecture =
+    #   "arm";
+
+    copyToRoot = with pkgs.dockerTools;[
+      (import ./web.nix args).web
+      binSh
+      caCertificates
+      pkgs.bashInteractive
+      pkgs.coreutils
+    ];
 
     config = {
       Cmd =
-        [ "${raspExe}/bin/Home" "+RTS" "-N4" "-RTS"];
+        [ "${strippedExec}/bin/Home" "+RTS" "-N4" "-RTS"];
+      Env = [ "PATH=/bin:/usr/bin" ];
     };
   };
 

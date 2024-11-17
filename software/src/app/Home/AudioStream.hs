@@ -49,7 +49,7 @@ withAsyncAudioStream ::
     -- ^ Callback to use the bytes
     -> IO ()
 withAsyncAudioStream withBytes = do
-    manager <- HTTP.newManager unsafeTLSSettings -- HTTPS.tlsManagerSettings
+    manager <- HTTP.newManager HTTPS.tlsManagerSettings
     let initialRequest = HTTP.parseRequest_ classicFMURL
         request = initialRequest {HTTP.method = "GET"}
     HTTP.withResponse request manager $ \rsp -> do

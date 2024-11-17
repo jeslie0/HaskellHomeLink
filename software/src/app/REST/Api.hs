@@ -5,16 +5,17 @@
 module REST.Api (Api, Radio, RadioCommand (..), Connection) where
 
 import Servant (
-    Capture,
     FromHttpApiData (..),
     Get,
     JSON,
     Put,
     (:<|>) (..),
-    (:>),
+    (:>), Raw,
  )
 
-type Api = "api" :> "v1" :> (Radio :<|> Connection)
+type Api =
+    "api" :> "v1" :> (Radio :<|> Connection)
+        :<|> Raw
 
 type Radio =
     "radio"

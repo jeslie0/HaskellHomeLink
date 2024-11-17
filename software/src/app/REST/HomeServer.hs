@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module REST.HomeServer (runApp, mkEnv) where
@@ -13,8 +14,11 @@ import REST.Api (Api, RadioCommand (..))
 import Servant (
     Handler,
     Proxy (Proxy),
+    Raw,
     Server,
     serve,
+    serveDirectoryWebApp,
+    serveDirectoryWith,
     (:<|>) (..),
  )
 
@@ -23,8 +27,14 @@ import Control.Monad (void)
 import Home.Env qualified as Home
 import Lens.Micro ((^.))
 import Lens.Micro.TH (makeLenses)
+import Network.Wai.Application.Static (
+    defaultWebAppSettings,
+    ssIndices,
+    ssRedirectToIndex,
+ )
 import Servant.Server (Application)
 import Threads (AsyncComputation, isAsyncComputationRunning)
+import WaiAppStatic.Types (unsafeToPiece)
 
 type AddMsg = ExHomeHandler -> IO ()
 
@@ -57,11 +67,24 @@ handleConnectionCommand addMsg = liftIO $ addMsg (ExHomeHandler $ defMessage @Ho
 
 server :: Env -> AddMsg -> Server Api
 server env addMsg =
-    ( handleGetRadioStatus env
-        :<|> handleRadioCommand addMsg Start
-        :<|> handleRadioCommand addMsg Stop
-    )
+    ( ( handleGetRadioStatus env
+            :<|> handleRadioCommand addMsg Start
+            :<|> handleRadioCommand addMsg Stop
+      )
         :<|> handleConnectionCommand addMsg
+    )
+        :<|> serveDir "/usr/local/haskell-home-link"
+
+-- | Serves the directory and uses index.html as the complete root.
+serveDir :: FilePath -> Server Raw
+serveDir path = do
+    let initSettings = defaultWebAppSettings path
+        staticSettings =
+            initSettings
+                { ssRedirectToIndex = False
+                , ssIndices = [unsafeToPiece "index.html"]
+                }
+    serveDirectoryWith staticSettings
 
 app :: Env -> AddMsg -> Application
 app env = serve (Proxy @Api) . server env
