@@ -2,7 +2,7 @@
 
 module Home.Main where
 
-import Control.Concurrent (putMVar, tryTakeMVar)
+import Control.Concurrent (putMVar, tryTakeMVar, modifyMVar_)
 import Control.Exception (bracket)
 import Control.Monad.Reader
 import Data.Foldable (for_)
@@ -46,6 +46,6 @@ main = do
         run loop homeHandler
 
     cleanupEnv env = do
-        tryTakeMVar (env ^. audioStreamMVar) >>= \m -> for_ m killAsyncComputation
+        modifyMVar_ (env ^. audioStreamMVar) $ \m -> for_ m killAsyncComputation >> pure Nothing
         tryTakeMVar (env ^. connectionMVar) >>= \m -> for_ m killAsyncComputation
         tryTakeMVar (env ^. httpServerMVar) >>= \m -> for_ m killAsyncComputation

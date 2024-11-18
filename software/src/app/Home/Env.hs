@@ -9,13 +9,13 @@ module Home.Env (
     httpServerMVar
 ) where
 
-import Control.Concurrent (MVar, newEmptyMVar)
+import Control.Concurrent (MVar, newEmptyMVar, newMVar)
 import Control.Monad.Reader (ReaderT)
 import Lens.Micro.TH (makeLenses)
 import Threads (AsyncComputation)
 
 data Env = Env
-    { _audioStreamMVar :: MVar AsyncComputation
+    { _audioStreamMVar :: MVar (Maybe AsyncComputation)
     , _connectionMVar :: MVar AsyncComputation
     , _httpServerMVar :: MVar AsyncComputation
     }
@@ -26,7 +26,7 @@ type EnvT = ReaderT Env IO
 
 mkEnv :: IO Env
 mkEnv = do
-    _audioStreamMVar <- newEmptyMVar
+    _audioStreamMVar <- newMVar Nothing
     _connectionMVar <- newEmptyMVar
     _httpServerMVar <- newEmptyMVar
     pure $

@@ -22,7 +22,7 @@ import Servant (
     (:<|>) (..),
  )
 
-import Control.Concurrent (MVar, tryPutMVar, tryTakeMVar)
+import Control.Concurrent (MVar, tryPutMVar, tryTakeMVar, withMVar)
 import Control.Monad (void)
 import Home.Env qualified as Home
 import Lens.Micro ((^.))
@@ -38,7 +38,7 @@ import WaiAppStatic.Types (unsafeToPiece)
 
 type AddMsg = ExHomeHandler -> IO ()
 
-data Env = Env {_asyncRadioStream :: MVar AsyncComputation}
+data Env = Env {_asyncRadioStream :: MVar (Maybe AsyncComputation)}
 
 $(makeLenses ''Env)
 
@@ -51,16 +51,9 @@ handleRadioCommand addMsg Stop = liftIO $ addMsg (ExHomeHandler $ defMessage @Ho
 
 handleGetRadioStatus :: Env -> Handler Bool
 handleGetRadioStatus env = do
-    liftIO
-        $ bracket
-            (tryTakeMVar $ env ^. asyncRadioStream)
-            ( \case
-                Nothing -> pure ()
-                Just stream -> liftIO . void $ tryPutMVar (env ^. asyncRadioStream) stream
-            )
-        $ \case
-            Nothing -> pure False
-            Just stream -> liftIO $ isAsyncComputationRunning stream
+    liftIO $ withMVar (env ^. asyncRadioStream) $ \case
+      Nothing -> pure False
+      Just stream -> isAsyncComputationRunning stream
 
 handleConnectionCommand :: AddMsg -> Handler Bool
 handleConnectionCommand addMsg = liftIO $ addMsg (ExHomeHandler $ defMessage @Home.ConnectTCP) >> pure True

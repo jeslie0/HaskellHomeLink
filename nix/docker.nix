@@ -29,8 +29,8 @@ in
     tag =
       "latest";
 
-    # architecture =
-    #   "arm";
+    architecture =
+      "arm";
 
     copyToRoot = with pkgs.dockerTools;[
       (import ./web.nix args).web
