@@ -13,10 +13,11 @@ import Control.Concurrent (MVar, newEmptyMVar, newMVar)
 import Control.Monad.Reader (ReaderT)
 import Lens.Micro.TH (makeLenses)
 import Threads (AsyncComputation)
+import Connection (Connection)
 
 data Env = Env
     { _audioStreamMVar :: MVar (Maybe AsyncComputation)
-    , _connectionMVar :: MVar AsyncComputation
+    , _connectionMVar :: MVar Connection
     , _httpServerMVar :: MVar AsyncComputation
     }
 

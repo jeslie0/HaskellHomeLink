@@ -1,51 +1,67 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Home.Main where
+module Home.Main (main) where
 
-import Control.Concurrent (putMVar, tryTakeMVar, modifyMVar_)
+import Connection (
+    killConnection,
+    mkTCPClientConnection,
+    mkTCPServerConnection,
+    sendMsg,
+ )
+import Control.Concurrent (modifyMVar_, putMVar, threadDelay, tryTakeMVar)
 import Control.Exception (bracket)
 import Control.Monad.Reader
+import Data.ByteString.Char8 qualified as B
 import Data.Foldable (for_)
-import Data.ProtoLens (defMessage)
 import EventLoop (addMsg, mkEventLoop, run)
 import Home.Env (audioStreamMVar, connectionMVar, httpServerMVar, mkEnv)
-import Home.Handler (homeHandler, toEnvelope, ExHomeHandler)
+import Home.Handler (ExHomeHandler (..), homeHandler)
 import Lens.Micro
+import Msg (ExMsg (..), Msg (..))
 import Proto.Home qualified as Home
-import Proto.Home_Fields qualified as Home
-import REST.HomeServer qualified as HomeServer (runApp, mkEnv)
+import REST.HomeServer (tcpServer)
+import REST.HomeServer qualified as HomeServer (mkEnv, runApp)
 import Threads (killAsyncComputation, spawnAsyncComputation)
 
-startConnection :: Home.Envelope
-startConnection =
-    toEnvelope
-        ( defMessage @Home.ConnectTCP
-            & Home.host
-            .~ "127.0.0.1"
-            & Home.port
-            .~ "3000"
-        )
+-- startConnection :: Home.Envelope
+-- startConnection =
+--     toEnvelope
+--         ( defMessage @Home.ConnectTCP
+--             & Home.host
+--             .~ "127.0.0.1"
+--             & Home.port
+--             .~ "3000"
+--         )
 
-startRadio :: Home.Envelope
-startRadio =
-    toEnvelope $ defMessage @Home.StartRadio
+-- startRadio :: Home.Envelope
+-- startRadio =
+--     toEnvelope $ defMessage @Home.StartRadio
 
-stopRadio :: Home.Envelope
-stopRadio =
-    toEnvelope $ defMessage @Home.StopRadio
+-- stopRadio :: Home.Envelope
+-- stopRadio =
+--     toEnvelope $ defMessage @Home.StopRadio
+
+httpServer :: IO ()
+httpServer = do
+    env <- HomeServer.mkEnv
+    HomeServer.runApp env $ \(ExMsg msg) -> sendMsg (env ^. tcpServer) (toBytes msg)
 
 main :: IO ()
 main = do
-    bracket mkEnv cleanupEnv $ \env ->
-        runReaderT (action env) env
+    bracket (spawnAsyncComputation httpServer) killAsyncComputation $ \_ ->
+        bracket mkEnv cleanupEnv $ \env ->
+            runReaderT (action env) env
   where
     action env = do
         loop <- mkEventLoop @ExHomeHandler
-        httpServerAsyncComp <- liftIO . spawnAsyncComputation $ HomeServer.runApp (HomeServer.mkEnv env) (addMsg loop)
-        liftIO . putMVar (env ^. httpServerMVar) $ httpServerAsyncComp
+        connection <- liftIO $ mkTCPClientConnection "127.0.0.1" "3000" $ \bytes ->
+            case fromBytes @Home.StartRadio bytes of
+                Left _ -> putStrLn "FAIL"
+                Right msg -> addMsg loop $ ExHomeHandler msg
+        liftIO . putMVar (env ^. connectionMVar) $ connection
         run loop homeHandler
 
     cleanupEnv env = do
         modifyMVar_ (env ^. audioStreamMVar) $ \m -> for_ m killAsyncComputation >> pure Nothing
-        tryTakeMVar (env ^. connectionMVar) >>= \m -> for_ m killAsyncComputation
+        tryTakeMVar (env ^. connectionMVar) >>= \m -> for_ m killConnection
         tryTakeMVar (env ^. httpServerMVar) >>= \m -> for_ m killAsyncComputation

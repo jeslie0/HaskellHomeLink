@@ -2,10 +2,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module REST.HomeServer (runApp, mkEnv) where
+module REST.HomeServer (runApp, mkEnv, radioStreamActive, tcpServer) where
 
 import Control.Exception (SomeAsyncException, bracket, catch)
 import Control.Monad.IO.Class (liftIO)
+import Data.ByteString.Char8 qualified as B
 import Data.ProtoLens (defMessage)
 import Home.Handler (ExHomeHandler (..))
 import Network.Wai.Handler.Warp (run)
@@ -22,7 +23,8 @@ import Servant (
     (:<|>) (..),
  )
 
-import Control.Concurrent (MVar, tryPutMVar, tryTakeMVar, withMVar)
+import Connection (Connection, mkTCPServerConnection)
+import Control.Concurrent (MVar, newMVar, tryPutMVar, tryTakeMVar, withMVar)
 import Control.Monad (void)
 import Home.Env qualified as Home
 import Lens.Micro ((^.))
@@ -35,28 +37,33 @@ import Network.Wai.Application.Static (
 import Servant.Server (Application)
 import Threads (AsyncComputation, isAsyncComputationRunning)
 import WaiAppStatic.Types (unsafeToPiece)
+import Msg (ExMsg (..))
 
-type AddMsg = ExHomeHandler -> IO ()
+type AddMsg = ExMsg -> IO ()
 
-data Env = Env {_asyncRadioStream :: MVar (Maybe AsyncComputation)}
+data Env = Env
+    { _radioStreamActive :: MVar Bool
+    , _tcpServer :: Connection
+    }
 
 $(makeLenses ''Env)
 
-mkEnv :: Home.Env -> Env
-mkEnv homeEnv = Env {_asyncRadioStream = homeEnv ^. Home.audioStreamMVar}
+mkEnv :: IO Env
+mkEnv = do
+    _radioStreamActive <- newMVar False
+    _tcpServer <- mkTCPServerConnection "3000" B.putStrLn
+    pure $ Env {_radioStreamActive, _tcpServer}
 
 handleRadioCommand :: AddMsg -> RadioCommand -> Handler Bool
-handleRadioCommand addMsg Start = liftIO $ addMsg (ExHomeHandler $ defMessage @Home.StartRadio) >> pure True
-handleRadioCommand addMsg Stop = liftIO $ addMsg (ExHomeHandler $ defMessage @Home.StopRadio) >> pure True
+handleRadioCommand addMsg Start = liftIO $ addMsg (ExMsg $ defMessage @Home.StartRadio) >> pure True
+handleRadioCommand addMsg Stop = liftIO $ addMsg (ExMsg $ defMessage @Home.StopRadio) >> pure True
 
 handleGetRadioStatus :: Env -> Handler Bool
 handleGetRadioStatus env = do
-    liftIO $ withMVar (env ^. asyncRadioStream) $ \case
-      Nothing -> pure False
-      Just stream -> isAsyncComputationRunning stream
+    liftIO $ withMVar (env ^. radioStreamActive) pure
 
 handleConnectionCommand :: AddMsg -> Handler Bool
-handleConnectionCommand addMsg = liftIO $ addMsg (ExHomeHandler $ defMessage @Home.ConnectTCP) >> pure True
+handleConnectionCommand addMsg = liftIO $ addMsg (ExMsg $ defMessage @Home.ConnectTCP) >> pure True
 
 server :: Env -> AddMsg -> Server Api
 server env addMsg =

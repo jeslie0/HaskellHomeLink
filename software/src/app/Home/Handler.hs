@@ -1,6 +1,6 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE LambdaCase #-}
 
 {-|
 Module : Home.Handler
@@ -13,13 +13,11 @@ module Home.Handler (
     ToEnvelope (..),
 ) where
 
-import Connection (mkConnection)
+import Connection (mkTCPClientConnection)
 import Control.Concurrent (
+    modifyMVar_,
     putMVar,
-    takeMVar,
-    tryTakeMVar, tryPutMVar, modifyMVar_,
  )
-import Control.Monad (void, unless)
 import Control.Monad.Reader
 import Data.ProtoLens (defMessage)
 import Data.Text qualified as T
@@ -31,7 +29,10 @@ import Msg (Msg (..))
 import Proto.Home qualified as Home
 import Proto.Home_Fields qualified as Home
 import TH (makeInstance, makeToEnvelopeInstances)
-import Threads (killAsyncComputation, spawnAsyncComputationWithNotify, spawnAsyncComputation)
+import Threads (
+    killAsyncComputation,
+    spawnAsyncComputation,
+ )
 
 class HomeHandler msg where
     homeHandler ::
@@ -57,43 +58,41 @@ thread. If one exists, report the error.
 -}
 instance HomeHandler Home.StartRadio where
     homeHandler _ _ = do
+        liftIO $ putStrLn "START"
         env <- ask
         liftIO $ modifyMVar_ (env ^. audioStreamMVar) $ \case
-          Just stream -> do
-            putStrLn "Audio stream already exists"
-            pure $ Just stream
-          Nothing -> do
-            asyncAudioStream <- mkAsyncAudioStream
-            Just <$> spawnAsyncComputation (start asyncAudioStream)
+            Just stream -> do
+                putStrLn "Audio stream already exists"
+                pure $ Just stream
+            Nothing -> do
+                asyncAudioStream <- mkAsyncAudioStream
+                Just <$> spawnAsyncComputation (start asyncAudioStream)
 
 -- | Stop playing an audio stream if one is playing.
 instance HomeHandler Home.StopRadio where
     homeHandler _ _ = do
         env <- ask
         liftIO $ modifyMVar_ (env ^. audioStreamMVar) $ \case
-          Nothing -> do
-            putStrLn "Radio not playing"
-            pure Nothing
-          Just asyncStream -> do
-            killAsyncComputation asyncStream
-            pure Nothing
+            Nothing -> do
+                putStrLn "Radio not playing"
+                pure Nothing
+            Just asyncStream -> do
+                killAsyncComputation asyncStream
+                pure Nothing
 
 -- | Spawn a new thread and try to connect to the given TCP server.
 instance HomeHandler Home.ConnectTCP where
     homeHandler loop msg = do
         env <- ask
-        asyncConnection <-
+        clientConn <-
             liftIO $
-                spawnAsyncComputationWithNotify
-                    ( mkConnection
-                        (T.unpack $ msg ^. Home.host)
-                        (T.unpack $ msg ^. Home.port)
-                        withBytes
-                    )
-                    (void . takeMVar $ env ^. connectionMVar)
-        liftIO $ putMVar (env ^. connectionMVar) asyncConnection
+                mkTCPClientConnection
+                    (T.unpack $ msg ^. Home.host)
+                    (T.unpack $ msg ^. Home.port)
+                    withBytes
+        liftIO $ putMVar (env ^. connectionMVar) clientConn
       where
-        -- | Receive a Home.Envelope and add, parse and add to the
+        -- \| Receive a Home.Envelope and add, parse and add to the
         -- event loop.
         withBytes bytes =
             case fromBytes @Home.Envelope bytes of
