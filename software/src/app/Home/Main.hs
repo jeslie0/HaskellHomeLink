@@ -5,13 +5,11 @@ module Home.Main (main) where
 import Connection (
     killConnection,
     mkTCPClientConnection,
-    mkTCPServerConnection,
     sendMsg,
  )
-import Control.Concurrent (modifyMVar_, putMVar, threadDelay, tryTakeMVar)
+import Control.Concurrent (modifyMVar_, putMVar, tryTakeMVar)
 import Control.Exception (bracket)
 import Control.Monad.Reader
-import Data.ByteString.Char8 qualified as B
 import Data.Foldable (for_)
 import EventLoop (addMsg, mkEventLoop, run)
 import Home.Env (audioStreamMVar, connectionMVar, httpServerMVar, mkEnv)

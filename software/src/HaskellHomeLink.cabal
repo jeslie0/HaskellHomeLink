@@ -63,6 +63,7 @@ executable Home
     -- Modules included in this executable, other than Main.
     other-modules:    Connection,
                       Connection.TCP,
+                      ConnectionManager,
                       EventLoop,
                       Home.AudioStream,
                       Home.Handler,
@@ -74,6 +75,7 @@ executable Home
                       REST.Api,
                       REST.Servant,
                       REST.HomeServer,
+                      Router,
                       Socket,
                       TH,
                       Threads
