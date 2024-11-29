@@ -2,14 +2,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module REST.HomeServer (runApp, mkEnv, radioStreamActive, tcpServer) where
+module REST.HomeServer (runApp, mkEnv, radioStreamActive, router) where
 
-import Control.Exception (SomeAsyncException, bracket, catch)
+import Control.Exception (SomeAsyncException, catch, fromException, throwIO)
 import Control.Monad.IO.Class (liftIO)
 import Data.ByteString.Char8 qualified as B
 import Data.ProtoLens (defMessage)
-import Home.Handler (ExHomeHandler (..))
-import Network.Wai.Handler.Warp (run)
+import Network.Wai.Handler.Warp (run, runSettings, defaultSettings, setPort, setOnException, defaultOnException)
 import Proto.Home qualified as Home
 import REST.Api (Api, RadioCommand (..))
 import Servant (
@@ -18,16 +17,13 @@ import Servant (
     Raw,
     Server,
     serve,
-    serveDirectoryWebApp,
     serveDirectoryWith,
     (:<|>) (..),
  )
 
-import Connection (Connection, mkTCPServerConnection)
-import Control.Concurrent (MVar, newMVar, tryPutMVar, tryTakeMVar, withMVar)
-import Control.Monad (void)
-import Home.Env qualified as Home
-import Lens.Micro ((^.))
+import Connection (mkTCPServerConnection)
+import Control.Concurrent (MVar, newMVar, withMVar)
+import Lens.Micro ((^.), (&))
 import Lens.Micro.TH (makeLenses)
 import Network.Wai.Application.Static (
     defaultWebAppSettings,
@@ -35,15 +31,17 @@ import Network.Wai.Application.Static (
     ssRedirectToIndex,
  )
 import Servant.Server (Application)
-import Threads (AsyncComputation, isAsyncComputationRunning)
 import WaiAppStatic.Types (unsafeToPiece)
 import Msg (ExMsg (..))
+import Router (Router, mkRouter, connectionsManager)
+import ConnectionManager (Island(..), addConnection)
+import Home.Handler (toEnvelope)
 
 type AddMsg = ExMsg -> IO ()
 
 data Env = Env
     { _radioStreamActive :: MVar Bool
-    , _tcpServer :: Connection
+    , _router :: Router
     }
 
 $(makeLenses ''Env)
@@ -51,19 +49,21 @@ $(makeLenses ''Env)
 mkEnv :: IO Env
 mkEnv = do
     _radioStreamActive <- newMVar False
-    _tcpServer <- mkTCPServerConnection "3000" B.putStrLn
-    pure $ Env {_radioStreamActive, _tcpServer}
+    _router <- mkRouter LocalProxy
+    tcpServerConnection <- mkTCPServerConnection "3000" B.putStrLn
+    addConnection Home tcpServerConnection (_router ^. connectionsManager)
+    pure $ Env {_radioStreamActive, _router}
 
 handleRadioCommand :: AddMsg -> RadioCommand -> Handler Bool
-handleRadioCommand addMsg Start = liftIO $ addMsg (ExMsg $ defMessage @Home.StartRadio) >> pure True
-handleRadioCommand addMsg Stop = liftIO $ addMsg (ExMsg $ defMessage @Home.StopRadio) >> pure True
+handleRadioCommand addMsg Start = liftIO $ addMsg (ExMsg . toEnvelope $ defMessage @Home.StartRadio) >> pure True
+handleRadioCommand addMsg Stop = liftIO $ addMsg (ExMsg . toEnvelope $ defMessage @Home.StopRadio) >> pure True
 
 handleGetRadioStatus :: Env -> Handler Bool
 handleGetRadioStatus env = do
     liftIO $ withMVar (env ^. radioStreamActive) pure
 
 handleConnectionCommand :: AddMsg -> Handler Bool
-handleConnectionCommand addMsg = liftIO $ addMsg (ExMsg $ defMessage @Home.ConnectTCP) >> pure True
+handleConnectionCommand addMsg = liftIO $ addMsg (ExMsg . toEnvelope$ defMessage @Home.ConnectTCP) >> pure True
 
 server :: Env -> AddMsg -> Server Api
 server env addMsg =
@@ -95,9 +95,13 @@ runApp env addMsg = do
     runAppImpl `catch` handleAsyncException
   where
     runAppImpl =
-        run port $ app env addMsg
+        runSettings settings $ app env addMsg
+
+    settings = defaultSettings
+      & setPort port
 
     port = 8080
 
-    handleAsyncException (_ :: SomeAsyncException) = do
+    handleAsyncException (ex :: SomeAsyncException) = do
         putStrLn "Async exception caught. Killing HTTP server"
+        throwIO ex

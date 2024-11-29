@@ -46,7 +46,10 @@ mkTCPServerConnection port withBytes = do
             }
 
 mkTCPClientConnection ::
-    HostName -> ServiceName -> (B.ByteString -> IO ()) -> IO Connection
+    HostName
+    -> ServiceName
+    -> (B.ByteString -> IO ())
+    -> IO Connection
 mkTCPClientConnection host port withBytes = do
     sendChan <- newChan @B.ByteString
     connectionThread <-

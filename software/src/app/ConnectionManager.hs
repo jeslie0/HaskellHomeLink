@@ -5,31 +5,44 @@ module ConnectionManager (
     addConnection,
     removeConnection,
     getConnection,
+    getSrcDest,
+    killConnections,
 ) where
 
-import Connection (Connection)
+import Connection (Connection, killConnection)
 import Control.Concurrent (MVar, modifyMVar_, newMVar, withMVar)
+import Control.Monad (forM_, void)
+import Data.ByteString qualified as B
 import Data.Map.Strict qualified as Map
-import Data.Serialize (Serialize (..), ensure, getWord8, putWord8)
+import Data.Serialize (Serialize (..), ensure, getWord8, putWord8, runGet)
 import GHC.Generics (Generic)
 
 data Island
     = Home
-    | Proxy
-    deriving (Generic, Eq, Ord)
+    | RemoteProxy
+    | LocalProxy
+    deriving (Generic, Eq, Ord, Enum, Show)
 
 instance Serialize Island where
-    put island = putWord8 $ case island of
-        Home -> 0
-        Proxy -> 1
-
     get = do
-        bytes <- ensure 1
-        word <- getWord8
-        case word of
-            0 -> pure Home
-            1 -> pure Proxy
-            _ -> fail "Could not deserialise value into an island"
+        void $ ensure 1
+        toEnum . fromIntegral <$> getWord8
+
+    put = putWord8 . fromIntegral . fromEnum
+
+rightToMaybe :: Either a b -> Maybe b
+rightToMaybe (Left _) = Nothing
+rightToMaybe (Right b) = Just b
+
+getSrcDest :: B.ByteString -> Maybe (Island, Island)
+getSrcDest bytes
+    | B.length bytes /= 2 = Nothing
+    | otherwise =
+        let (srcByte, destByte) = B.splitAt 1 bytes
+         in rightToMaybe $ do
+                src <- runGet get srcByte
+                dest <- runGet get destByte
+                pure (src, dest)
 
 newtype ConnectionManager = ConnectionManager {connectionsMVar :: MVar (Map.Map Island Connection)}
 
@@ -49,3 +62,10 @@ removeConnection island (ConnectionManager connectionsMVar) = do
 getConnection :: Island -> ConnectionManager -> IO (Maybe Connection)
 getConnection island (ConnectionManager connectionsMVar) = do
     withMVar connectionsMVar $ pure . Map.lookup island
+
+killConnections :: ConnectionManager -> IO ()
+killConnections (ConnectionManager connectionsMVar) = do
+    modifyMVar_ connectionsMVar $
+        \connections -> do
+            forM_ connections killConnection
+            pure Map.empty

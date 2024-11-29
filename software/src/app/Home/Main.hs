@@ -1,24 +1,30 @@
-{-# LANGUAGE OverloadedStrings #-}
-
 module Home.Main (main) where
 
-import Connection (
-    killConnection,
-    mkTCPClientConnection,
-    sendMsg,
+import ConnectionManager (
+    Island (..),
+    killConnections,
  )
-import Control.Concurrent (modifyMVar_, putMVar, tryTakeMVar)
+import Control.Concurrent (modifyMVar_, tryTakeMVar)
 import Control.Exception (bracket)
+import Control.Monad (void)
 import Control.Monad.Reader
+import Data.Bifunctor (second)
 import Data.Foldable (for_)
 import EventLoop (addMsg, mkEventLoop, run)
-import Home.Env (audioStreamMVar, connectionMVar, httpServerMVar, mkEnv)
+import Home.Env (
+    Env,
+    addLocalHTTPServerConnection,
+    audioStreamMVar,
+    httpServerMVar,
+    mkEnv,
+    router,
+ )
 import Home.Handler (ExHomeHandler (..), homeHandler)
 import Lens.Micro
-import Msg (ExMsg (..), Msg (..))
+import Msg (ExMsg (..))
 import Proto.Home qualified as Home
-import REST.HomeServer (tcpServer)
-import REST.HomeServer qualified as HomeServer (mkEnv, runApp)
+import REST.HomeServer qualified as HomeServer
+import Router (connectionsManager, trySendMessage)
 import Threads (killAsyncComputation, spawnAsyncComputation)
 
 -- startConnection :: Home.Envelope
@@ -42,7 +48,8 @@ import Threads (killAsyncComputation, spawnAsyncComputation)
 httpServer :: IO ()
 httpServer = do
     env <- HomeServer.mkEnv
-    HomeServer.runApp env $ \(ExMsg msg) -> sendMsg (env ^. tcpServer) (toBytes msg)
+    HomeServer.runApp env $ \(ExMsg msg) -> do
+        void $ trySendMessage (env ^. HomeServer.router) Home msg
 
 main :: IO ()
 main = do
@@ -50,16 +57,16 @@ main = do
         bracket mkEnv cleanupEnv $ \env ->
             runReaderT (action env) env
   where
+    action :: Env -> ReaderT Env IO ()
     action env = do
-        loop <- mkEventLoop @ExHomeHandler
-        connection <- liftIO $ mkTCPClientConnection "127.0.0.1" "3000" $ \bytes ->
-            case fromBytes @Home.StartRadio bytes of
-                Left _ -> putStrLn "FAIL"
-                Right msg -> addMsg loop $ ExHomeHandler msg
-        liftIO . putMVar (env ^. connectionMVar) $ connection
-        run loop homeHandler
+        loop <- mkEventLoop @(Island, ExHomeHandler)
+        liftIO
+            $ addLocalHTTPServerConnection @Home.Envelope
+                (addMsg loop . second ExHomeHandler)
+            $ env ^. router
+        run loop $ \evloop b -> uncurry (homeHandler evloop) b
 
     cleanupEnv env = do
         modifyMVar_ (env ^. audioStreamMVar) $ \m -> for_ m killAsyncComputation >> pure Nothing
-        tryTakeMVar (env ^. connectionMVar) >>= \m -> for_ m killConnection
+        killConnections (env ^. (router . connectionsManager))
         tryTakeMVar (env ^. httpServerMVar) >>= \m -> for_ m killAsyncComputation

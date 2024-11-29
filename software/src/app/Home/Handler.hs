@@ -14,20 +14,23 @@ module Home.Handler (
 ) where
 
 import Connection (mkTCPClientConnection)
+import ConnectionManager (Island (..), addConnection, getSrcDest)
 import Control.Concurrent (
     modifyMVar_,
-    putMVar,
  )
+import Control.Monad (void)
 import Control.Monad.Reader
+import Data.ByteString qualified as B
 import Data.ProtoLens (defMessage)
 import Data.Text qualified as T
 import EventLoop (EventLoop, addMsg)
 import Home.AudioStream (mkAsyncAudioStream, start)
-import Home.Env (EnvT, audioStreamMVar, connectionMVar)
+import Home.Env (EnvT, audioStreamMVar, router)
 import Lens.Micro
 import Msg (Msg (..))
 import Proto.Home qualified as Home
 import Proto.Home_Fields qualified as Home
+import Router (connectionsManager, forwardMsg, thisIsland)
 import TH (makeInstance, makeToEnvelopeInstances)
 import Threads (
     killAsyncComputation,
@@ -36,12 +39,12 @@ import Threads (
 
 class HomeHandler msg where
     homeHandler ::
-        EventLoop EnvT ExHomeHandler -> msg -> EnvT ()
+        EventLoop EnvT (Island, ExHomeHandler) -> Island -> msg -> EnvT ()
 
 data ExHomeHandler = forall a. (HomeHandler a) => ExHomeHandler a
 
 instance HomeHandler ExHomeHandler where
-    homeHandler loop (ExHomeHandler msg) = homeHandler loop msg
+    homeHandler loop island (ExHomeHandler msg) = homeHandler loop island msg
 
 -- * Message instances
 
@@ -57,7 +60,7 @@ $( makeInstance
 thread. If one exists, report the error.
 -}
 instance HomeHandler Home.StartRadio where
-    homeHandler _ _ = do
+    homeHandler _ _ _ = do
         liftIO $ putStrLn "START"
         env <- ask
         liftIO $ modifyMVar_ (env ^. audioStreamMVar) $ \case
@@ -70,7 +73,7 @@ instance HomeHandler Home.StartRadio where
 
 -- | Stop playing an audio stream if one is playing.
 instance HomeHandler Home.StopRadio where
-    homeHandler _ _ = do
+    homeHandler _ _ _ = do
         env <- ask
         liftIO $ modifyMVar_ (env ^. audioStreamMVar) $ \case
             Nothing -> do
@@ -82,22 +85,29 @@ instance HomeHandler Home.StopRadio where
 
 -- | Spawn a new thread and try to connect to the given TCP server.
 instance HomeHandler Home.ConnectTCP where
-    homeHandler loop msg = do
+    homeHandler loop _ msg = do
         env <- ask
         clientConn <-
             liftIO $
                 mkTCPClientConnection
                     (T.unpack $ msg ^. Home.host)
                     (T.unpack $ msg ^. Home.port)
-                    withBytes
-        liftIO $ putMVar (env ^. connectionMVar) clientConn
+                    (withBytes $ env ^. router)
+        liftIO $
+            addConnection RemoteProxy clientConn (env ^. (router . connectionsManager))
       where
         -- \| Receive a Home.Envelope and add, parse and add to the
         -- event loop.
-        withBytes bytes =
-            case fromBytes @Home.Envelope bytes of
-                Left err -> putStrLn err
-                Right envelope -> addMsg loop $ ExHomeHandler envelope
+        withBytes rtr bytes = do
+            let (srcDest, payload) = B.splitAt 2 bytes
+            case getSrcDest srcDest of
+                Nothing -> putStrLn "Could not get source or dest from message"
+                Just (src, dest) -> do
+                    if dest == rtr ^. thisIsland
+                        then case fromBytes @Home.Envelope payload of
+                            Left err -> putStrLn err
+                            Right envelope -> addMsg loop (src, ExHomeHandler envelope)
+                        else void $ forwardMsg rtr dest bytes
 
 --
 class ToEnvelope msg where
