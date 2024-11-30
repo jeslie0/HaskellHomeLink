@@ -20,7 +20,7 @@ import GHC.Generics (Generic)
 data Island
     = Home
     | RemoteProxy
-    | LocalProxy
+    | LocalHTTP
     deriving (Generic, Eq, Ord, Enum, Show)
 
 instance Serialize Island where

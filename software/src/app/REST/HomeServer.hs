@@ -4,11 +4,11 @@
 
 module REST.HomeServer (runApp, mkEnv, radioStreamActive, router) where
 
-import Control.Exception (SomeAsyncException, catch, fromException, throwIO)
+import Control.Exception (SomeAsyncException, catch, throwIO)
 import Control.Monad.IO.Class (liftIO)
 import Data.ByteString.Char8 qualified as B
 import Data.ProtoLens (defMessage)
-import Network.Wai.Handler.Warp (run, runSettings, defaultSettings, setPort, setOnException, defaultOnException)
+import Network.Wai.Handler.Warp (runSettings, defaultSettings, setPort)
 import Proto.Home qualified as Home
 import REST.Api (Api, RadioCommand (..))
 import Servant (
@@ -49,7 +49,7 @@ $(makeLenses ''Env)
 mkEnv :: IO Env
 mkEnv = do
     _radioStreamActive <- newMVar False
-    _router <- mkRouter LocalProxy
+    _router <- mkRouter LocalHTTP
     tcpServerConnection <- mkTCPServerConnection "3000" B.putStrLn
     addConnection Home tcpServerConnection (_router ^. connectionsManager)
     pure $ Env {_radioStreamActive, _router}

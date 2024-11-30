@@ -15,7 +15,7 @@ import Control.Concurrent (
     tryTakeMVar,
     writeChan,
  )
-import Control.Exception (SomeAsyncException, bracket, catch, displayException)
+import Control.Exception (SomeAsyncException, bracket, catch)
 import Control.Monad (void)
 import Data.ByteString qualified as BS
 import Data.ByteString.Internal qualified as BS
@@ -174,8 +174,8 @@ readChanAndPlay mp3 info chan pcmData = do
             chans <- getChannels info
             makeAudioHandle (SR freq) (Channels chans)
 
-    asyncErrHandler (err :: SomeAsyncException) =
-        putStrLn $ "Async error caught: " <> displayException err
+    asyncErrHandler (_err :: SomeAsyncException) =
+        pure ()
 
 -- | Compute the size of an MP3 frame from the given info.
 computeFrameSize :: MP3DecFrameInfo -> IO Int
@@ -209,10 +209,8 @@ start (AsyncAudioStream _streamAsyncMVar) = do
         withAsyncAudioStream (writeChan chan)
 
     asyncErrHandler (_ :: SomeAsyncException) = do
-      mAsyncStream <- tryTakeMVar _streamAsyncMVar
-      for_ mAsyncStream killAsyncComputation
-
-
+        mAsyncStream <- tryTakeMVar _streamAsyncMVar
+        for_ mAsyncStream killAsyncComputation
 
 stop :: AsyncAudioStream -> IO ()
 stop (AsyncAudioStream _streamAsyncMVar) = do

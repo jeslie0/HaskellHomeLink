@@ -1,5 +1,5 @@
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE MonoLocalBinds #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Home.Env (
     Env,
@@ -8,20 +8,20 @@ module Home.Env (
     audioStreamMVar,
     httpServerMVar,
     router,
-    addLocalHTTPServerConnection
+    addLocalHTTPServerConnection,
+    addRemoteProxyConnection
 ) where
 
 import Connection (mkTCPClientConnection)
-import ConnectionManager (Island (..), addConnection, getSrcDest)
+import ConnectionManager (Island (..), addConnection)
 import Control.Concurrent (MVar, newEmptyMVar, newMVar)
 import Control.Monad.Reader (ReaderT)
-import Lens.Micro.TH (makeLenses)
-import Router (Router, mkRouter, connectionsManager, thisIsland, forwardMsg)
-import Threads (AsyncComputation)
 import Lens.Micro ((^.))
-import qualified Data.ByteString as B
-import Msg (fromBytes, Msg)
-import Control.Monad (void)
+import Lens.Micro.TH (makeLenses)
+import Msg (Msg)
+import Router (Router, connectionsManager, mkRouter, handleBytes)
+import Threads (AsyncComputation)
+import Network.Socket (ServiceName, HostName)
 
 data Env = Env
     { _router :: Router
@@ -45,19 +45,16 @@ mkEnv = do
             , _router
             }
 
-addLocalHTTPServerConnection :: forall msg. Msg msg => ((Island, msg) -> IO ()) -> Router -> IO ()
+addLocalHTTPServerConnection ::
+    forall msg. (Msg msg) => ((Island, msg) -> IO ()) -> Router -> IO ()
 addLocalHTTPServerConnection actOnMsg rtr = do
     connection <-
-        mkTCPClientConnection "127.0.0.1" "3000" withBytes
-    addConnection LocalProxy connection (rtr ^. connectionsManager)
-  where
-    withBytes bytes = do
-        let (srcDest, payload) = B.splitAt 2 bytes
-        case getSrcDest srcDest of
-            Nothing -> putStrLn "Could not get source or dest from message"
-            Just (src, dest) -> do
-                if dest == rtr ^. thisIsland
-                    then case fromBytes @msg payload of
-                        Left err -> putStrLn err
-                        Right envelope -> actOnMsg (src, envelope)
-                    else void $ forwardMsg rtr dest bytes
+        mkTCPClientConnection "127.0.0.1" "3000" $ handleBytes actOnMsg rtr
+    addConnection LocalHTTP connection (rtr ^. connectionsManager)
+
+addRemoteProxyConnection ::
+    forall msg. (Msg msg) => ((Island, msg) -> IO ()) -> HostName -> ServiceName -> Router -> IO ()
+addRemoteProxyConnection actOnMsg host port rtr = do
+    connection <-
+        mkTCPClientConnection host port $ handleBytes actOnMsg rtr
+    addConnection RemoteProxy connection (rtr ^. connectionsManager)
