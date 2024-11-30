@@ -1,22 +1,21 @@
-{ pkgs
+{ self
+, pkgs
 , ghcVersion
 , packageName
-, extendHaskellPackages
-, self
+, nix-filter
 , ...
 }:
 let
   dir =
-    "${self}";
+      nix-filter {
+        root =
+          self;
 
-  haskellPackages = pkgs:
-    extendHaskellPackages {
-      haskellPackages =
-        pkgs.haskell.packages.${ghcVersion};
+        include =
+          [ "cabal.project" "software/libs" "software/proto" "software/src" ];
 
-      alsa-lib =
-        pkgs.alsa-lib;
-    };
+        exclude = [ ];
+      };
 
   project =
     pkgs.haskell-nix.project' {
@@ -37,7 +36,6 @@ let
 
   linux =
     flake.packages."${packageName}:exe:Home";
-
 in
 {
   inherit linux flake project;

@@ -4,6 +4,7 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     ps-overlay.url = "github:thomashoneyman/purescript-overlay";
+    nix-filter.url = "github:numtide/nix-filter";
     mkSpagoDerivation = {
       url = "github:jeslie0/mkSpagoDerivation";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -15,7 +16,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, ps-overlay, mkSpagoDerivation, haskellNix }:
+  outputs = { self, nixpkgs, nix-filter, ps-overlay, mkSpagoDerivation, haskellNix }:
     let
       supportedSystems =
         [ "aarch64-linux" "x86_64-linux" "aarch64-darwin" "x86_64-darwin" ];
@@ -76,38 +77,50 @@
             let
               pkgs =
                 nixpkgsFor.${system};
-            in
-            {
+
+              web =
+                import ./software/apps/Web/default.nix {
+                  inherit self;
+                  nix-filter = nix-filter.lib;
+                  mkSpagoDerivation = pkgs.mkSpagoDerivation;
+                  purs-unstable = pkgs.purs-unstable;
+                  spago-unstable = pkgs.spago-unstable;
+                  esbuild = pkgs.esbuild;
+                  buildNpmPackage = pkgs.buildNpmPackage;
+                  mkDerivation = pkgs.stdenv.mkDerivation;
+                };
+
+              HomeArmv7 =
+                import ./software/apps/Home/default.nix {
+                  inherit self pkgs ghcVersion web;
+
+                  packageName =
+                    packageName system;
+
+                  nix-filter =
+                    nix-filter.lib;
+                };
+
+              linux =
+                import ./nix/linux.nix {
+                  inherit self pkgs ghcVersion;
+
+                  packageName =
+                    packageName system;
+
+                  nix-filter =
+                    nix-filter.lib;
+                };
+            in {
               nixpkgs =
                 nixpkgsFor.${system};
 
               default =
                 self.packages.${system}.linux;
-              # (haskellPackages system).callCabal2nix (packageName system) "${self}/software/src" {};
-            } // (
-              import ./nix/xCompiled.nix {
-                inherit ghcVersion system nixpkgs pkgs extendHaskellPackages self;
 
-
-                packageName =
-                  packageName system;
-
-                webSrc =
-                  "${self}/software/src/web";
-
-                mkSpagoDerivation =
-                  pkgs.mkSpagoDerivation;
-
-                purs-unstable = pkgs.purs-unstable;
-
-                spago-unstable = pkgs.spago-unstable;
-
-                esbuild = pkgs.esbuild;
-
-                buildNpmPackage = pkgs.buildNpmPackage;
-
-                mkDerivation = pkgs.stdenv.mkDerivation;
-              })
+              project =
+                linux.project;
+            } // HomeArmv7
           );
 
 
@@ -132,7 +145,6 @@
                   ];
                 };
             in
-
               self.packages.${system}.project.shellFor {
                 withHoogle =
                   true;
@@ -147,9 +159,6 @@
                   [ toolsShell ];
 
                 tools = {
-                  # cabal =
-                  #   "latest";
-
                   haskell-language-server =
                     "latest";
                 };
