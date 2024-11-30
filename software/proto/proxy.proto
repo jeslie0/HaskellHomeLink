@@ -1,0 +1,29 @@
+syntax="proto3";
+
+// Received from HTTP Server.
+message ModifyRadioRequest {
+  bool start = 1;
+}
+
+// Sent to HTTP Server
+message ModifyRadioResponse {
+  bool mrfRadioOn = 1;
+}
+
+// Received from HTTP Server.
+message GetRadioStatusRequest {
+
+}
+
+// Sent to HTTP Server
+message GetRadioStatusResponse {
+  bool radioOn = 1;
+  uint32 stateId = 2;
+}
+
+message ProxyRecieveEnvelope {
+  oneof payload {
+    ModifyRadioResponse m1 = 1;
+    GetRadioStatusResponse m2 = 2;
+  }
+}

@@ -10,13 +10,16 @@
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.ps-overlay.follows = "ps-overlay";
     };
+    purescript-protobuf = {
+      url = "github:rowtype-yoga/purescript-protobuf/v4.3.0";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     haskellNix = {
       url = "github:jeslie0/haskell.nix";
-      # inputs.nixpkgs.follows = "nixpkgs";
     };
   };
 
-  outputs = { self, nixpkgs, nix-filter, ps-overlay, mkSpagoDerivation, haskellNix }:
+  outputs = { self, nixpkgs, nix-filter, ps-overlay, mkSpagoDerivation, purescript-protobuf, haskellNix }:
     let
       supportedSystems =
         [ "aarch64-linux" "x86_64-linux" "aarch64-darwin" "x86_64-darwin" ];
@@ -120,6 +123,9 @@
 
               project =
                 linux.project;
+
+              web =
+                web;
             } // HomeArmv7
           );
 
@@ -142,6 +148,7 @@
                     nodePackages.npm
                     nodejs
                     purs-tidy
+                    purescript-protobuf.packages.${system}.protoc-gen-purescript
                   ];
                 };
             in

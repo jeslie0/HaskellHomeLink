@@ -6,7 +6,6 @@ module Home.Env (
     EnvT,
     mkEnv,
     audioStreamMVar,
-    httpServerMVar,
     router,
     addLocalHTTPServerConnection,
     addRemoteProxyConnection
@@ -14,7 +13,7 @@ module Home.Env (
 
 import Connection (mkTCPClientConnection)
 import ConnectionManager (Island (..), addConnection)
-import Control.Concurrent (MVar, newEmptyMVar, newMVar)
+import Control.Concurrent (MVar, newMVar)
 import Control.Monad.Reader (ReaderT)
 import Lens.Micro ((^.))
 import Lens.Micro.TH (makeLenses)
@@ -26,7 +25,6 @@ import Network.Socket (ServiceName, HostName)
 data Env = Env
     { _router :: Router
     , _audioStreamMVar :: MVar (Maybe AsyncComputation)
-    , _httpServerMVar :: MVar AsyncComputation
     }
 
 $(makeLenses ''Env)
@@ -36,12 +34,10 @@ type EnvT = ReaderT Env IO
 mkEnv :: IO Env
 mkEnv = do
     _audioStreamMVar <- newMVar Nothing
-    _httpServerMVar <- newEmptyMVar
     _router <- mkRouter Home
     pure $
         Env
             { _audioStreamMVar
-            , _httpServerMVar
             , _router
             }
 

@@ -2,15 +2,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module REST.HomeServer (runApp, mkEnv, radioStreamActive, router) where
+module REST.HomeServer (runApp, mkEnv, router) where
 
 import Control.Exception (SomeAsyncException, catch, throwIO)
 import Control.Monad.IO.Class (liftIO)
-import Data.ByteString.Char8 qualified as B
 import Data.ProtoLens (defMessage)
-import Network.Wai.Handler.Warp (runSettings, defaultSettings, setPort)
-import Proto.Home qualified as Home
-import REST.Api (Api, RadioCommand (..))
+import Network.Wai.Handler.Warp (defaultSettings, runSettings, setPort)
+import REST.Api (Api)
 import Servant (
     Handler,
     Proxy (Proxy),
@@ -21,57 +19,61 @@ import Servant (
     (:<|>) (..),
  )
 
-import Connection (mkTCPServerConnection)
-import Control.Concurrent (MVar, newMVar, withMVar)
-import Lens.Micro ((^.), (&))
+import ConnectionManager (Island (..))
+import Control.Monad (void)
+import Home.AudioStream (StreamStatus)
+import Envelope (toEnvelope)
+import Lens.Micro ((&), (^.))
 import Lens.Micro.TH (makeLenses)
 import Network.Wai.Application.Static (
     defaultWebAppSettings,
     ssIndices,
     ssRedirectToIndex,
  )
+import Proto.Home qualified as Home
+import Proto.Proxy qualified as Proxy
+import Proto.Proxy_Fields qualified as Proxy
+import ProtoHelper (streamStatusToprotoRadioStatusResponse)
+import Router (Router, trySendMessage)
 import Servant.Server (Application)
+import State (State, waitForStateUpdate, withState, StateId)
 import WaiAppStatic.Types (unsafeToPiece)
-import Msg (ExMsg (..))
-import Router (Router, mkRouter, connectionsManager)
-import ConnectionManager (Island(..), addConnection)
-import Home.Handler (toEnvelope)
-
-type AddMsg = ExMsg -> IO ()
 
 data Env = Env
-    { _radioStreamActive :: MVar Bool
+    { _streamStatusState :: State StreamStatus
     , _router :: Router
     }
 
 $(makeLenses ''Env)
 
-mkEnv :: IO Env
-mkEnv = do
-    _radioStreamActive <- newMVar False
-    _router <- mkRouter LocalHTTP
-    tcpServerConnection <- mkTCPServerConnection "3000" B.putStrLn
-    addConnection Home tcpServerConnection (_router ^. connectionsManager)
-    pure $ Env {_radioStreamActive, _router}
+mkEnv :: State StreamStatus -> Router -> IO Env
+mkEnv streamStatus rtr = do
+    pure $ Env {_streamStatusState = streamStatus, _router = rtr}
 
-handleRadioCommand :: AddMsg -> RadioCommand -> Handler Bool
-handleRadioCommand addMsg Start = liftIO $ addMsg (ExMsg . toEnvelope $ defMessage @Home.StartRadio) >> pure True
-handleRadioCommand addMsg Stop = liftIO $ addMsg (ExMsg . toEnvelope $ defMessage @Home.StopRadio) >> pure True
+-- * Server handlers
 
-handleGetRadioStatus :: Env -> Handler Bool
+handleGetRadioStatus :: Env -> Handler Proxy.GetRadioStatusResponse
 handleGetRadioStatus env = do
-    liftIO $ withMVar (env ^. radioStreamActive) pure
+    liftIO $ withState (env ^. streamStatusState) $ \stateId state -> pure . streamStatusToprotoRadioStatusResponse stateId $ state
 
-handleConnectionCommand :: AddMsg -> Handler Bool
-handleConnectionCommand addMsg = liftIO $ addMsg (ExMsg . toEnvelope$ defMessage @Home.ConnectTCP) >> pure True
+handleModifyRadioRequest ::
+    Env -> Proxy.ModifyRadioRequest -> Maybe StateId -> Handler Bool
+handleModifyRadioRequest _ _ Nothing = pure False
+handleModifyRadioRequest env req (Just stateId) = do
+    void . liftIO $ waitForStateUpdate (env ^. streamStatusState) stateId $ \_ _ ->
+        void $
+            if req ^. Proxy.start
+                then do
+                    trySendMessage (env ^. router) Home (toEnvelope $ defMessage @Home.StartRadio)
+                else
+                    trySendMessage (env ^. router) Home (toEnvelope $ defMessage @Home.StopRadio)
+    pure True
 
-server :: Env -> AddMsg -> Server Api
-server env addMsg =
-    ( ( handleGetRadioStatus env
-            :<|> handleRadioCommand addMsg Start
-            :<|> handleRadioCommand addMsg Stop
-      )
-        :<|> handleConnectionCommand addMsg
+-- * Server
+server :: Env -> Server Api
+server env =
+    ( handleGetRadioStatus env
+        :<|> handleModifyRadioRequest env
     )
         :<|> serveDir "/usr/local/haskell-home-link"
 
@@ -86,19 +88,20 @@ serveDir path = do
                 }
     serveDirectoryWith staticSettings
 
-app :: Env -> AddMsg -> Application
-app env = serve (Proxy @Api) . server env
+app :: Env -> Application
+app env = serve (Proxy @Api) $ server env
 
-runApp :: Env -> AddMsg -> IO ()
-runApp env addMsg = do
+runApp :: Env -> IO ()
+runApp env = do
     putStrLn $ "Starting HTTP server on port " <> show port
     runAppImpl `catch` handleAsyncException
   where
     runAppImpl =
-        runSettings settings $ app env addMsg
+        runSettings settings $ app env
 
-    settings = defaultSettings
-      & setPort port
+    settings =
+        defaultSettings
+            & setPort port
 
     port = 8080
 

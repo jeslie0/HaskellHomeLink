@@ -3,6 +3,7 @@ module Pages.Overview (OverviewPageState, overviewPage, fetchStreamStatus) where
 import Prelude
 
 import Constants (getApiUrl)
+import Data.ArrayBuffer.Builder (execPutM)
 import Data.HTTP.Method (Method(..))
 import Data.Maybe (Maybe(..))
 import Deku.Control as DC
@@ -16,13 +17,16 @@ import Effect.Aff (launchAff_)
 import Effect.Class (liftEffect)
 import FRP.Poll (Poll)
 import Fetch (fetch)
+import Effect.Ref (Ref)
+import Effect.Ref as Ref
+import Proto.Proxy as Proto
 import Yoga.JSON (read_)
 
-type OverviewPageState = { setStreamActivePoll :: Boolean -> Effect Unit, streamActivePoll :: Poll Boolean }
+type OverviewPageState = { setStreamActivePoll :: Boolean -> Effect Unit, streamActivePoll :: Poll Boolean, streamStateIdRef :: Ref Int }
 
 overviewPage :: Poll OverviewPageState -> Nut
 overviewPage pollState = do
-  pollState <#~> \{ setStreamActivePoll, streamActivePoll } ->
+  pollState <#~> \ { setStreamActivePoll, streamActivePoll, streamStateIdRef } ->
     DD.div
       [ DA.klass_ "pf-v5-l-gallery pf-m-gutter" ]
       [ DD.div [ DA.klass_ "pf-v5-l-gallery__item" ]
@@ -32,18 +36,18 @@ overviewPage pollState = do
                       [ DC.text_ "Radio" ]
                   ]
               , DD.div [ DA.klass_ "pf-v5-c-card__body" ]
-                  [ overviewPageBody setStreamActivePoll streamActivePoll ]
+                  [ overviewPageBody setStreamActivePoll streamActivePoll streamStateIdRef]
               , DD.div [ DA.klass_ "pf-v5-c-card__footer" ] [ DC.text_ "Footer" ]
               ]
           ]
       ]
   where
-  overviewPageBody setStreamActivePoll streamActivePoll =
+  overviewPageBody setStreamActivePoll streamActivePoll streamStateIdRef=
     DD.div []
       [ DD.button
           [ DA.klass_ "pf-v5-c-button pf-m-primary"
           , DA.disabled $ streamActivePoll <#> if _ then "true" else ""
-          , DL.click_ $ \_ -> startStream setStreamActivePoll
+          , DL.click_ $ \_ -> startStream streamStateIdRef setStreamActivePoll
           ]
           [ DD.text_ "Start radio"
           ]
@@ -55,8 +59,8 @@ overviewPage pollState = do
           [ DD.text_ "Stop radio" ]
       ]
 
-fetchStreamStatus :: (Boolean -> Effect Unit) -> Effect Unit
-fetchStreamStatus setStreamStatus = do
+fetchStreamStatus :: (Boolean -> Effect Unit) -> (Int -> Effect Unit) -> Effect Unit
+fetchStreamStatus setStreamStatus setStreamStateId = do
   apiUrl <- getApiUrl
   let requestUrl = apiUrl <> "radio"
   launchAff_ do
@@ -67,18 +71,27 @@ fetchStreamStatus setStreamStatus = do
       Nothing -> pure unit
       Just bool -> liftEffect $ setStreamStatus bool
 
-startStream :: (Boolean -> Effect Unit) -> Effect Unit
-startStream setStreamStatus = do
+startStream :: Ref Int -> (Boolean -> Effect Unit) -> Effect Unit
+startStream ref setStreamStatus = do
+  id <- Ref.read ref
   apiUrl <- getApiUrl
-  let requestUrl = apiUrl <> "radio/start"
+  let
+    requestUrl = apiUrl <> "radio/modify" <> "?stateId=" <> show id
+    body = Proto.mkModifyRadioRequest { start: Just true }
+  bodyBuff <- execPutM $ Proto.putModifyRadioRequest body
   launchAff_ do
-    _ <- fetch requestUrl { method: PUT }
-    liftEffect $ fetchStreamStatus setStreamStatus
+    _ <- fetch requestUrl { method: POST
+                          , body: bodyBuff
+                          , headers: { "content-type": "application/protobuf" }
+                          }
+    pure unit
+    -- liftEffect $ fetchStreamStatus setStreamStatus
 
 stopStream :: (Boolean -> Effect Unit) -> Effect Unit
 stopStream setStreamStatus = do
   apiUrl <- getApiUrl
-  let requestUrl = apiUrl <> "radio/stop"
+  let requestUrl = apiUrl <> "radio/modify"
   launchAff_ do
     _ <- fetch requestUrl { method: PUT }
-    liftEffect $ fetchStreamStatus setStreamStatus
+    pure unit
+    -- liftEffect $ fetchStreamStatus setStreamStatus

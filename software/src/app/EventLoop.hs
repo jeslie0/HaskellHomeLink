@@ -51,7 +51,7 @@ mkEventLoop = do
             }
 
 addMsg :: (MonadIO m, MonadIO m1) => EventLoop m1 msg -> msg -> m ()
-addMsg loop msg = setTimeout loop msg 0
+addMsg loop msg = liftIO (putStrLn "Adding msg") >> setTimeout loop msg 0
 
 setTimeout :: (MonadIO m, MonadIO m1) => EventLoop m1 msg -> msg -> Int -> m ()
 setTimeout (EventLoop {_keepLoopAliveMVar, _pqueueMVar}) msg timeoutMs = do

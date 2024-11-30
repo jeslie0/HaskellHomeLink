@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Home.AudioStream (AsyncAudioStream, mkAsyncAudioStream, start, stop, isPlaying) where
+module Home.AudioStream (AsyncAudioStream, StreamStatus (..), mkAsyncAudioStream, start, stop, isPlaying) where
 
 import Alsa.PCM.Handle
 import Alsa.PCM.Params
@@ -32,6 +32,10 @@ import Threads (
     killAsyncComputation,
     spawnAsyncComputation,
  )
+
+data StreamStatus
+    = Inactive
+    | Active
 
 classicFMURL :: String
 classicFMURL =

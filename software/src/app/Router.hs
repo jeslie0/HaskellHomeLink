@@ -48,7 +48,7 @@ trySendMessage (Router island connMgr) dest msg = do
         addressedBytes = runPut (put island) <> runPut (put dest) <> bytes
     mConn <- getConnection hop connMgr
     case mConn of
-        Nothing -> pure False
+        Nothing -> putStrLn "Couldn't find dest" >> pure False
         Just conn -> sendMsg conn addressedBytes >> pure True
 
 forwardMsg :: Router -> Island -> B.ByteString -> IO Bool

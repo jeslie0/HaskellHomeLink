@@ -13,6 +13,7 @@ import Deku.Hooks ((<#~>))
 import Deku.Hooks as DH
 import Deku.Toplevel (runInBody)
 import Effect (Effect)
+import Effect.Ref as Ref
 import Effect.Console as Console
 import Effect.Timer (setInterval)
 import FRP.Poll (Poll)
@@ -70,9 +71,12 @@ dekuApp = do
   _ <- getAndSetSystemPageInfo setSystemPageState
 
   _ /\ setStreamActivePoll /\ streamActivePoll <- DE.useHot false
-  _ <- setInterval 2000 $ fetchStreamStatus setStreamActivePoll
+  streamStateIdRef <- Ref.new 0
 
-  let overviewPageState = pure {setStreamActivePoll, streamActivePoll}
+  _ <- setInterval 2000 $ fetchStreamStatus setStreamActivePoll (\n -> Ref.write n streamStateIdRef)
+
+  let overviewPageState = pure {setStreamActivePoll, streamActivePoll, streamStateIdRef}
+
 
   pure Deku.do
     Tuple _setApplicationsPageState applicationsPageState <- DH.useHot initialApplicationsPageState

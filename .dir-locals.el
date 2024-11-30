@@ -7,7 +7,7 @@
                                                                 (:importLens
                                                                  (:globalOn nil)))
                                            :purescript
-                                           (:outputDirectory "./software/src/web/output" :formatter "purs-tidy")))))
+                                           (:outputDirectory "./software/web/output" :formatter "purs-tidy")))))
  (auto-mode-alist . (("\\.lock\\'" . json-ts-mode)))
  (haskell-mode . ((eval . (eglot-ensure))))
  (nix-mode . ((eval . (eglot-ensure))))

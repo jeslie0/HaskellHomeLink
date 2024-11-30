@@ -10,24 +10,28 @@ handled by the Home application.
 module Home.Handler (
     HomeHandler (..),
     ExHomeHandler (..),
-    ToEnvelope (..),
 ) where
 
 import ConnectionManager (Island (..))
 import Control.Concurrent (
     modifyMVar_,
  )
+import Control.Monad (void)
 import Control.Monad.Reader
 import Data.Bifunctor (second)
 import Data.ProtoLens (defMessage)
 import Data.Text qualified as T
+import Envelope (ToProxyEnvelope (..))
 import EventLoop (EventLoop, addMsg)
 import Home.AudioStream (mkAsyncAudioStream, start)
 import Home.Env (EnvT, addRemoteProxyConnection, audioStreamMVar, router)
 import Lens.Micro
 import Proto.Home qualified as Home
 import Proto.Home_Fields qualified as Home
-import TH (makeInstance, makeToEnvelopeInstances)
+import Proto.Proxy qualified as Proxy
+import Proto.Proxy_Fields qualified as Proxy
+import Router (trySendMessage)
+import TH (makeInstance)
 import Threads (
     killAsyncComputation,
     spawnAsyncComputation,
@@ -56,8 +60,7 @@ $( makeInstance
 thread. If one exists, report the error.
 -}
 instance HomeHandler Home.StartRadio where
-    homeHandler _ _ _ = do
-        liftIO $ putStrLn "START"
+    homeHandler _ src _ = do
         env <- ask
         liftIO $ modifyMVar_ (env ^. audioStreamMVar) $ \case
             Just stream -> do
@@ -67,9 +70,18 @@ instance HomeHandler Home.StartRadio where
                 asyncAudioStream <- mkAsyncAudioStream
                 Just <$> spawnAsyncComputation (start asyncAudioStream)
 
+        void . liftIO $
+            trySendMessage
+                (env ^. router)
+                src
+                ( toProxyEnvelope $
+                    defMessage @Proxy.ModifyRadioResponse
+                        & (Proxy.mrfRadioOn .~ True)
+                )
+
 -- | Stop playing an audio stream if one is playing.
 instance HomeHandler Home.StopRadio where
-    homeHandler _ _ _ = do
+    homeHandler _ src _ = do
         env <- ask
         liftIO $ modifyMVar_ (env ^. audioStreamMVar) $ \case
             Nothing -> do
@@ -78,6 +90,15 @@ instance HomeHandler Home.StopRadio where
             Just asyncStream -> do
                 killAsyncComputation asyncStream
                 pure Nothing
+
+        void . liftIO $
+            trySendMessage
+                (env ^. router)
+                src
+                ( toProxyEnvelope $
+                    defMessage @Proxy.ModifyRadioResponse
+                        & (Proxy.mrfRadioOn .~ False)
+                )
 
 -- | Spawn a new thread and try to connect to the given TCP server.
 instance HomeHandler Home.ConnectTCP where
@@ -91,12 +112,3 @@ instance HomeHandler Home.ConnectTCP where
                 (env ^. router)
 
 --
-class ToEnvelope msg where
-    toEnvelope :: msg -> Home.Envelope
-
-$( makeToEnvelopeInstances
-    ''ToEnvelope
-    ''Home.Envelope
-    ''Home.Envelope'Payload
-    'Home.maybe'payload
- )
