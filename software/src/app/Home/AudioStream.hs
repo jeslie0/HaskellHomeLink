@@ -36,6 +36,7 @@ import Threads (
 data StreamStatus
     = Inactive
     | Active
+    deriving (Eq, Show)
 
 classicFMURL :: String
 classicFMURL =

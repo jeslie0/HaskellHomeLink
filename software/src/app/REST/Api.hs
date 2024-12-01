@@ -21,6 +21,7 @@ import Servant (
     (:>),
  )
 import Servant.API.ContentTypes.Proto
+import State (StateId)
 
 type Api =
     "api" :> "v1" :> (Radio)
@@ -31,7 +32,7 @@ type Radio =
         :> ( Get '[Proto] Proxy.GetRadioStatusResponse
                 :<|> "modify"
                     :> ReqBody '[Proto] Proxy.ModifyRadioRequest
-                    :> QueryParam "stateId" Word32
+                    :> QueryParam "stateId" StateId
                     :> PostAccepted '[JSON] Bool
            )
 

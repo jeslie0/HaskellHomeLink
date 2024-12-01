@@ -13,8 +13,8 @@ import Deku.Hooks ((<#~>))
 import Deku.Hooks as DH
 import Deku.Toplevel (runInBody)
 import Effect (Effect)
-import Effect.Ref as Ref
 import Effect.Console as Console
+import Effect.Ref as Ref
 import Effect.Timer (setInterval)
 import FRP.Poll (Poll)
 import Pages (ApplicationsPageState, OverviewPageState, Page(..), SystemPageState, applicationsPage, getAndSetSystemPageInfo, initialApplicationsPageState, initialSystemPageState, overviewPage, pageList, systemPage)

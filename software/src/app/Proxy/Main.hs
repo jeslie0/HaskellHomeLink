@@ -43,7 +43,7 @@ proxyMain island = do
         loop <- mkEventLoop @(Island, ExProxyHandler)
         liftIO
             $ addLocalHTTPServerConnection @Proxy.ProxyRecieveEnvelope
-                (\(src, m) -> putStrLn "PPP" >> addMsg loop (src, ExProxyHandler m))
+                (addMsg loop . second ExProxyHandler)
             $ env ^. router
         run loop $ \evloop b -> uncurry (proxyHandler evloop) b
 

@@ -21,9 +21,9 @@ import Servant (
 
 import ConnectionManager (Island (..))
 import Control.Monad (void)
-import Home.AudioStream (StreamStatus)
 import Envelope (toEnvelope)
-import Lens.Micro ((&), (^.))
+import Home.AudioStream (StreamStatus)
+import Lens.Micro ((&), (.~), (^.))
 import Lens.Micro.TH (makeLenses)
 import Network.Wai.Application.Static (
     defaultWebAppSettings,
@@ -36,7 +36,7 @@ import Proto.Proxy_Fields qualified as Proxy
 import ProtoHelper (streamStatusToprotoRadioStatusResponse)
 import Router (Router, trySendMessage)
 import Servant.Server (Application)
-import State (State, waitForStateUpdate, withState, StateId)
+import State (State, StateId, waitForStateUpdate, withState)
 import WaiAppStatic.Types (unsafeToPiece)
 
 data Env = Env
@@ -54,7 +54,8 @@ mkEnv streamStatus rtr = do
 
 handleGetRadioStatus :: Env -> Handler Proxy.GetRadioStatusResponse
 handleGetRadioStatus env = do
-    liftIO $ withState (env ^. streamStatusState) $ \stateId state -> pure . streamStatusToprotoRadioStatusResponse stateId $ state
+    liftIO $ withState (env ^. streamStatusState) $ \stateId state ->
+        pure $ streamStatusToprotoRadioStatusResponse stateId state
 
 handleModifyRadioRequest ::
     Env -> Proxy.ModifyRadioRequest -> Maybe StateId -> Handler Bool

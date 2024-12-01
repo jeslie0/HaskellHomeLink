@@ -14,6 +14,7 @@
             "fetch",
             "js-timers",
             "numbers",
+            "parsing-dataview",
             "prelude",
             "protobuf",
             "random",

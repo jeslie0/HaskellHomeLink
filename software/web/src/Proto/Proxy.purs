@@ -66,7 +66,8 @@ mergeModifyRadioRequest (ModifyRadioRequest l) (ModifyRadioRequest r) = ModifyRa
 -- | Sent to HTTP Server
 newtype ModifyRadioResponse = ModifyRadioResponse ModifyRadioResponseR
 type ModifyRadioResponseRow =
-  ( __unknown_fields :: Array Prelude.UnknownField
+  ( mrfRadioOn :: Prelude.Maybe Boolean
+  , __unknown_fields :: Array Prelude.UnknownField
   )
 type ModifyRadioResponseR = Record ModifyRadioResponseRow
 derive instance genericModifyRadioResponse :: Prelude.Generic ModifyRadioResponse _
@@ -76,7 +77,7 @@ instance showModifyRadioResponse :: Prelude.Show ModifyRadioResponse where show 
 
 putModifyRadioResponse :: forall m. Prelude.MonadEffect m => ModifyRadioResponse -> Prelude.PutM m Prelude.Unit
 putModifyRadioResponse (ModifyRadioResponse r) = do
-
+  Prelude.putOptional 1 r.mrfRadioOn Prelude.isDefault Prelude.encodeBoolField
   Prelude.traverse_ Prelude.putFieldUnknown r.__unknown_fields
 
 parseModifyRadioResponse :: forall m. Prelude.MonadEffect m => Prelude.MonadRec m => Prelude.ByteLength -> Prelude.ParserT Prelude.DataView m ModifyRadioResponse
@@ -87,12 +88,15 @@ parseModifyRadioResponse length = Prelude.label "ModifyRadioResponse / " $
     :: Prelude.FieldNumberInt
     -> Prelude.WireType
     -> Prelude.ParserT Prelude.DataView m (Prelude.Builder ModifyRadioResponseR ModifyRadioResponseR)
-
+  parseField 1 Prelude.VarInt = Prelude.label "mrfRadioOn / " $ do
+    x <- Prelude.decodeBool
+    pure $ Prelude.modify (Prelude.Proxy :: Prelude.Proxy "mrfRadioOn") $ \_ -> Prelude.Just x
   parseField fieldNumber wireType = Prelude.parseFieldUnknown fieldNumber wireType
 
 defaultModifyRadioResponse :: ModifyRadioResponseR
 defaultModifyRadioResponse =
-  { __unknown_fields: []
+  { mrfRadioOn: Prelude.Nothing
+  , __unknown_fields: []
   }
 
 mkModifyRadioResponse :: forall r1 r3. Prelude.Union r1 ModifyRadioResponseRow r3 => Prelude.Nub r3 ModifyRadioResponseRow => Record r1 -> ModifyRadioResponse
@@ -100,7 +104,8 @@ mkModifyRadioResponse r = ModifyRadioResponse $ Prelude.merge r defaultModifyRad
 
 mergeModifyRadioResponse :: ModifyRadioResponse -> ModifyRadioResponse -> ModifyRadioResponse
 mergeModifyRadioResponse (ModifyRadioResponse l) (ModifyRadioResponse r) = ModifyRadioResponse
-  { __unknown_fields: r.__unknown_fields <> l.__unknown_fields
+  { mrfRadioOn: Prelude.alt l.mrfRadioOn r.mrfRadioOn
+  , __unknown_fields: r.__unknown_fields <> l.__unknown_fields
   }
 
 
@@ -153,7 +158,7 @@ mergeGetRadioStatusRequest (GetRadioStatusRequest l) (GetRadioStatusRequest r) =
 newtype GetRadioStatusResponse = GetRadioStatusResponse GetRadioStatusResponseR
 type GetRadioStatusResponseRow =
   ( radioOn :: Prelude.Maybe Boolean
-  , stateId :: Prelude.Maybe Prelude.UInt
+  , stateId :: Prelude.Maybe Int
   , __unknown_fields :: Array Prelude.UnknownField
   )
 type GetRadioStatusResponseR = Record GetRadioStatusResponseRow
@@ -165,7 +170,7 @@ instance showGetRadioStatusResponse :: Prelude.Show GetRadioStatusResponse where
 putGetRadioStatusResponse :: forall m. Prelude.MonadEffect m => GetRadioStatusResponse -> Prelude.PutM m Prelude.Unit
 putGetRadioStatusResponse (GetRadioStatusResponse r) = do
   Prelude.putOptional 1 r.radioOn Prelude.isDefault Prelude.encodeBoolField
-  Prelude.putOptional 2 r.stateId Prelude.isDefault Prelude.encodeUint32Field
+  Prelude.putOptional 2 r.stateId Prelude.isDefault Prelude.encodeInt32Field
   Prelude.traverse_ Prelude.putFieldUnknown r.__unknown_fields
 
 parseGetRadioStatusResponse :: forall m. Prelude.MonadEffect m => Prelude.MonadRec m => Prelude.ByteLength -> Prelude.ParserT Prelude.DataView m GetRadioStatusResponse
@@ -180,7 +185,7 @@ parseGetRadioStatusResponse length = Prelude.label "GetRadioStatusResponse / " $
     x <- Prelude.decodeBool
     pure $ Prelude.modify (Prelude.Proxy :: Prelude.Proxy "radioOn") $ \_ -> Prelude.Just x
   parseField 2 Prelude.VarInt = Prelude.label "stateId / " $ do
-    x <- Prelude.decodeUint32
+    x <- Prelude.decodeInt32
     pure $ Prelude.modify (Prelude.Proxy :: Prelude.Proxy "stateId") $ \_ -> Prelude.Just x
   parseField fieldNumber wireType = Prelude.parseFieldUnknown fieldNumber wireType
 

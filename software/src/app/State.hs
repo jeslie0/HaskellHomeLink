@@ -18,10 +18,10 @@ import Control.Concurrent (
     withMVar, tryPutMVar,
  )
 import Control.Monad (void, unless)
-import Data.Word (Word32)
-import System.Random (StdGen, genWord32, initStdGen)
+import Data.Int (Int32)
+import System.Random (StdGen, genWord32, initStdGen, random)
 
-type StateId = Word32
+type StateId = Int32
 
 newtype State a = State (MVar StdGen, MVar a)
 
@@ -41,26 +41,22 @@ waitForStateUpdate :: State a -> StateId -> (StateId -> a -> IO ()) -> IO ()
 waitForStateUpdate (State (mvarGen, mvarState)) stateId action = do
     a <- takeMVar mvarState
     withMVar mvarGen $ \gen -> do
-      let currStateId = fst . genWord32 $ gen
+      let currStateId = fst . random $ gen
       if currStateId /= stateId
-        then-- putMVar mvarState a
-            action currStateId a
+        then putMVar mvarState a
+            -- action currStateId a
         else do
             action currStateId a
-    print 4
     void $ readMVar mvarState
-    print 5
 
 {- | Fill the state. Note - using this inside the waitForStateUpdate
 function will cause a deadlock.
 -}
 fulfilPromise :: a -> State a -> IO ()
 fulfilPromise a (State (mvarGen, mvarState)) = do
-    print 1
     modifyMVar_ mvarGen $ \gen -> do
-        print 2
-        succ <- tryPutMVar mvarState a
-        unless succ $ modifyMVar_ mvarState $ \_ -> pure a
+        success <- tryPutMVar mvarState a
+        unless success $ modifyMVar_ mvarState $ \_ -> pure a
         pure . snd . genWord32 $ gen
 
 -- | Update the current state. Use inside a waitForStateUpdate call
@@ -75,4 +71,4 @@ setState a (State (mvarGen, mvarState)) = do
 withState :: State a -> (StateId -> a -> IO b) -> IO b
 withState (State (mvarGen, mvarState)) action = do
     withMVar mvarState $ \a ->
-        withMVar mvarGen $ \gen -> action (fst . genWord32 $ gen) a
+        withMVar mvarGen $ \gen -> action (fst . random $ gen) a

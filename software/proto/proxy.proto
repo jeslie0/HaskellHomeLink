@@ -18,7 +18,7 @@ message GetRadioStatusRequest {
 // Sent to HTTP Server
 message GetRadioStatusResponse {
   bool radioOn = 1;
-  uint32 stateId = 2;
+  int32 stateId = 2;
 }
 
 message ProxyRecieveEnvelope {

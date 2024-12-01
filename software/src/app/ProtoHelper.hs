@@ -21,4 +21,4 @@ streamStatusToprotoRadioStatusResponse statusId status =
                 Active -> True
                 Inactive -> False
            )
-        & Proxy.stateId .~ statusId
+        & (Proxy.stateId .~ statusId)

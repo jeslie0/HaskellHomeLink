@@ -4,8 +4,11 @@ import Prelude
 
 import Constants (getApiUrl)
 import Data.ArrayBuffer.Builder (execPutM)
+import Data.ArrayBuffer.DataView (whole, byteLength)
+import Data.Either (Either(..))
 import Data.HTTP.Method (Method(..))
 import Data.Maybe (Maybe(..))
+import Data.Tuple (Tuple(..))
 import Deku.Control as DC
 import Deku.Core (Nut)
 import Deku.DOM as DD
@@ -15,10 +18,13 @@ import Deku.Hooks ((<#~>))
 import Effect (Effect)
 import Effect.Aff (launchAff_)
 import Effect.Class (liftEffect)
-import FRP.Poll (Poll)
-import Fetch (fetch)
+import Effect.Console as Console
 import Effect.Ref (Ref)
 import Effect.Ref as Ref
+import FRP.Poll (Poll)
+import Fetch (fetch)
+import JS.Fetch.Response (arrayBuffer)
+import Parsing (fail, runParserT)
 import Proto.Proxy as Proto
 import Yoga.JSON (read_)
 
@@ -54,7 +60,7 @@ overviewPage pollState = do
       , DD.button
           [ DA.klass_ "pf-v5-c-button pf-m-primary"
           , DA.disabled $ streamActivePoll <#> if _ then "" else "true"
-          , DL.click_ $ \_ -> stopStream setStreamActivePoll
+          , DL.click_ $ \_ -> stopStream streamStateIdRef setStreamActivePoll
           ]
           [ DD.text_ "Stop radio" ]
       ]
@@ -64,12 +70,28 @@ fetchStreamStatus setStreamStatus setStreamStateId = do
   apiUrl <- getApiUrl
   let requestUrl = apiUrl <> "radio"
   launchAff_ do
-    { json } <- fetch requestUrl { method: GET }
-    respData <- json
-    let (mBool :: Maybe Boolean) = read_ respData
-    case mBool of
-      Nothing -> pure unit
-      Just bool -> liftEffect $ setStreamStatus bool
+    { arrayBuffer } <- fetch requestUrl { method: GET }
+    body <- whole <$> arrayBuffer
+    result <- liftEffect $ runParserT body  do
+      resp <- Proto.parseGetRadioStatusResponse (byteLength body)
+      case resp of
+        Proto.GetRadioStatusResponse {radioOn: Just state, stateId: Just id} -> pure $ Tuple state id
+        Proto.GetRadioStatusResponse {radioOn: Just state, stateId: Nothing} -> fail "Missing stateId"
+        Proto.GetRadioStatusResponse {radioOn: Nothing, stateId: Just id} -> pure $ Tuple false id
+        Proto.GetRadioStatusResponse {radioOn: Nothing, stateId: Nothing} -> fail "Missing all data"
+        _ -> fail "Missing required entries"
+    case result of
+      Left err -> liftEffect $ Console.logShow err
+      Right (Tuple state id) -> do
+        liftEffect $ setStreamStatus state
+        liftEffect $ setStreamStateId id
+    pure unit
+      -- Left a -> pure 1
+      -- Right a -> pure 2
+    -- let (mBool :: Maybe Boolean) = read_ respData
+    -- case mBool of
+    --   Nothing -> pure unit
+    --   Just bool -> liftEffect $ setStreamStatus bool
 
 startStream :: Ref Int -> (Boolean -> Effect Unit) -> Effect Unit
 startStream ref setStreamStatus = do
@@ -85,13 +107,20 @@ startStream ref setStreamStatus = do
                           , headers: { "content-type": "application/protobuf" }
                           }
     pure unit
-    -- liftEffect $ fetchStreamStatus setStreamStatus
+    liftEffect $ fetchStreamStatus setStreamStatus (\n -> Ref.write n ref)
 
-stopStream :: (Boolean -> Effect Unit) -> Effect Unit
-stopStream setStreamStatus = do
+stopStream :: Ref Int -> (Boolean -> Effect Unit) -> Effect Unit
+stopStream ref setStreamStatus = do
+  id <- Ref.read ref
   apiUrl <- getApiUrl
-  let requestUrl = apiUrl <> "radio/modify"
+  let
+    requestUrl = apiUrl <> "radio/modify" <> "?stateId=" <> show id
+    body = Proto.mkModifyRadioRequest { start: Just false }
+  bodyBuff <- execPutM $ Proto.putModifyRadioRequest body
   launchAff_ do
-    _ <- fetch requestUrl { method: PUT }
+    _ <- fetch requestUrl { method: POST
+                          , body: bodyBuff
+                          , headers: { "content-type": "application/protobuf" }
+                          }
     pure unit
-    -- liftEffect $ fetchStreamStatus setStreamStatus
+    liftEffect $ fetchStreamStatus setStreamStatus (\n -> Ref.write n ref)
