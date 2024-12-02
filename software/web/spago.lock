@@ -680,6 +680,11 @@
           "web-html",
           "web-uievents"
         ]
+      },
+      "protobuf": {
+        "git": "https://github.com/rowtype-yoga/purescript-protobuf",
+        "ref": "610ef795387663a90ce372338aa91e29d3d5a434",
+        "subdir": "library"
       }
     }
   },
@@ -1659,9 +1664,10 @@
       ]
     },
     "protobuf": {
-      "type": "registry",
-      "version": "4.3.0",
-      "integrity": "sha256-nqGUMdvaud5EtQQ3NLd/xTCo7SJOTlL6JDfs7YaTiq4=",
+      "type": "git",
+      "url": "https://github.com/rowtype-yoga/purescript-protobuf",
+      "rev": "610ef795387663a90ce372338aa91e29d3d5a434",
+      "subdir": "library",
       "dependencies": [
         "arraybuffer",
         "arraybuffer-builder",

@@ -53,3 +53,8 @@ workspace:
       ref: "d87900c"
       dependencies:
         - hyrule
+
+    protobuf:
+      git: "https://github.com/rowtype-yoga/purescript-protobuf"
+      ref: "610ef795387663a90ce372338aa91e29d3d5a434"
+      subdir: library

@@ -27,10 +27,10 @@ derive instance newtypeModifyRadioRequest :: Prelude.Newtype ModifyRadioRequest 
 derive instance eqModifyRadioRequest :: Prelude.Eq ModifyRadioRequest
 instance showModifyRadioRequest :: Prelude.Show ModifyRadioRequest where show x = Prelude.genericShow x
 
-putModifyRadioRequest :: forall m. Prelude.MonadEffect m => ModifyRadioRequest -> Prelude.PutM m Prelude.Unit
+putModifyRadioRequest :: forall m. Prelude.MonadEffect m => Prelude.MonadRec m => ModifyRadioRequest -> Prelude.PutM m Prelude.Unit
 putModifyRadioRequest (ModifyRadioRequest r) = do
   Prelude.putOptional 1 r.start Prelude.isDefault Prelude.encodeBoolField
-  Prelude.traverse_ Prelude.putFieldUnknown r.__unknown_fields
+  Prelude.foldRecM (\_ x -> Prelude.putFieldUnknown x) unit r.__unknown_fields
 
 parseModifyRadioRequest :: forall m. Prelude.MonadEffect m => Prelude.MonadRec m => Prelude.ByteLength -> Prelude.ParserT Prelude.DataView m ModifyRadioRequest
 parseModifyRadioRequest length = Prelude.label "ModifyRadioRequest / " $
@@ -75,10 +75,10 @@ derive instance newtypeModifyRadioResponse :: Prelude.Newtype ModifyRadioRespons
 derive instance eqModifyRadioResponse :: Prelude.Eq ModifyRadioResponse
 instance showModifyRadioResponse :: Prelude.Show ModifyRadioResponse where show x = Prelude.genericShow x
 
-putModifyRadioResponse :: forall m. Prelude.MonadEffect m => ModifyRadioResponse -> Prelude.PutM m Prelude.Unit
+putModifyRadioResponse :: forall m. Prelude.MonadEffect m => Prelude.MonadRec m => ModifyRadioResponse -> Prelude.PutM m Prelude.Unit
 putModifyRadioResponse (ModifyRadioResponse r) = do
   Prelude.putOptional 1 r.mrfRadioOn Prelude.isDefault Prelude.encodeBoolField
-  Prelude.traverse_ Prelude.putFieldUnknown r.__unknown_fields
+  Prelude.foldRecM (\_ x -> Prelude.putFieldUnknown x) unit r.__unknown_fields
 
 parseModifyRadioResponse :: forall m. Prelude.MonadEffect m => Prelude.MonadRec m => Prelude.ByteLength -> Prelude.ParserT Prelude.DataView m ModifyRadioResponse
 parseModifyRadioResponse length = Prelude.label "ModifyRadioResponse / " $
@@ -122,10 +122,10 @@ derive instance newtypeGetRadioStatusRequest :: Prelude.Newtype GetRadioStatusRe
 derive instance eqGetRadioStatusRequest :: Prelude.Eq GetRadioStatusRequest
 instance showGetRadioStatusRequest :: Prelude.Show GetRadioStatusRequest where show x = Prelude.genericShow x
 
-putGetRadioStatusRequest :: forall m. Prelude.MonadEffect m => GetRadioStatusRequest -> Prelude.PutM m Prelude.Unit
+putGetRadioStatusRequest :: forall m. Prelude.MonadEffect m => Prelude.MonadRec m => GetRadioStatusRequest -> Prelude.PutM m Prelude.Unit
 putGetRadioStatusRequest (GetRadioStatusRequest r) = do
 
-  Prelude.traverse_ Prelude.putFieldUnknown r.__unknown_fields
+  Prelude.foldRecM (\_ x -> Prelude.putFieldUnknown x) unit r.__unknown_fields
 
 parseGetRadioStatusRequest :: forall m. Prelude.MonadEffect m => Prelude.MonadRec m => Prelude.ByteLength -> Prelude.ParserT Prelude.DataView m GetRadioStatusRequest
 parseGetRadioStatusRequest length = Prelude.label "GetRadioStatusRequest / " $
@@ -167,11 +167,11 @@ derive instance newtypeGetRadioStatusResponse :: Prelude.Newtype GetRadioStatusR
 derive instance eqGetRadioStatusResponse :: Prelude.Eq GetRadioStatusResponse
 instance showGetRadioStatusResponse :: Prelude.Show GetRadioStatusResponse where show x = Prelude.genericShow x
 
-putGetRadioStatusResponse :: forall m. Prelude.MonadEffect m => GetRadioStatusResponse -> Prelude.PutM m Prelude.Unit
+putGetRadioStatusResponse :: forall m. Prelude.MonadEffect m => Prelude.MonadRec m => GetRadioStatusResponse -> Prelude.PutM m Prelude.Unit
 putGetRadioStatusResponse (GetRadioStatusResponse r) = do
   Prelude.putOptional 1 r.radioOn Prelude.isDefault Prelude.encodeBoolField
   Prelude.putOptional 2 r.stateId Prelude.isDefault Prelude.encodeInt32Field
-  Prelude.traverse_ Prelude.putFieldUnknown r.__unknown_fields
+  Prelude.foldRecM (\_ x -> Prelude.putFieldUnknown x) unit r.__unknown_fields
 
 parseGetRadioStatusResponse :: forall m. Prelude.MonadEffect m => Prelude.MonadRec m => Prelude.ByteLength -> Prelude.ParserT Prelude.DataView m GetRadioStatusResponse
 parseGetRadioStatusResponse length = Prelude.label "GetRadioStatusResponse / " $
@@ -219,13 +219,13 @@ derive instance newtypeProxyRecieveEnvelope :: Prelude.Newtype ProxyRecieveEnvel
 derive instance eqProxyRecieveEnvelope :: Prelude.Eq ProxyRecieveEnvelope
 instance showProxyRecieveEnvelope :: Prelude.Show ProxyRecieveEnvelope where show x = Prelude.genericShow x
 
-putProxyRecieveEnvelope :: forall m. Prelude.MonadEffect m => ProxyRecieveEnvelope -> Prelude.PutM m Prelude.Unit
+putProxyRecieveEnvelope :: forall m. Prelude.MonadEffect m => Prelude.MonadRec m => ProxyRecieveEnvelope -> Prelude.PutM m Prelude.Unit
 putProxyRecieveEnvelope (ProxyRecieveEnvelope r) = do
   case r.payload of
     Prelude.Nothing -> pure Prelude.unit
     Prelude.Just (ProxyRecieveEnvelope_Payload_M1 x) -> Prelude.putOptional 1 (Prelude.Just x) (\_ -> false) $ Prelude.putLenDel putModifyRadioResponse
     Prelude.Just (ProxyRecieveEnvelope_Payload_M2 x) -> Prelude.putOptional 2 (Prelude.Just x) (\_ -> false) $ Prelude.putLenDel putGetRadioStatusResponse
-  Prelude.traverse_ Prelude.putFieldUnknown r.__unknown_fields
+  Prelude.foldRecM (\_ x -> Prelude.putFieldUnknown x) unit r.__unknown_fields
 
 parseProxyRecieveEnvelope :: forall m. Prelude.MonadEffect m => Prelude.MonadRec m => Prelude.ByteLength -> Prelude.ParserT Prelude.DataView m ProxyRecieveEnvelope
 parseProxyRecieveEnvelope length = Prelude.label "ProxyRecieveEnvelope / " $

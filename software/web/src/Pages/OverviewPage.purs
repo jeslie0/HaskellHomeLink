@@ -86,12 +86,6 @@ fetchStreamStatus setStreamStatus setStreamStateId = do
         liftEffect $ setStreamStatus state
         liftEffect $ setStreamStateId id
     pure unit
-      -- Left a -> pure 1
-      -- Right a -> pure 2
-    -- let (mBool :: Maybe Boolean) = read_ respData
-    -- case mBool of
-    --   Nothing -> pure unit
-    --   Just bool -> liftEffect $ setStreamStatus bool
 
 startStream :: Ref Int -> (Boolean -> Effect Unit) -> Effect Unit
 startStream ref setStreamStatus = do

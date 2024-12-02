@@ -68,7 +68,6 @@ type PageStates =
 dekuApp :: Effect Nut
 dekuApp = do
   _ /\ setSystemPageState /\ systemPageState <- DE.useHot initialSystemPageState
-  _ <- getAndSetSystemPageInfo setSystemPageState
 
   _ /\ setStreamActivePoll /\ streamActivePoll <- DE.useHot false
   streamStateIdRef <- Ref.new 0

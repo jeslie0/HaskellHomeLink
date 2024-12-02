@@ -11,7 +11,7 @@
       inputs.ps-overlay.follows = "ps-overlay";
     };
     purescript-protobuf = {
-      url = "github:rowtype-yoga/purescript-protobuf/v4.3.0";
+      url = "github:rowtype-yoga/purescript-protobuf/610ef795387663a90ce372338aa91e29d3d5a434";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     haskellNix = {
