@@ -3,3 +3,4 @@ dist-newstyle/
 result
 *build*
 software/libs/alsa-hs/output
+/.psc-ide-port
