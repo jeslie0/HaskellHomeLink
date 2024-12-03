@@ -1,12 +1,36 @@
-{ self, nix-filter, mkSpagoDerivation, purs-unstable, spago-unstable, esbuild, buildNpmPackage, mkDerivation,... }:
+{ self
+, nix-filter
+, mkSpagoDerivation
+, purs-unstable
+, spago-unstable
+, esbuild
+, buildNpmPackage
+, mkDerivation
+, protobuf
+, protoc-gen-purescript
+, ... }:
 let
   webSrc =
-    nix-filter {
-      root =
-        self;
+    mkDerivation {
+      name =
+        "web-src";
 
-      include =
-        ["software/web" "software/proto"];
+      src =
+        nix-filter {
+          root =
+            self;
+
+          include =
+            [ "scripts" "software/web" "software/proto"];
+        };
+
+      nativeBuildInputs = [ protobuf protoc-gen-purescript ];
+
+      buildPhase =
+        "bash scripts/compile-purescript-protos";
+
+      installPhase =
+        "mkdir $out; cp -r * $out";
     };
 
   dependenciesOutput =
@@ -17,12 +41,13 @@ let
       spagoLock =
         "${src}/spago.lock";
 
-        src = nix-filter {
-            root =
-              "${self}/software/web";
+      src =
+        nix-filter {
+          root =
+            "${self}/software/web";
 
-            include =
-              ["spago.yaml" "spago.lock"];
+          include =
+            ["spago.yaml" "spago.lock"];
         };
 
       nativeBuildInputs =
@@ -40,7 +65,6 @@ let
       installPhase = ''
         mkdir $out
         cp -r output $out
-        cp -r .spago $out
       '';
     };
 
@@ -63,7 +87,6 @@ let
 
       buildPhase = ''
         cp -r ${dependenciesOutput}/output ./
-        ln -s ${dependenciesOutput}/.spago .spago
         chmod -R u+w ./output
         spago build
       '';

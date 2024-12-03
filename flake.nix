@@ -91,6 +91,8 @@
                   esbuild = pkgs.esbuild;
                   buildNpmPackage = pkgs.buildNpmPackage;
                   mkDerivation = pkgs.stdenv.mkDerivation;
+                  protobuf = pkgs.protobuf;
+                  protoc-gen-purescript = purescript-protobuf.packages.${system}.protoc-gen-purescript;
                 };
 
               HomeArmv7 =
