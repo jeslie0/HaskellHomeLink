@@ -9,6 +9,41 @@ let
         ["software/web" "software/proto"];
     };
 
+  dependenciesOutput =
+    mkSpagoDerivation rec {
+      spagoYaml =
+        "${src}/spago.yaml";
+
+      spagoLock =
+        "${src}/spago.lock";
+
+        src = nix-filter {
+            root =
+              "${self}/software/web";
+
+            include =
+              ["spago.yaml" "spago.lock"];
+        };
+
+      nativeBuildInputs =
+        [ purs-unstable spago-unstable esbuild ];
+
+      name =
+        "web-dependencies";
+
+      version =
+        "0.1.0";
+
+      buildPhase =
+        "spago install";
+
+      installPhase = ''
+        mkdir $out
+        cp -r output $out
+        cp -r .spago $out
+      '';
+    };
+
   spago =
     mkSpagoDerivation {
       spagoYaml =
@@ -26,8 +61,12 @@ let
       version =
         "0.1.0";
 
-      buildPhase =
-        "spago build";
+      buildPhase = ''
+        cp -r ${dependenciesOutput}/output ./
+        ln -s ${dependenciesOutput}/.spago .spago
+        chmod -R u+w ./output
+        spago build
+      '';
 
       installPhase =
         "mkdir $out; cp -r * $out";
@@ -35,7 +74,7 @@ let
 
   npmPkg =
     buildNpmPackage {
-      pname = "HaskellHomeLink";
+      pname = "HaskellHomeLink-web-build";
       version = "0.1.0";
       src = spago;
       npmDepsHash = "sha256-bw0qZJ9rnci3a2T9/4p0oZdgFenzJNrtX3CDXBbAMb0=";
@@ -43,7 +82,7 @@ let
 in
 mkDerivation {
   pname =
-    "HaskellHomeLink-WEB";
+    "HaskellHomeLink-Web";
 
   version =
     "0.1.0";

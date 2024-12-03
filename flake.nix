@@ -115,6 +115,8 @@
                     nix-filter.lib;
                 };
             in {
+              inherit web;
+
               nixpkgs =
                 nixpkgsFor.${system};
 
@@ -124,8 +126,6 @@
               project =
                 linux.project;
 
-              web =
-                web;
             } // HomeArmv7
           );
 
