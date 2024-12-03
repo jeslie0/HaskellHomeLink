@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+
+cd "$script_dir/../software"
+protoc --purescript_out=web/src/Proto/ proto/*
+
+cd "$script_dir/../software/web/src/Proto"
+
+for file in *..purs; do
+	if [ -f "$file" ]; then
+		# Extract the part before ".." and capitalize the first letter
+		base_name=$(echo "$file" | cut -d'.' -f1)
+		capitalized_name=$(echo "${base_name^}")
+
+		# Construct the new file name
+		new_name="${capitalized_name}.purs"
+
+		# Rename the file
+		mv "$file" "$new_name"
+
+		# Fix module name
+		sed -i 's/module \./ module Proto\./' "$new_name"
+	fi
+done
