@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+
+scp -P 1995 result mohabat@raspberrypi:~/dockerimageNix &&
+	ssh -o StrictHostKeyChecking=no -p 1995 mohabat@raspberrypi "docker load < dockerimageNix && rm -rf dockerimageNix"
