@@ -150,8 +150,11 @@
                     nodePackages.npm
                     nodejs
                     purs-tidy
+                    protobuf
                     purescript-protobuf.packages.${system}.protoc-gen-purescript
                   ];
+
+                  inputsFrom = [ self.packages.${system}.web ];
                 };
             in
               self.packages.${system}.project.shellFor {

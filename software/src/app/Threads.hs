@@ -1,7 +1,6 @@
 module Threads (
     AsyncComputation,
     spawnAsyncComputation,
-    spawnAsyncComputationWithNotify,
     isAsyncComputationRunning,
     killAsyncComputation,
 ) where
@@ -9,11 +8,11 @@ module Threads (
 import Control.Concurrent (
     MVar,
     ThreadId,
-    forkIO,
+    forkFinally,
     isEmptyMVar,
     killThread,
     newEmptyMVar,
-    tryPutMVar,
+    putMVar,
  )
 import Control.Monad (void)
 
@@ -26,17 +25,9 @@ data AsyncComputation = AsyncComputation
 -- | Run a task in another thread.
 spawnAsyncComputation ::
     IO () -> IO AsyncComputation
-spawnAsyncComputation task =
-    spawnAsyncComputationWithNotify task (pure ())
-
-{- | Run a task in another thread, giving a function which will be
-called when the task is completed.
--}
-spawnAsyncComputationWithNotify ::
-    IO () -> IO () -> IO AsyncComputation
-spawnAsyncComputationWithNotify task onFinish = do
+spawnAsyncComputation task = do
     isRunningMVar <- newEmptyMVar
-    threadId <- forkIO $ task >> tryPutMVar isRunningMVar () >> onFinish
+    threadId <- forkFinally task $ \_ -> void $ putMVar isRunningMVar ()
     pure $
         AsyncComputation
             { threadId
@@ -50,6 +41,5 @@ isAsyncComputationRunning (AsyncComputation _ isRunningMVar) = do
 
 -- | Kill an asynchronous computation.
 killAsyncComputation :: AsyncComputation -> IO ()
-killAsyncComputation (AsyncComputation threadId isRunningMVar) = do
+killAsyncComputation (AsyncComputation threadId _) = do
     killThread threadId
-    void $ tryPutMVar isRunningMVar ()

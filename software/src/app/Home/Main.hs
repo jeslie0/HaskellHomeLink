@@ -4,16 +4,17 @@ import ConnectionManager (
     Island (..),
     killConnections,
  )
-import Control.Concurrent (modifyMVar_)
 import Control.Exception (bracket)
+import Control.Monad (void)
 import Control.Monad.Reader
 import Data.Bifunctor (second)
 import Data.Foldable (for_)
+import Data.IORef (readIORef, writeIORef)
 import EventLoop (addMsg, mkEventLoop, run)
 import Home.Env (
     Env,
     addLocalHTTPServerConnection,
-    audioStreamMVar,
+    audioStreamRef,
     mkEnv,
     router,
  )
@@ -24,15 +25,9 @@ import Proxy.Main (proxyMain)
 import Router (connectionsManager)
 import Threads (killAsyncComputation, spawnAsyncComputation)
 
--- httpServer :: IO ()"
--- httpServer = do
---     env <- HomeServer.mkEnv
---     HomeServer.runApp env $ \(ExMsg msg) -> do
---         void $ trySendMessage (env ^. HomeServer.router) Home msg
-
 main :: IO ()
 main = do
-    spawnAsyncComputation (proxyMain LocalHTTP)
+    void $ spawnAsyncComputation (proxyMain LocalHTTP)
     bracket mkEnv cleanupEnv $ \env ->
         runReaderT (action env) env
   where
@@ -46,5 +41,7 @@ main = do
         run loop $ \evloop b -> uncurry (homeHandler evloop) b
 
     cleanupEnv env = do
-        modifyMVar_ (env ^. audioStreamMVar) $ \m -> for_ m killAsyncComputation >> pure Nothing
+        mAudioStream <- readIORef (env ^. audioStreamRef)
+        for_ mAudioStream killAsyncComputation
+        writeIORef (env ^. audioStreamRef) Nothing
         killConnections (env ^. (router . connectionsManager))

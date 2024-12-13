@@ -13,18 +13,16 @@ module Home.Handler (
 ) where
 
 import ConnectionManager (Island (..))
-import Control.Concurrent (
-    modifyMVar_,
- )
 import Control.Monad (void)
 import Control.Monad.Reader
 import Data.Bifunctor (second)
+import Data.IORef (readIORef, writeIORef)
 import Data.ProtoLens (defMessage)
 import Data.Text qualified as T
 import Envelope (ToProxyEnvelope (..))
 import EventLoop (EventLoop, addMsg)
-import Home.AudioStream (mkAsyncAudioStream, start)
-import Home.Env (EnvT, addRemoteProxyConnection, audioStreamMVar, router)
+import Home.AudioStream (startAudioStream)
+import Home.Env (EnvT, addRemoteProxyConnection, audioStreamRef, router)
 import Lens.Micro
 import Proto.Home qualified as Home
 import Proto.Home_Fields qualified as Home
@@ -62,13 +60,13 @@ thread. If one exists, report the error.
 instance HomeHandler Home.StartRadio where
     homeHandler _ src _ = do
         env <- ask
-        liftIO $ modifyMVar_ (env ^. audioStreamMVar) $ \case
-            Just stream -> do
-                putStrLn "Audio stream already exists"
-                pure $ Just stream
-            Nothing -> do
-                asyncAudioStream <- mkAsyncAudioStream
-                Just <$> spawnAsyncComputation (start asyncAudioStream)
+        liftIO . void $
+            readIORef (env ^. audioStreamRef) >>= \case
+                Just _ -> do
+                    putStrLn "Audio stream already exists"
+                Nothing -> do
+                    spawnAsyncComputation startAudioStream
+                        >>= writeIORef (env ^. audioStreamRef) . Just
 
         void . liftIO $
             trySendMessage
@@ -83,13 +81,13 @@ instance HomeHandler Home.StartRadio where
 instance HomeHandler Home.StopRadio where
     homeHandler _ src _ = do
         env <- ask
-        liftIO $ modifyMVar_ (env ^. audioStreamMVar) $ \case
-            Nothing -> do
-                putStrLn "Radio not playing"
-                pure Nothing
-            Just asyncStream -> do
-                killAsyncComputation asyncStream
-                pure Nothing
+        liftIO . void $
+            readIORef (env ^. audioStreamRef) >>= \case
+                Nothing -> do
+                    putStrLn "Radio not playing"
+                Just asyncStream -> do
+                    killAsyncComputation asyncStream
+                    writeIORef (env ^. audioStreamRef) Nothing
 
         void . liftIO $
             trySendMessage

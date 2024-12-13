@@ -112,6 +112,7 @@ executable Home
                       proto-lens,
                       proto-lens-runtime,
                       random,
+                      resourcet,
                       servant,
                       servant-server,
                       servant-proto-lens,
