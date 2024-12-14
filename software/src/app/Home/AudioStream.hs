@@ -136,8 +136,7 @@ readFramesAndPlay handle mp3 info mp3Data pcmData =
 
     decide mp3Ptr newMP3Len samples consumed
         | samples > 0 && consumed > 0 = do
-            int <- writeBuffer handle pcmData $ fromIntegral samples
-            putStrLn $ "writeBuffer returned: " <> show int
+            void . writeBuffer handle pcmData $ fromIntegral samples
             frameSize <- computeFrameSize info
             if frameSize > newMP3Len
                 then return newMP3Len
@@ -181,10 +180,10 @@ startAudioStream = do
         -> Ptr Int16
         -> BS.ByteString
         -> IO ()
-    go bodyReader handle mp3Dec info pcmData leftoverBytes = do
+    go !bodyReader !handle !mp3Dec !info !pcmData !leftoverBytes = do
         newBytes <- HTTP.brRead bodyReader
-        let mp3Data@(BS.BS !frnPtr !mp3Len) = BS.append leftoverBytes newBytes
-        remainingBytes <- withForeignPtr frnPtr $ \mp3Ptr -> do
+        let !mp3Data@(BS.BS !frnPtr !mp3Len) = BS.append leftoverBytes newBytes
+        !remainingBytes <- withForeignPtr frnPtr $ \mp3Ptr -> do
             !leftOverAmount <- readFramesAndPlay handle mp3Dec info (mp3Ptr, mp3Len) pcmData
             pure $ BS.takeEnd leftOverAmount mp3Data
         go bodyReader handle mp3Dec info pcmData remainingBytes
