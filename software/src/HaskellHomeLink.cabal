@@ -136,4 +136,4 @@ executable Home
     -- Base language which the package is written in.
     default-language: GHC2021
 
-    ghc-options: -main-is Home.Main -O2 -threaded
+    ghc-options: -main-is Home.Main -O2 -threaded -split-objs
