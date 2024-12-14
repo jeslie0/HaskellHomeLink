@@ -23,7 +23,7 @@ import ConnectionManager (Island (..))
 import Control.Monad (void)
 import Envelope (toEnvelope)
 import Home.AudioStream (StreamStatus)
-import Lens.Micro ((&), (.~), (^.))
+import Lens.Micro ((&), (^.))
 import Lens.Micro.TH (makeLenses)
 import Network.Wai.Application.Static (
     defaultWebAppSettings,
@@ -61,7 +61,7 @@ handleModifyRadioRequest ::
     Env -> Proxy.ModifyRadioRequest -> Maybe StateId -> Handler Bool
 handleModifyRadioRequest _ _ Nothing = pure False
 handleModifyRadioRequest env req (Just stateId) = do
-    void . liftIO $ waitForStateUpdate (env ^. streamStatusState) stateId $ \_ _ ->
+    void . liftIO $ waitForStateUpdate (env ^. streamStatusState) stateId $ \_ _ -> do
         void $
             if req ^. Proxy.start
                 then do

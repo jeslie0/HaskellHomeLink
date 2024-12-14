@@ -77,6 +77,7 @@ instance HomeHandler Home.StartRadio where
                         & (Proxy.mrfRadioOn .~ True)
                 )
 
+
 -- | Stop playing an audio stream if one is playing.
 instance HomeHandler Home.StopRadio where
     homeHandler _ src _ = do

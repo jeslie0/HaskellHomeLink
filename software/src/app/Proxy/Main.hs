@@ -50,5 +50,5 @@ proxyMain island = do
     cleanupEnv env = do
         killConnections (env ^. (router . connectionsManager))
 
-main :: IO ()
-main = proxyMain RemoteProxy
+-- main :: IO ()
+-- main = proxyMain RemoteProxy

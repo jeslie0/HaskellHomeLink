@@ -2,7 +2,7 @@ module ProtoHelper (protoRadioStatusResponseToStreamStatus, streamStatusToprotoR
 
 import Data.ProtoLens (defMessage)
 import Home.AudioStream (StreamStatus (..))
-import Lens.Micro ((%~), (&), (.~), (^.))
+import Lens.Micro ((&), (.~), (^.))
 import Proto.Proxy qualified as Proxy
 import Proto.Proxy_Fields qualified as Proxy
 import State (StateId)

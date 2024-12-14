@@ -8,7 +8,7 @@ module Connection (
 ) where
 
 import Connection.TCP qualified as TCP
-import Control.Concurrent (newChan, writeChan)
+import Control.Concurrent (newChan, writeChan, ThreadId)
 import Data.ByteString qualified as B
 import Network.Socket (HostName, ServiceName)
 import Threads (

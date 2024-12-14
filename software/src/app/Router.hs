@@ -3,12 +3,10 @@
 
 module Router (Router, thisIsland, connectionsManager, mkRouter, trySendMessage, forwardMsg, handleBytes) where
 
-import Connection (sendMsg)
 import ConnectionManager (
     ConnectionManager,
     Island (..),
-    getConnection,
-    mkConnectionManager, getSrcDest,
+    mkConnectionManager, getSrcDest, trySendBytes,
  )
 import Data.ByteString qualified as B
 import Data.Maybe (fromMaybe)
@@ -46,18 +44,11 @@ trySendMessage (Router island connMgr) dest msg = do
     let hop = fromMaybe dest $ nextHop island dest
         bytes = toBytes msg
         addressedBytes = runPut (put island) <> runPut (put dest) <> bytes
-    mConn <- getConnection hop connMgr
-    case mConn of
-        Nothing -> putStrLn "Couldn't find dest" >> pure False
-        Just conn -> sendMsg conn addressedBytes >> pure True
+    trySendBytes connMgr hop addressedBytes
 
 forwardMsg :: Router -> Island -> B.ByteString -> IO Bool
-forwardMsg (Router island connMgr) dest bytes = do
-    -- Get next hop
-    mConn <- getConnection dest connMgr
-    case mConn of
-        Nothing -> pure False
-        Just conn -> sendMsg conn bytes >> pure True
+forwardMsg (Router _island connMgr) dest bytes = do
+    trySendBytes connMgr dest bytes
 
 handleBytes :: forall msg. (Msg msg) => ((Island, msg) -> IO ()) -> Router -> B.ByteString -> IO ()
 handleBytes handleMsg rtr bytes = do

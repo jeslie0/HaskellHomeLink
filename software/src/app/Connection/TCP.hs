@@ -1,22 +1,26 @@
 module Connection.TCP (
     mkClientConnection,
     mkServerConnection,
+    aquireActiveClientSocket,
+    aquireActiveServerSocket,
 ) where
 
 import Control.Concurrent (
     Chan,
     readChan,
-    threadDelay, newChan,
+    threadDelay,
  )
 import Control.Exception (
     Exception (..),
     IOException,
     SomeAsyncException (..),
     bracket,
+    bracketOnError,
     catch,
     throwIO,
  )
 import Data.ByteString qualified as B
+import Data.Serialize (putWord32le, runPut)
 import Network.Socket
 import Network.Socket.ByteString (sendAll)
 import Socket (readHeader, recvNBytes)
@@ -24,7 +28,6 @@ import Threads (
     killAsyncComputation,
     spawnAsyncComputation,
  )
-import Data.Serialize (runPut, putWord32le)
 
 -- | Create address info for to be used to create a client socket.
 mkAddrInfo :: HostName -> ServiceName -> IO AddrInfo
@@ -172,12 +175,6 @@ mkServerConnection port sendChan withBytes =
     asyncExceptionHandler (SomeAsyncException _) = do
         putStrLn "Async exception caught. Thread dying.."
 
-
-foo :: IO ()
-foo = do
-  chan <- newChan
-  mkServerConnection "3000" chan $ \bytes -> pure ()
-
 withServerSocket ::
     Chan B.ByteString
     -> (B.ByteString -> IO ())
@@ -226,6 +223,108 @@ recvMsg sock = do
         Just len -> do
             recvNBytes sock $ fromIntegral len
 
--- test :: IO ()
--- test = do
---   mkServerConnection "3000" (print)
+-- * Next
+
+aquireBoundListeningServerSocket ::
+    ServiceName
+    -> IO Socket
+aquireBoundListeningServerSocket port = do
+    addrInfo <- mkServerAddrInfo port
+    sock <-
+        socket (addrFamily addrInfo) (addrSocketType addrInfo) (addrProtocol addrInfo)
+    setSocketOption sock ReuseAddr 1
+    bind sock (addrAddress addrInfo)
+    listen sock 1
+    putStrLn "Server listening..."
+    pure sock
+
+aquireActiveServerSocket ::
+    ServiceName
+    -> (B.ByteString -> IO ())
+    -- ^ Function to run when receiving
+    -- messages on the socket.
+    -> (Socket -> IO ())
+    -- ^ Function to run when socket has been acquired.
+    -> (Socket -> IO ())
+    -- ^ Cleanup function to run when socket is closed by server.
+    -> IO ()
+aquireActiveServerSocket port withBytes withSock cleanupSocket = do
+    bracket (aquireBoundListeningServerSocket port) close $ \serverSock -> do
+        bracket (open serverSock) close $ \conn -> do
+            withSock conn
+            recvFunc conn
+  where
+    open sock = do
+        (conn, peer) <- accept sock
+        putStrLn $ "Accepted connection from " <> show peer
+        pure conn
+
+    recvFunc sock = do
+        mMsg <- recvMsg sock
+        case mMsg of
+            Nothing -> do
+                -- Socket dead
+                cleanupSocket sock
+            Just msg -> do
+                withBytes msg
+                recvFunc sock
+
+aquireConnectedClientSocket ::
+    HostName
+    -> ServiceName
+    -> IO Socket
+aquireConnectedClientSocket host port = do
+    addrInfo <- mkAddrInfo host port
+    safeNewSocket addrInfo
+  where
+    newSocket addrInfo =
+        bracketOnError
+            (openSocket addrInfo)
+            (\s -> close s >> putStrLn "Closing socket down...")
+            $ \sock -> do
+                safeConnect sock (addrAddress addrInfo)
+                pure sock
+
+    safeNewSocket addrInfo =
+        newSocket addrInfo `catch` \(_ :: SocketClosedException) -> safeNewSocket addrInfo
+
+    safeConnect sock sockAddr = do
+        tryConnect sock sockAddr `catch` handleConnectionFail sock sockAddr
+
+    -- If unable to connect to server, try again in 2 seconds.
+    handleConnectionFail sock sockAddr (_ :: IOException) = do
+        putStrLn "Could not connect to server. Trying again in 2s..."
+        threadDelay 2000000
+        safeConnect sock sockAddr
+
+    -- Attempt to connect to the socket. Return if the
+    -- connection is successful, otherwise throw.
+    tryConnect sock sockAddr = do
+        connect sock sockAddr
+        putStrLn $ "Connected to server at: " <> show sockAddr
+
+aquireActiveClientSocket ::
+    HostName
+    -> ServiceName
+    -> (B.ByteString -> IO ())
+    -- ^ Function to run when receiving
+    -- messages on the socket.
+    -> (Socket -> IO ())
+    -- ^ Function to run when socket has been acquired.
+    -> (Socket -> IO ())
+    -- ^ Cleanup function to run when socket is closed by server.
+    -> IO ()
+aquireActiveClientSocket host port withBytes withSock cleanupSocket = do
+    bracket (aquireConnectedClientSocket host port) close $ \sock -> do
+        withSock sock
+        recvFunc sock
+  where
+    recvFunc sock = do
+        mMsg <- recvMsg sock
+        case mMsg of
+            Nothing -> do
+                -- Socket dead
+                cleanupSocket sock
+            Just msg -> do
+                withBytes msg
+                recvFunc sock

@@ -3,8 +3,7 @@
 
 module Proxy.Env (Env, mkEnv, router, streamStatusState, EnvT, addLocalHTTPServerConnection) where
 
-import Connection (mkTCPServerConnection)
-import ConnectionManager (Island (..), addConnection)
+import ConnectionManager (Island (..), initTCPServerConnection)
 import Control.Concurrent (newEmptyMVar)
 import Control.Monad.Reader (ReaderT)
 import Home.AudioStream (StreamStatus (..))
@@ -37,6 +36,4 @@ mkEnv island = do
 addLocalHTTPServerConnection ::
     forall msg. (Msg msg) => ((Island, msg) -> IO ()) -> Router -> IO ()
 addLocalHTTPServerConnection actOnMsg rtr = do
-    connection <-
-        mkTCPServerConnection "3000" $ handleBytes actOnMsg rtr
-    addConnection Home connection (rtr ^. connectionsManager)
+    initTCPServerConnection Home (rtr ^. connectionsManager) "3000" $ handleBytes actOnMsg rtr

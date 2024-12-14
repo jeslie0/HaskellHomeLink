@@ -4,16 +4,13 @@
 
 module REST.Api (Api, Radio, RadioCommand (..), Connection) where
 
-import Data.Word (Word32)
 import Proto.Proxy qualified as Proxy
 import Servant (
     FromHttpApiData (..),
     Get,
     JSON,
-    NoContent,
     PostAccepted,
     Put,
-    PutAccepted,
     QueryParam,
     Raw,
     ReqBody,

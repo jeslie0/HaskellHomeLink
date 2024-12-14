@@ -8,11 +8,10 @@ module Home.Env (
     audioStreamRef,
     router,
     addLocalHTTPServerConnection,
-    addRemoteProxyConnection
+    addRemoteProxyConnection,
 ) where
 
-import Connection (mkTCPClientConnection)
-import ConnectionManager (Island (..), addConnection)
+import ConnectionManager (Island (..), initTCPClientConnection)
 import Control.Monad.Reader (ReaderT)
 import Lens.Micro ((^.))
 import Lens.Micro.TH (makeLenses)
@@ -44,13 +43,9 @@ mkEnv = do
 addLocalHTTPServerConnection ::
     forall msg. (Msg msg) => ((Island, msg) -> IO ()) -> Router -> IO ()
 addLocalHTTPServerConnection actOnMsg rtr = do
-    connection <-
-        mkTCPClientConnection "127.0.0.1" "3000" $ handleBytes actOnMsg rtr
-    addConnection LocalHTTP connection (rtr ^. connectionsManager)
+  initTCPClientConnection LocalHTTP (rtr ^. connectionsManager) "127.0.0.1" "3000" $ handleBytes actOnMsg rtr
 
 addRemoteProxyConnection ::
     forall msg. (Msg msg) => ((Island, msg) -> IO ()) -> HostName -> ServiceName -> Router -> IO ()
 addRemoteProxyConnection actOnMsg host port rtr = do
-    connection <-
-        mkTCPClientConnection host port $ handleBytes actOnMsg rtr
-    addConnection RemoteProxy connection (rtr ^. connectionsManager)
+  initTCPClientConnection RemoteProxy (rtr ^. connectionsManager) host port $ handleBytes actOnMsg rtr
