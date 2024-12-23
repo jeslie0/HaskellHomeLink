@@ -1,13 +1,13 @@
 {-# LANGUAGE CApiFFI #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
 
-module Alsa.PCM.Handle (PCMHandle (..), StreamType (..), DeviceMode (..), waitPCM, availablePCMFrames, newPCMHandle, openPCMHandle, preparePCMHandle, Snd_PCM_t) where
+module Alsa.PCM.Handle (PCMHandle (..), StreamType (..), DeviceMode (..), waitPCM, availablePCMFrames, newPCMHandle, openPCMHandle, preparePCMHandle, Snd_PCM_t, recoverPCM) where
 
 import Control.Exception (mask_)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Int (Int64)
 import Foreign (ForeignPtr, FunPtr, Ptr, Storable (..), alloca, newForeignPtr, withForeignPtr)
-import Foreign.C (CInt (..), CLong (..))
+import Foreign.C (CInt (..), CLong (..), Errno(..))
 import Foreign.C.String (CString, withCString)
 
 -- Type to represent what Alsa calls a "Sound Device". We always
@@ -80,3 +80,11 @@ waitPCM (PCMHandle ref) n = do
   frnPtr <- readIORef ref
   withForeignPtr frnPtr $ \ptr -> fromIntegral <$> snd_pcm_wait_c ptr (fromIntegral n)
 {-# NOINLINE waitPCM #-}
+
+foreign import capi safe "alsa/asoundlib.h snd_pcm_recover" snd_pcm_recover_h :: Ptr Snd_PCM_t -> Errno -> CInt -> IO CInt
+
+-- | Recover the stream state from an error or suspend.
+recoverPCM :: PCMHandle -> Errno -> Bool -> IO Int
+recoverPCM (PCMHandle ref) err bool = do
+  frnPtr <- readIORef ref
+  withForeignPtr frnPtr $ \ptr -> fromIntegral <$> snd_pcm_recover_h ptr err (if bool then 1 else 0)

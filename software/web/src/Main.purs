@@ -72,10 +72,10 @@ dekuApp = do
   _ /\ setStreamActivePoll /\ streamActivePoll <- DE.useHot false
   streamStateIdRef <- Ref.new 0
 
+  fetchStreamStatus setStreamActivePoll (\n -> Ref.write n streamStateIdRef)
   _ <- setInterval 2000 $ fetchStreamStatus setStreamActivePoll (\n -> Ref.write n streamStateIdRef)
 
-  let overviewPageState = pure {setStreamActivePoll, streamActivePoll, streamStateIdRef}
-
+  let overviewPageState = pure { setStreamActivePoll, streamActivePoll, streamStateIdRef }
 
   pure Deku.do
     Tuple _setApplicationsPageState applicationsPageState <- DH.useHot initialApplicationsPageState

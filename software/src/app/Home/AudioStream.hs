@@ -9,6 +9,7 @@ import Alsa.PCM.Handle (
     newPCMHandle,
     openPCMHandle,
     preparePCMHandle,
+    recoverPCM,
  )
 import Alsa.PCM.Params (allocateParams, fillParams, newPCMParams)
 import Alsa.PCM.Stream (
@@ -24,11 +25,12 @@ import Alsa.PCM.Stream (
     writeBuffer,
     writeParamsToDriver,
  )
-import Control.Exception (bracket)
+import Control.Exception (Exception (..), bracket, catch)
 import Control.Monad (void)
 import Data.ByteString qualified as BS
 import Data.ByteString.Internal qualified as BS
 import Foreign (Int16, Ptr, Word8, allocaArray, withForeignPtr)
+import Foreign.C (Errno (..))
 import Foreign.Ptr (plusPtr)
 import Minimp3 (
     MP3Dec,
@@ -45,6 +47,8 @@ import Minimp3 (
 import Network.HTTP.Client (BodyReader, Response)
 import Network.HTTP.Client qualified as HTTP
 import Network.HTTP.Client.TLS qualified as HTTPS
+import Network.HTTP.Types.Status (ok200)
+import System.Timeout (timeout)
 
 data StreamStatus
     = Inactive
@@ -70,7 +74,8 @@ withAudioStream withBodyRsp = do
     manager <- HTTP.newManager HTTPS.tlsManagerSettings
     let initialRequest = HTTP.parseRequest_ classicFMURL
         request = initialRequest {HTTP.method = "GET"}
-    HTTP.withResponse request manager withBodyRsp
+    HTTP.withResponse request manager withBodyRsp `catch` \(e :: HTTP.HttpException) -> do
+        putStrLn $ "An HTTP Exception occurred: " <> displayException e
 
 newtype SR = SR Int
 
@@ -111,7 +116,8 @@ configureDevice handle (SR sampleRate) (Channels channels) = do
                 else return $ Just $ sampleRateVal sr
 
 {- | Read the input buffer as MP3 data and play as many full frames as
-possible. Return the number of bytes that haven't been used.
+possible. Return the number of bytes that haven't been used, or an
+error code if one has been given.
 -}
 readFramesAndPlay ::
     PCMHandle
@@ -124,7 +130,7 @@ readFramesAndPlay ::
     -- ^ Input PCM buffer
     -> Ptr Int16
     -- ^ Buffer to store data in.
-    -> IO Int
+    -> IO (Either Errno Int)
 readFramesAndPlay handle mp3 info mp3Data pcmData =
     go mp3Data
   where
@@ -136,20 +142,24 @@ readFramesAndPlay handle mp3 info mp3Data pcmData =
 
     decide mp3Ptr newMP3Len samples consumed
         | samples > 0 && consumed > 0 = do
-            void . writeBuffer handle pcmData $ fromIntegral samples
-            frameSize <- computeFrameSize info
-            if frameSize > newMP3Len
-                then return newMP3Len
-                else go (mp3Ptr `plusPtr` consumed, newMP3Len)
+            samplesWritten <- writeBuffer handle pcmData $ fromIntegral samples
+            if samplesWritten < 0
+                then
+                    pure $ Left (Errno . fromIntegral $ -samplesWritten)
+                else do
+                    frameSize <- computeFrameSize info
+                    if frameSize > newMP3Len
+                        then pure $ Right newMP3Len
+                        else go (mp3Ptr `plusPtr` consumed, newMP3Len)
         | samples == 0 && consumed > 0 = do
             -- putStrLn "Skipped ID3 or Invalid data"
-            return newMP3Len
+            pure $ Right newMP3Len
         | samples == 0 && consumed == 0 = do
             -- putStrLn "Insufficient data"
-            return newMP3Len
+            pure $ Right newMP3Len
         | otherwise = do
             -- putStrLn "Impossible situation"
-            return 0
+            pure $ Right 0
 
 -- | Compute the size of an MP3 frame from the given info.
 computeFrameSize :: MP3DecFrameInfo -> IO Int
@@ -165,12 +175,16 @@ startAudioStream = do
 
     allocaArray @Int16 maxSamplesPerFrame $ \pcmData ->
         withAudioStream $ \rsp -> do
-            let bodyReader = HTTP.responseBody rsp
-            chunk <- HTTP.brRead bodyReader
-            bracket
-                (makePCMHandleFromBytes mp3Dec info chunk pcmData)
-                dropDevice
-                $ \handle -> go bodyReader handle mp3Dec info pcmData ""
+            if HTTP.responseStatus rsp /= ok200
+                then
+                    putStrLn "Bad status from response"
+                else do
+                    let bodyReader = HTTP.responseBody rsp
+                    chunk <- HTTP.brRead bodyReader
+                    bracket
+                        (makePCMHandleFromBytes mp3Dec info chunk pcmData)
+                        dropDevice
+                        $ \handle -> go bodyReader handle mp3Dec info pcmData ""
   where
     go ::
         BodyReader
@@ -181,12 +195,26 @@ startAudioStream = do
         -> BS.ByteString
         -> IO ()
     go !bodyReader !handle !mp3Dec !info !pcmData !leftoverBytes = do
-        newBytes <- HTTP.brRead bodyReader
-        let !mp3Data@(BS.BS !frnPtr !mp3Len) = BS.append leftoverBytes newBytes
-        !remainingBytes <- withForeignPtr frnPtr $ \mp3Ptr -> do
-            !leftOverAmount <- readFramesAndPlay handle mp3Dec info (mp3Ptr, mp3Len) pcmData
-            pure $ BS.takeEnd leftOverAmount mp3Data
-        go bodyReader handle mp3Dec info pcmData remainingBytes
+        mNewBytes <- timeout (1000000 * 5) $ HTTP.brRead bodyReader
+        case mNewBytes of
+          Nothing -> pure ()
+          Just newBytes -> do
+            if BS.length newBytes == 0
+            then putStrLn "Stream over"
+            else do
+                let !mp3Data@(BS.BS !frnPtr !mp3Len) = BS.append leftoverBytes newBytes
+                !eRemainingBytes <- withForeignPtr frnPtr $ \mp3Ptr -> do
+                    eLeftOverAmount <- readFramesAndPlay handle mp3Dec info (mp3Ptr, mp3Len) pcmData
+                    case eLeftOverAmount of
+                        Left err -> do
+                            putStrLn "Underflow occurred"
+                            void $ recoverPCM handle err False
+                            pure . Right $ mp3Data
+                        Right leftOverAmount -> pure . Right $ BS.takeEnd leftOverAmount mp3Data
+                case eRemainingBytes of
+                    Left _ -> pure ()
+                    Right remainingBytes ->
+                        go bodyReader handle mp3Dec info pcmData remainingBytes
 
 makePCMHandleFromBytes ::
     MP3Dec -> MP3DecFrameInfo -> BS.ByteString -> Ptr Int16 -> IO PCMHandle

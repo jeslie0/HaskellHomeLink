@@ -4,7 +4,7 @@
 
 module REST.Api (Api, Radio, RadioCommand (..), Connection) where
 
-import Proto.Proxy qualified as Proxy
+import Proto.Messages qualified as Proto
 import Servant (
     FromHttpApiData (..),
     Get,
@@ -21,17 +21,20 @@ import Servant.API.ContentTypes.Proto
 import State (StateId)
 
 type Api =
-    "api" :> "v1" :> (Radio)
+    "api" :> "v1" :> (Radio :<|> System)
         :<|> Raw
 
 type Radio =
     "radio"
-        :> ( Get '[Proto] Proxy.GetRadioStatusResponse
+        :> ( Get '[Proto] Proto.GetRadioStatusResponse
                 :<|> "modify"
-                    :> ReqBody '[Proto] Proxy.ModifyRadioRequest
+                    :> ReqBody '[Proto] Proto.ModifyRadioRequest
                     :> QueryParam "stateId" StateId
                     :> PostAccepted '[JSON] Bool
            )
+
+type System =
+    "system" :> Get '[Proto] Proto.SystemDataMessage
 
 data RadioCommand = Start | Stop
 

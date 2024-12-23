@@ -20,6 +20,7 @@ import Servant (
  )
 
 import ConnectionManager (Island (..))
+import Control.Concurrent (MVar, readMVar)
 import Control.Monad (void)
 import Envelope (toEnvelope)
 import Home.AudioStream (StreamStatus)
@@ -30,9 +31,8 @@ import Network.Wai.Application.Static (
     ssIndices,
     ssRedirectToIndex,
  )
-import Proto.Home qualified as Home
-import Proto.Proxy qualified as Proxy
-import Proto.Proxy_Fields qualified as Proxy
+import Proto.Messages qualified as Proto
+import Proto.Messages_Fields qualified as Proto
 import ProtoHelper (streamStatusToprotoRadioStatusResponse)
 import Router (Router, trySendMessage)
 import Servant.Server (Application)
@@ -41,40 +41,53 @@ import WaiAppStatic.Types (unsafeToPiece)
 
 data Env = Env
     { _streamStatusState :: State StreamStatus
+    , _systemDataState :: MVar Proto.SystemDataMessage
     , _router :: Router
     }
 
 $(makeLenses ''Env)
 
-mkEnv :: State StreamStatus -> Router -> IO Env
-mkEnv streamStatus rtr = do
-    pure $ Env {_streamStatusState = streamStatus, _router = rtr}
+mkEnv ::
+    State StreamStatus -> MVar Proto.SystemDataMessage -> Router -> IO Env
+mkEnv streamStatus systemState rtr = do
+    pure $
+        Env
+            { _streamStatusState = streamStatus
+            , _systemDataState = systemState
+            , _router = rtr
+            }
 
 -- * Server handlers
 
-handleGetRadioStatus :: Env -> Handler Proxy.GetRadioStatusResponse
+handleGetRadioStatus :: Env -> Handler Proto.GetRadioStatusResponse
 handleGetRadioStatus env = do
     liftIO $ withState (env ^. streamStatusState) $ \stateId state ->
         pure $ streamStatusToprotoRadioStatusResponse stateId state
 
 handleModifyRadioRequest ::
-    Env -> Proxy.ModifyRadioRequest -> Maybe StateId -> Handler Bool
+    Env -> Proto.ModifyRadioRequest -> Maybe StateId -> Handler Bool
 handleModifyRadioRequest _ _ Nothing = pure False
 handleModifyRadioRequest env req (Just stateId) = do
     void . liftIO $ waitForStateUpdate (env ^. streamStatusState) stateId $ \_ _ -> do
         void $
-            if req ^. Proxy.start
+            if req ^. Proto.start
                 then do
-                    trySendMessage (env ^. router) Home (toEnvelope $ defMessage @Home.StartRadio)
+                    trySendMessage (env ^. router) Home (toEnvelope $ defMessage @Proto.StartRadio)
                 else
-                    trySendMessage (env ^. router) Home (toEnvelope $ defMessage @Home.StopRadio)
+                    trySendMessage (env ^. router) Home (toEnvelope $ defMessage @Proto.StopRadio)
     pure True
+
+handleGetSystemDataRequest :: Env -> Handler Proto.SystemDataMessage
+handleGetSystemDataRequest env = do
+    liftIO $ readMVar (env ^. systemDataState)
 
 -- * Server
 server :: Env -> Server Api
 server env =
-    ( handleGetRadioStatus env
-        :<|> handleModifyRadioRequest env
+    ( ( handleGetRadioStatus env
+            :<|> handleModifyRadioRequest env
+      )
+        :<|> handleGetSystemDataRequest env
     )
         :<|> serveDir "/usr/local/haskell-home-link"
 

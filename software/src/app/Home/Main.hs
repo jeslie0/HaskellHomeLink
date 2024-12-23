@@ -4,6 +4,7 @@ import ConnectionManager (
     Island (..),
     killConnections,
  )
+import Control.Concurrent (forkIO, killThread)
 import Control.Exception (bracket)
 import Control.Monad (void)
 import Control.Monad.Reader
@@ -20,14 +21,13 @@ import Home.Env (
  )
 import Home.Handler (ExHomeHandler (..), homeHandler)
 import Lens.Micro
-import Proto.Home qualified as Home
+import Proto.Messages qualified as Proto
 import Proxy.Main (proxyMain)
 import Router (connectionsManager)
-import Threads (killAsyncComputation, spawnAsyncComputation)
 
 main :: IO ()
 main = do
-    void $ spawnAsyncComputation (proxyMain LocalHTTP)
+    void $ forkIO (proxyMain LocalHTTP)
     bracket mkEnv cleanupEnv $ \env ->
         runReaderT (action env) env
   where
@@ -35,13 +35,13 @@ main = do
     action env = do
         loop <- mkEventLoop @(Island, ExHomeHandler)
         liftIO
-            $ addLocalHTTPServerConnection @Home.Envelope
+            $ addLocalHTTPServerConnection @Proto.HomeEnvelope
                 (addMsg loop . second ExHomeHandler)
             $ env ^. router
         run loop $ \evloop b -> uncurry (homeHandler evloop) b
 
     cleanupEnv env = do
         mAudioStream <- readIORef (env ^. audioStreamRef)
-        for_ mAudioStream killAsyncComputation
+        for_ mAudioStream killThread
         writeIORef (env ^. audioStreamRef) Nothing
         killConnections (env ^. (router . connectionsManager))

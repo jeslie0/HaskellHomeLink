@@ -3,22 +3,22 @@ module ProtoHelper (protoRadioStatusResponseToStreamStatus, streamStatusToprotoR
 import Data.ProtoLens (defMessage)
 import Home.AudioStream (StreamStatus (..))
 import Lens.Micro ((&), (.~), (^.))
-import Proto.Proxy qualified as Proxy
-import Proto.Proxy_Fields qualified as Proxy
+import Proto.Messages qualified as Proto
+import Proto.Messages_Fields qualified as Proto
 import State (StateId)
 
 protoRadioStatusResponseToStreamStatus ::
-    Proxy.GetRadioStatusResponse -> StreamStatus
+    Proto.GetRadioStatusResponse -> StreamStatus
 protoRadioStatusResponseToStreamStatus resp =
-    if resp ^. Proxy.radioOn then Active else Inactive
+    if resp ^. Proto.radioOn then Active else Inactive
 
 streamStatusToprotoRadioStatusResponse ::
-    StateId -> StreamStatus -> Proxy.GetRadioStatusResponse
+    StateId -> StreamStatus -> Proto.GetRadioStatusResponse
 streamStatusToprotoRadioStatusResponse statusId status =
     defMessage
-        & Proxy.radioOn
+        & Proto.radioOn
         .~ ( case status of
                 Active -> True
                 Inactive -> False
            )
-        & (Proxy.stateId .~ statusId)
+        & (Proto.stateId .~ statusId)

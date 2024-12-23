@@ -25,7 +25,7 @@ import FRP.Poll (Poll)
 import Fetch (fetch)
 import JS.Fetch.Response (arrayBuffer)
 import Parsing (fail, runParserT)
-import Proto.Proxy as Proto
+import Proto.Messages as Proto
 import Yoga.JSON (read_)
 
 type OverviewPageState = { setStreamActivePoll :: Boolean -> Effect Unit, streamActivePoll :: Poll Boolean, streamStateIdRef :: Ref Int }
@@ -86,6 +86,7 @@ fetchStreamStatus setStreamStatus setStreamStateId = do
         liftEffect $ setStreamStatus state
         liftEffect $ setStreamStateId id
     pure unit
+
 
 startStream :: Ref Int -> (Boolean -> Effect Unit) -> Effect Unit
 startStream ref setStreamStatus = do

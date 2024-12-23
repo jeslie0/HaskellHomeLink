@@ -9,7 +9,7 @@ module ConnectionManager (
     killConnections,
     initTCPClientConnection,
     initTCPServerConnection,
-    trySendBytes
+    trySendBytes,
 ) where
 
 import Connection.TCP (aquireActiveClientSocket, aquireActiveServerSocket)
@@ -26,11 +26,18 @@ import Control.Concurrent (
 import Control.Monad (forM_, void)
 import Data.ByteString qualified as B
 import Data.Map.Strict qualified as Map
-import Data.Serialize (Serialize (..), ensure, getWord8, putWord8, runGet, putWord32le)
+import Data.Serialize (
+    Serialize (..),
+    ensure,
+    getWord8,
+    putWord32le,
+    putWord8,
+    runGet,
+ )
+import Data.Serialize.Put (runPut)
 import GHC.Generics (Generic)
 import Network.Socket
 import Socket (sendAll)
-import Data.Serialize.Put (runPut)
 
 data Island
     = Home
@@ -126,7 +133,7 @@ initTCPServerConnection ::
     -> ServiceName
     -> (B.ByteString -> IO ())
     -> IO ()
-initTCPServerConnection island (ConnectionManager connectionsMVar) port withBytes =
+initTCPServerConnection island (ConnectionManager connectionsMVar) port withBytes = do
     let handle = do
             threadId <- myThreadId
             aquireActiveServerSocket
@@ -135,9 +142,8 @@ initTCPServerConnection island (ConnectionManager connectionsMVar) port withByte
                 ( \sock -> modifyMVar_ connectionsMVar $ \conns ->
                     pure $ Map.insert island (threadId, Just $ sendAll sock) conns
                 )
-                ( \_ -> do
+                ( do
                     modifyMVar_ connectionsMVar $ pure . Map.insert island (threadId, Nothing)
-                    handle
                 )
      in modifyMVar_ connectionsMVar $ \conns -> do
             threadId <- forkIO handle

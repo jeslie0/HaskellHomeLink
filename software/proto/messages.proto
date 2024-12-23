@@ -1,0 +1,83 @@
+syntax="proto3";
+
+package proto;
+
+// * Data types
+
+enum ISLAND {
+  HOME = 0;
+  LOCAL_PROXY = 1;
+  REMOTE_PROXY = 2;
+}
+
+message CPUData {
+  string vendor = 1;
+  string modelName = 2;
+}
+
+message SystemData {
+  CPUData cpuData = 1;
+  bool inDockerContainer = 2;
+}
+
+message IslandSystemData {
+  ISLAND island = 1;
+  SystemData systemData = 2;
+}
+
+// * Home Received Msgs
+
+message StartRadio {
+}
+
+message StopRadio {
+}
+
+message ConnectTCP {
+  string host = 1;
+  string port = 2;
+}
+
+message HomeEnvelope {
+  oneof payload {
+    StartRadio m1 = 1;
+    StopRadio m2 = 2;
+    ConnectTCP m3 = 3;
+    SystemData m4 = 4;
+  }
+}
+
+// * Proxy Received Msgs
+
+// Received from HTTP Server.
+message ModifyRadioRequest {
+  bool start = 1;
+}
+
+// Sent to HTTP Server
+message ModifyRadioResponse {
+  bool mrfRadioOn = 1;
+}
+
+// Received from HTTP Server.
+message GetRadioStatusRequest {
+
+}
+
+// Sent to HTTP Server
+message GetRadioStatusResponse {
+  bool radioOn = 1;
+  int32 stateId = 2;
+}
+
+message SystemDataMessage {
+  repeated IslandSystemData islandSystemData = 1;
+}
+
+message ProxyEnvelope {
+  oneof payload {
+    ModifyRadioResponse m1 = 1;
+    GetRadioStatusResponse m2 = 2;
+    SystemDataMessage m3 = 3;
+  }
+}

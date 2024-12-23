@@ -2,12 +2,12 @@
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
-cd "$script_dir/../software"
+pushd "$script_dir/../software"
 protoc --purescript_out=web/src/Proto/ proto/*
 
-cd "$script_dir/../software/web/src/Proto"
+pushd "$script_dir/../software/web/src/Proto"
 
-for file in *..purs; do
+for file in *.Proto.purs; do
 	if [ -f "$file" ]; then
 		# Extract the part before ".." and capitalize the first letter
 		base_name=$(echo "$file" | cut -d'.' -f1)
@@ -19,7 +19,10 @@ for file in *..purs; do
 		# Rename the file
 		mv "$file" "$new_name"
 
-		# Fix module name
-		sed -i 's/module \./ module Proto\./' "$new_name"
+		# # Fix module name
+		# sed -i 's/module \./ module Proto\./' "$new_name"
 	fi
 done
+
+popd
+popd

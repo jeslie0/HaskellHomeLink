@@ -245,29 +245,35 @@ aquireActiveServerSocket ::
     -- messages on the socket.
     -> (Socket -> IO ())
     -- ^ Function to run when socket has been acquired.
-    -> (Socket -> IO ())
-    -- ^ Cleanup function to run when socket is closed by server.
+    -> IO ()
+    -- ^ Cleanup action to run when socket is closed by server.
     -> IO ()
 aquireActiveServerSocket port withBytes withSock cleanupSocket = do
-    bracket (aquireBoundListeningServerSocket port) close $ \serverSock -> do
+    bracket
+        (aquireBoundListeningServerSocket port)
+        close
+        withServerSock
+  where
+    withServerSock serverSock = do
         bracket (open serverSock) close $ \conn -> do
             withSock conn
-            recvFunc conn
-  where
+            recvFunc serverSock conn
+
     open sock = do
         (conn, peer) <- accept sock
         putStrLn $ "Accepted connection from " <> show peer
         pure conn
 
-    recvFunc sock = do
+    recvFunc serverSock sock = do
         mMsg <- recvMsg sock
         case mMsg of
             Nothing -> do
-                -- Socket dead
-                cleanupSocket sock
+                cleanupSocket
+                withServerSock serverSock
+            -- Socket dead
             Just msg -> do
                 withBytes msg
-                recvFunc sock
+                recvFunc serverSock sock
 
 aquireConnectedClientSocket ::
     HostName
@@ -280,7 +286,7 @@ aquireConnectedClientSocket host port = do
     newSocket addrInfo =
         bracketOnError
             (openSocket addrInfo)
-            (\s -> close s >> putStrLn "Closing socket down...")
+            close
             $ \sock -> do
                 safeConnect sock (addrAddress addrInfo)
                 pure sock
