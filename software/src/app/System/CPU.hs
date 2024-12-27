@@ -1,14 +1,18 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module System.CPU (CPUData, vendor, modelName, getCPUData) where
+module System.CPU (CPUData, vendor, modelName, getCPUData, cpuDataToMessage, messageToCPUData) where
 
 import Control.Applicative ((<|>))
 import Data.Attoparsec.Text
 import Data.Map.Strict qualified as Map
+import Data.ProtoLens (defMessage)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
+import Lens.Micro ((&), (.~), (^.))
 import Lens.Micro.TH (makeLenses)
+import Proto.Messages qualified as Proto
+import Proto.Messages_Fields qualified as Proto
 
 -- Type for key-value pairs
 type Key = T.Text
@@ -58,6 +62,21 @@ data CPUData = CPUData
     }
 
 $(makeLenses ''CPUData)
+
+cpuDataToMessage :: CPUData -> Proto.CPUData
+cpuDataToMessage (CPUData vendor' modelName') =
+    defMessage
+        & Proto.vendor
+        .~ vendor'
+        & Proto.modelName
+        .~ modelName'
+
+messageToCPUData :: Proto.CPUData -> CPUData
+messageToCPUData cpuDataMessage =
+    CPUData
+        { _vendor = cpuDataMessage ^. Proto.vendor
+        , _modelName = cpuDataMessage ^. Proto.modelName
+        }
 
 getCPUData :: IO (Maybe CPUData)
 getCPUData = do

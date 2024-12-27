@@ -12,12 +12,14 @@ module Home.Handler (
     ExHomeHandler (..),
 ) where
 
-import ConnectionManager (Island (..))
+import ConnectionManager (Island (..), islands)
 import Control.Concurrent (forkFinally, killThread)
 import Control.Monad (void)
 import Control.Monad.Reader
 import Data.Bifunctor (second)
-import Data.IORef (readIORef, writeIORef)
+import Data.Foldable (forM_)
+import Data.IORef (modifyIORef, readIORef, writeIORef)
+import Data.Map.Strict qualified as Map
 import Data.ProtoLens (defMessage)
 import Data.Text qualified as T
 import Envelope (ToProxyEnvelope (..))
@@ -28,6 +30,7 @@ import Lens.Micro
 import Proto.Messages qualified as Proto
 import Proto.Messages_Fields qualified as Proto
 import Router (Router, trySendMessage)
+import System (messageToSystemData, systemDataToMessage)
 import TH (makeInstance)
 
 class HomeHandler msg where
@@ -107,5 +110,7 @@ instance HomeHandler Proto.ConnectTCP where
 
 --
 instance HomeHandler Proto.SystemData where
-    homeHandler loop _ msg = do
-      undefined
+    homeHandler _ _ msg = do
+        env <- ask
+        liftIO . forM_ (filter (/= Home) islands) $ \island ->
+            trySendMessage (env ^. router) island msg

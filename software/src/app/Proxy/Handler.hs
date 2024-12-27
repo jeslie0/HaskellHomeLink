@@ -3,7 +3,6 @@
 module Proxy.Handler (
     ProxyHandler (..),
     ExProxyHandler (..),
-    -- ToEnvelope (..),
 ) where
 
 import ConnectionManager (Island (..))

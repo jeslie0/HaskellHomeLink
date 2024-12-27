@@ -4,6 +4,7 @@ import ConnectionManager (
     Island (..),
     killConnections,
  )
+import Control.Concurrent (MVar)
 import Control.Exception (bracket)
 import Control.Monad.Reader
 import Data.Bifunctor (second)
@@ -24,7 +25,6 @@ import REST.HomeServer qualified as HTTP
 import Router (Router, connectionsManager)
 import State (State)
 import Threads (killAsyncComputation, spawnAsyncComputation)
-import Control.Concurrent (MVar)
 
 httpServer ::
     State StreamStatus -> MVar Proto.SystemDataMessage -> Router -> IO ()

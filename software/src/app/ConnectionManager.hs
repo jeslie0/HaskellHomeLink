@@ -10,6 +10,7 @@ module ConnectionManager (
     initTCPClientConnection,
     initTCPServerConnection,
     trySendBytes,
+    islands,
 ) where
 
 import Connection.TCP (aquireActiveClientSocket, aquireActiveServerSocket)
@@ -44,6 +45,10 @@ data Island
     | RemoteProxy
     | LocalHTTP
     deriving (Generic, Eq, Ord, Enum, Show)
+
+islands :: [Island]
+islands =
+  [Home, RemoteProxy, LocalHTTP]
 
 instance Serialize Island where
     get = do
