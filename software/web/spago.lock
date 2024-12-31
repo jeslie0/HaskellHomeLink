@@ -6,13 +6,16 @@
         "core": {
           "dependencies": [
             "arraybuffer-builder",
+            "bifunctors",
             "console",
             "deku-core",
             "deku-css",
             "deku-dom",
             "effect",
+            "enums",
             "fetch",
             "js-timers",
+            "maybe",
             "numbers",
             "parsing-dataview",
             "prelude",

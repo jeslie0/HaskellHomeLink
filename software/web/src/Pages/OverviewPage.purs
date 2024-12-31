@@ -1,7 +1,8 @@
-module Pages.Overview (OverviewPageState, overviewPage, fetchStreamStatus) where
+module Pages.Overview (OverviewPageState, overviewPage) where
 
 import Prelude
 
+import Api (Api)
 import Constants (getApiUrl)
 import Data.ArrayBuffer.Builder (execPutM)
 import Data.ArrayBuffer.DataView (whole, byteLength)
@@ -28,11 +29,10 @@ import Parsing (fail, runParserT)
 import Proto.Messages as Proto
 import Yoga.JSON (read_)
 
-type OverviewPageState = { setStreamActivePoll :: Boolean -> Effect Unit, streamActivePoll :: Poll Boolean, streamStateIdRef :: Ref Int }
+type OverviewPageState = { api :: Api }
 
-overviewPage :: Poll OverviewPageState -> Nut
-overviewPage pollState = do
-  pollState <#~> \ { setStreamActivePoll, streamActivePoll, streamStateIdRef } ->
+overviewPage :: OverviewPageState -> Nut
+overviewPage {api} = do
     DD.div
       [ DA.klass_ "pf-v5-l-gallery pf-m-gutter" ]
       [ DD.div [ DA.klass_ "pf-v5-l-gallery__item" ]
@@ -42,80 +42,25 @@ overviewPage pollState = do
                       [ DC.text_ "Radio" ]
                   ]
               , DD.div [ DA.klass_ "pf-v5-c-card__body" ]
-                  [ overviewPageBody setStreamActivePoll streamActivePoll streamStateIdRef]
+                  [ overviewPageBody  ]
               , DD.div [ DA.klass_ "pf-v5-c-card__footer" ] [ DC.text_ "Footer" ]
               ]
           ]
       ]
   where
-  overviewPageBody setStreamActivePoll streamActivePoll streamStateIdRef=
+  overviewPageBody  =
     DD.div []
       [ DD.button
           [ DA.klass_ "pf-v5-c-button pf-m-primary"
-          , DA.disabled $ streamActivePoll <#> if _ then "true" else ""
-          , DL.click_ $ \_ -> startStream streamStateIdRef setStreamActivePoll
+          , DA.disabled $ api.polls.streamActivePoll <#> if _ then "true" else ""
+          , DL.click_ $ \_ -> api.requests.modifyStream true
           ]
           [ DD.text_ "Start radio"
           ]
       , DD.button
           [ DA.klass_ "pf-v5-c-button pf-m-primary"
-          , DA.disabled $ streamActivePoll <#> if _ then "" else "true"
-          , DL.click_ $ \_ -> stopStream streamStateIdRef setStreamActivePoll
+          , DA.disabled $ api.polls.streamActivePoll <#> if _ then "" else "true"
+          , DL.click_ $ \_ -> api.requests.modifyStream false
           ]
           [ DD.text_ "Stop radio" ]
       ]
-
-fetchStreamStatus :: (Boolean -> Effect Unit) -> (Int -> Effect Unit) -> Effect Unit
-fetchStreamStatus setStreamStatus setStreamStateId = do
-  apiUrl <- getApiUrl
-  let requestUrl = apiUrl <> "radio"
-  launchAff_ do
-    { arrayBuffer } <- fetch requestUrl { method: GET }
-    body <- whole <$> arrayBuffer
-    result <- liftEffect $ runParserT body  do
-      resp <- Proto.parseGetRadioStatusResponse (byteLength body)
-      case resp of
-        Proto.GetRadioStatusResponse {radioOn: Just state, stateId: Just id} -> pure $ Tuple state id
-        Proto.GetRadioStatusResponse {radioOn: Just state, stateId: Nothing} -> fail "Missing stateId"
-        Proto.GetRadioStatusResponse {radioOn: Nothing, stateId: Just id} -> pure $ Tuple false id
-        Proto.GetRadioStatusResponse {radioOn: Nothing, stateId: Nothing} -> fail "Missing all data"
-        _ -> fail "Missing required entries"
-    case result of
-      Left err -> liftEffect $ Console.logShow err
-      Right (Tuple state id) -> do
-        liftEffect $ setStreamStatus state
-        liftEffect $ setStreamStateId id
-    pure unit
-
-
-startStream :: Ref Int -> (Boolean -> Effect Unit) -> Effect Unit
-startStream ref setStreamStatus = do
-  id <- Ref.read ref
-  apiUrl <- getApiUrl
-  let
-    requestUrl = apiUrl <> "radio/modify" <> "?stateId=" <> show id
-    body = Proto.mkModifyRadioRequest { start: Just true }
-  bodyBuff <- execPutM $ Proto.putModifyRadioRequest body
-  launchAff_ do
-    _ <- fetch requestUrl { method: POST
-                          , body: bodyBuff
-                          , headers: { "content-type": "application/protobuf" }
-                          }
-    pure unit
-    liftEffect $ fetchStreamStatus setStreamStatus (\n -> Ref.write n ref)
-
-stopStream :: Ref Int -> (Boolean -> Effect Unit) -> Effect Unit
-stopStream ref setStreamStatus = do
-  id <- Ref.read ref
-  apiUrl <- getApiUrl
-  let
-    requestUrl = apiUrl <> "radio/modify" <> "?stateId=" <> show id
-    body = Proto.mkModifyRadioRequest { start: Just false }
-  bodyBuff <- execPutM $ Proto.putModifyRadioRequest body
-  launchAff_ do
-    _ <- fetch requestUrl { method: POST
-                          , body: bodyBuff
-                          , headers: { "content-type": "application/protobuf" }
-                          }
-    pure unit
-    liftEffect $ fetchStreamStatus setStreamStatus (\n -> Ref.write n ref)

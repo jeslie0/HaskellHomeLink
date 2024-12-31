@@ -1,5 +1,7 @@
 module Main where
 
+
+import Api (mkApi)
 import Data.Tuple (Tuple(..))
 import Data.Tuple.Nested ((/\))
 import Deku.Control as DC
@@ -17,8 +19,7 @@ import Effect.Console as Console
 import Effect.Ref as Ref
 import Effect.Timer (setInterval)
 import FRP.Poll (Poll)
-import Pages (ApplicationsPageState, OverviewPageState, Page(..), SystemPageState, applicationsPage, getAndSetSystemPageInfo, initialApplicationsPageState, initialSystemPageState, overviewPage, pageList, systemPage)
-import Pages.Overview (fetchStreamStatus)
+import Pages (ApplicationsPageState, OverviewPageState, Page(..), SystemPageState, applicationsPage, initialApplicationsPageState, overviewPage, pageList, systemPage)
 import Prelude (Unit, bind, discard, pure, show, unit, ($), (<#>), (<>), (==))
 
 main :: Effect Unit
@@ -53,34 +54,24 @@ pageBody pagePoll states =
         [ pagePoll <#~> case _ of
             Overview -> overviewPage states.overviewPageState
 
-            System -> systemPage states.systemPageState
+            _ -> systemPage states.systemPageState
 
-            Applications -> applicationsPage states.applicationsPageState
+            -- Applications -> applicationsPage states.applicationsPageState
         ]
     ]
 
 type PageStates =
-  { overviewPageState :: Poll OverviewPageState
-  , systemPageState :: Poll SystemPageState
-  , applicationsPageState :: Poll ApplicationsPageState
+  { overviewPageState :: OverviewPageState
+  , systemPageState :: SystemPageState
+  -- , applicationsPageState :: ApplicationsPageState
   }
 
 dekuApp :: Effect Nut
 dekuApp = do
-  _ /\ setSystemPageState /\ systemPageState <- DE.useHot initialSystemPageState
-
-  _ /\ setStreamActivePoll /\ streamActivePoll <- DE.useHot false
-  streamStateIdRef <- Ref.new 0
-
-  fetchStreamStatus setStreamActivePoll (\n -> Ref.write n streamStateIdRef)
-  _ <- setInterval 2000 $ fetchStreamStatus setStreamActivePoll (\n -> Ref.write n streamStateIdRef)
-
-  let overviewPageState = pure { setStreamActivePoll, streamActivePoll, streamStateIdRef }
+  api <- mkApi
 
   pure Deku.do
-    Tuple _setApplicationsPageState applicationsPageState <- DH.useHot initialApplicationsPageState
-
-    Tuple setPage page <- DH.useState Overview
+    setPage /\page <- DH.useState Overview
     let
       changePage newPage = do
         Console.logShow newPage
@@ -88,5 +79,5 @@ dekuApp = do
 
     DD.div [ DA.klass_ "pf-v5-c-page" ]
       [ header page changePage
-      , pageBody page { overviewPageState, systemPageState, applicationsPageState }
+      , pageBody page { overviewPageState: {api}, systemPageState: {api} }
       ]

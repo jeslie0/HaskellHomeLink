@@ -10,7 +10,7 @@ import Prelude
 
 import Pages.Applications (ApplicationsPageState, applicationsPage, initialApplicationsPageState)
 import Pages.Overview (OverviewPageState, overviewPage)
-import Pages.System (HardwareInformation, SystemPageState, TemperatureInformation, getAndSetSystemPageInfo, initialSystemPageState, systemPage)
+import Pages.System (SystemPageState, systemPage)
 
 data Page
   = Overview

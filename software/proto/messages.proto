@@ -25,6 +25,10 @@ message IslandSystemData {
   SystemData systemData = 2;
 }
 
+message IslandsSystemData {
+  repeated IslandSystemData allSystemData = 1;
+}
+
 // * Home Received Msgs
 
 message StartRadio {
