@@ -47,50 +47,60 @@ overviewPage { api } = do
   radioCardBody =
     DD.form [ DA.klass_ "pf-v5-c-form", DA.formnovalidate_ "", DL.submit_ preventDefault ]
       [ makeStreamRadioGroup
-
-      , DD.div [ DA.klass_ "pf-v5-c-form__group pf-m-action" ]
-          [ DD.div [ DA.klass_ "pf-v5-c-form__group-label" ]
-              [ DD.label [ DA.klass_ "pf-v5-c-form__label", DA.for_ "radio_form" ]
-                  [ DD.div [ DA.klass_ "pf-v5-c-form__label-text" ]
-                      [ DC.text_ "Stream control" ]
-                  ]
-              ]
-          , DD.div [ DA.klass_ "pf-v5-c-form__actions" ]
-              [ DD.button
-                  [ DA.klass_ "pf-v5-c-button pf-m-primary"
-                  , DA.disabled $ api.polls.streamActivePoll <#> if _ then "true" else ""
-                  , DL.click_ $ \_ -> api.requests.modifyStream true
-                  ]
-                  [ DD.text_ "Start radio"
-                  ]
-              , DD.button
-                  [ DA.klass_ "pf-v5-c-button pf-m-primary"
-                  , DA.disabled $ api.polls.streamActivePoll <#> if _ then "" else "true"
-                  , DL.click_ $ \_ -> api.requests.modifyStream false
-                  ]
-                  [ DD.text_ "Stop radio" ]
-              ]
-          ]
+      , streamControlButtons
       ]
 
   makeStreamRadioGroup =
     api.polls.selectedStreamPoll <#~> \selectedStream ->
       DD.div [ DA.klass_ "pf-v5-c-form__group" ] $
-        radioStreams <#> \stream ->
-          DD.div
-            [ DA.klass_ "pf-v5-c-radio"
-            , DL.click $ api.polls.streamActivePoll <#>
-                if _ then
-                  \_ -> pure unit
-                else
-                  \_ -> api.setters.selectStream stream.stream
-            ]
-            [ DD.input
-                [ DA.klass_ "pf-v5-c-radio__input"
-                , DA.xtype_ "radio"
-                , DA.checked_ <<< show $ stream.stream == selectedStream
-                , DA.disabled $ show <$> api.polls.streamActivePoll
+        [ DD.div [ DA.klass_ "pf-v5-c-form__group-label" ]
+            [ DD.label [ DA.klass_ "pf-v5-c-form__label", DA.for_ "radio_form" ]
+                [ DD.div [ DA.klass_ "pf-v5-c-form__label-text" ]
+                    [ DC.text_ "Radio stations" ]
                 ]
-                []
-            , DD.label [ DA.klass_ "pf-v5-c-radio__label" ] [ DC.text_ $ show stream.stream ]
             ]
+        ] <>
+          ( radioStreams <#> \stream ->
+              DD.div
+                [ DA.klass_ "pf-v5-c-radio"
+                , DL.click $ api.polls.streamActivePoll <#>
+                    if _ then
+                      \_ -> pure unit
+                    else
+                      \_ -> api.setters.selectStream stream.stream
+                ]
+                [ DD.input
+                    [ DA.klass_ "pf-v5-c-radio__input"
+                    , DA.xtype_ "radio"
+                    , DA.checked_ <<< show $ stream.stream == selectedStream
+                    , DA.disabled $ show <$> api.polls.streamActivePoll
+                    ]
+                    []
+                , DD.label [ DA.klass_ "pf-v5-c-radio__label" ] [ DC.text_ $ show stream.stream ]
+                ]
+          )
+
+  streamControlButtons =
+    DD.div [ DA.klass_ "pf-v5-c-form__group pf-m-action" ]
+      [ DD.div [ DA.klass_ "pf-v5-c-form__group-label" ]
+          [ DD.label [ DA.klass_ "pf-v5-c-form__label", DA.for_ "radio_form" ]
+              [ DD.div [ DA.klass_ "pf-v5-c-form__label-text" ]
+                  [ DC.text_ "Stream control" ]
+              ]
+          ]
+      , DD.div [ DA.klass_ "pf-v5-c-form__actions" ]
+          [ DD.button
+              [ DA.klass_ "pf-v5-c-button pf-m-primary"
+              , DA.disabled $ api.polls.streamActivePoll <#> if _ then "true" else ""
+              , DL.click_ $ \_ -> api.requests.modifyStream true
+              ]
+              [ DD.text_ "Start radio"
+              ]
+          , DD.button
+              [ DA.klass_ "pf-v5-c-button pf-m-primary"
+              , DA.disabled $ api.polls.streamActivePoll <#> if _ then "" else "true"
+              , DL.click_ $ \_ -> api.requests.modifyStream false
+              ]
+              [ DD.text_ "Stop radio" ]
+          ]
+      ]
