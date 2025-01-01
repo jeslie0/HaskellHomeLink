@@ -31,7 +31,9 @@ mkIslandSystemDataCard (IslandSystemData { island, systemData }) =
   descriptionList =
     DD.dl [ DA.klass_ "pf-v5-c-description-list pf-m-horizontal" ]
       [ dlistGroup "CPU Model Name" $ pure (unsafeCoerce systemData).cpuData.modelName
-      , dlistGroup "Container" $ pure $ show @Boolean $ (unsafeCoerce systemData).inDockerContainer
+      , dlistGroup "OS" $ pure (unsafeCoerce systemData).operatingSystemName
+      , dlistGroup "Architecture" $ pure (unsafeCoerce systemData).architecture
+      , dlistGroup "Container" <<< pure <<< show @Boolean $ (unsafeCoerce systemData).inDockerContainer
       ]
 
 systemPage :: SystemPageState -> Nut

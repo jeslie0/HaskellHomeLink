@@ -11,11 +11,10 @@ import Data.Traversable (traverse)
 import Proto.Messages as Proto
 import ProtoHelper (class FromMessage, class SayError, fromMessage, sayError, toEither)
 
-type CPUDataR = ( modelName :: String)
+type CPUDataR = (modelName :: String)
 newtype CPUData = CPUData (Record CPUDataR)
 
-data CPUDataError
-  = MissingModelName
+data CPUDataError = MissingModelName
 
 instance FromMessage Proto.CPUData CPUData CPUDataError where
   fromMessage (Proto.CPUData msg) = ado
@@ -25,24 +24,31 @@ instance FromMessage Proto.CPUData CPUData CPUDataError where
 instance SayError CPUDataError where
   sayError MissingModelName = pure "Model name is missing from CPUData"
 
-type SystemDataR = (cpuData :: CPUData, inDockerContainer :: Boolean)
+type SystemDataR = (cpuData :: CPUData, inDockerContainer :: Boolean, operatingSystemName :: String, architecture :: String)
 newtype SystemData = SystemData (Record SystemDataR)
+
 data SystemDataError
   = MissingCPUData
   | MissingPartOfCPUData CPUDataError
   | MissingInDockerContainer
+  | MissingOperatingSystemName
+  | MissingArchitecture
 
 instance FromMessage Proto.SystemData SystemData SystemDataError where
   fromMessage (Proto.SystemData msg) = do
+    let inDockerContainer = fromMaybe false msg.inDockerContainer
     cpuDataProt <- toEither MissingCPUData msg.cpuData
     cpuData <- lmap MissingPartOfCPUData $ fromMessage cpuDataProt
-    let inDockerContainer = fromMaybe false msg.inDockerContainer
-    pure $ SystemData { cpuData, inDockerContainer }
+    operatingSystemName <- toEither MissingOperatingSystemName msg.operatingSystemName
+    architecture <- toEither MissingArchitecture msg.architecture
+    pure $ SystemData { cpuData, inDockerContainer, operatingSystemName, architecture }
 
 instance SayError SystemDataError where
   sayError MissingCPUData = pure "SystemData is missing cpuData"
   sayError (MissingPartOfCPUData errs) = "SystemData is missing cpuData" : sayError errs
   sayError MissingInDockerContainer = pure "SystemData is missing inDockerContainer"
+  sayError MissingOperatingSystemName = pure "SystemData is missing operatingSystemName"
+  sayError MissingArchitecture = pure "SystemData is missing architecture"
 
 data Island
   = Home

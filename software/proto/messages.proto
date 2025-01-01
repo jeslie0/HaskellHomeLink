@@ -19,6 +19,8 @@ message CPUData {
 message SystemData {
   CPUData cpuData = 1;
   bool inDockerContainer = 2;
+  string operatingSystemName = 3;
+  string architecture = 4;
 }
 
 message IslandSystemData {
