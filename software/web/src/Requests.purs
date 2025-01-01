@@ -7,6 +7,7 @@ module Requests
 import Prelude
 
 import Constants (getApiUrl)
+import Data.Array as Array
 import Data.ArrayBuffer.Builder (execPutM)
 import Data.ArrayBuffer.DataView (byteLength, whole)
 import Data.Either (Either(..))
@@ -22,6 +23,7 @@ import Fetch (fetch)
 import Parsing (fail, runParserT)
 import Proto.Messages as Proto
 import ProtoHelper (fromMessage, sayError)
+import Radio (Stream, radioStreams)
 import System (IslandsSystemData)
 
 -- * Stream requests
@@ -49,13 +51,15 @@ fetchStreamStatus setStreamStatus setStreamStateId = do
     pure unit
 
 -- | Start or stop the audio stream.
-modifyStream :: Ref.Ref Int -> (Boolean -> Effect Unit) -> Boolean -> Effect Unit
-modifyStream ref setStreamStatus bool = do
+modifyStream :: Ref.Ref Int -> Ref.Ref Stream -> (Boolean -> Effect Unit) -> Boolean -> Effect Unit
+modifyStream ref streamRef setStreamStatus bool = do
   id <- Ref.read ref
+  stream <- Ref.read streamRef
+  let mRStream = Array.find (\rstream -> rstream.stream == stream) radioStreams
   apiUrl <- getApiUrl
   let
     requestUrl = apiUrl <> "radio/modify" <> "?stateId=" <> show id
-    body = Proto.mkModifyRadioRequest { start: Just bool }
+    body = Proto.mkModifyRadioRequest { start: Just bool, url: mRStream <#> _.url }
   bodyBuff <- execPutM $ Proto.putModifyRadioRequest body
   launchAff_ do
     _ <- fetch requestUrl
@@ -65,7 +69,6 @@ modifyStream ref setStreamStatus bool = do
       }
     pure unit
     liftEffect $ fetchStreamStatus setStreamStatus (\n -> Ref.write n ref)
-
 
 -- | Get the current system data
 fetchSystemsData :: (IslandsSystemData -> Effect Unit) -> Effect Unit

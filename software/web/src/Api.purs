@@ -8,6 +8,7 @@ import Effect (Effect)
 import Effect.Ref as Ref
 import Effect.Timer (setInterval)
 import FRP.Poll (Poll)
+import Radio (Stream(..))
 import Requests (fetchStreamStatus, fetchSystemsData, modifyStream)
 import System (IslandsSystemData(..))
 
@@ -15,8 +16,10 @@ type Api =
   { polls ::
       { systemsDataPoll :: Poll IslandsSystemData
       , streamActivePoll :: Poll Boolean
+      , selectedStreamPoll :: Poll Stream
       }
   , requests :: { modifyStream :: Boolean -> Effect Unit }
+  , setters :: { selectStream :: Stream -> Effect Unit }
   }
 
 mkApi :: Effect Api
@@ -24,6 +27,9 @@ mkApi = do
   -- Polls
   _ /\ setSystemsDataPoll /\ systemsDataPoll <- DE.useHot $ IslandsSystemData { allSystemData: [] }
   _ /\ setStreamActivePoll /\ streamActivePoll <- DE.useHot false
+
+  _ /\ setSelectedStreamPoll /\ selectedStreamPoll <- DE.useHot ClassicFM
+  selectedStreamRef <- Ref.new ClassicFM
 
   -- StateId Refs
   streamStateIdRef <- Ref.new 0
@@ -35,6 +41,7 @@ mkApi = do
   fetchSystemsData setSystemsDataPoll
 
   pure
-    { polls: { systemsDataPoll, streamActivePoll }
-    , requests: { modifyStream: modifyStream streamStateIdRef setStreamActivePoll }
+    { polls: { systemsDataPoll, streamActivePoll, selectedStreamPoll }
+    , requests: { modifyStream: modifyStream streamStateIdRef selectedStreamRef setStreamActivePoll }
+    , setters: { selectStream: \stream -> Ref.write stream selectedStreamRef >>= \_ -> setSelectedStreamPoll stream }
     }

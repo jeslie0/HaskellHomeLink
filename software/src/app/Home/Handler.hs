@@ -64,7 +64,7 @@ notifyProxyRadioStatus rtr island state =
 thread. If one exists, report the error.
 -}
 instance HomeHandler Proto.StartRadio where
-    homeHandler _ src _ = do
+    homeHandler _ src req = do
         env <- ask
         liftIO . void $
             readIORef (env ^. audioStreamRef) >>= \case
@@ -72,7 +72,7 @@ instance HomeHandler Proto.StartRadio where
                     putStrLn "Audio stream already exists"
                 Nothing -> do
                     forkFinally
-                        startAudioStream
+                        (startAudioStream (req ^. Proto.url))
                         ( \_ -> do
                             writeIORef (env ^. audioStreamRef) Nothing
                             void $ notifyProxyRadioStatus (env ^. router) src False

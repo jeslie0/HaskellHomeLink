@@ -54,15 +54,12 @@ import State (StateId)
 import qualified Proto.Messages_Fields as Proto
 import Lens.Micro ((^.), (&), (.~))
 import Data.ProtoLens (defMessage)
+import qualified Data.Text as T
 
 data StreamStatus
     = Inactive
     | Active
     deriving (Eq, Show)
-
-classicFMURL :: String
-classicFMURL =
-    "https://media-ice.musicradio.com/ClassicFMMP3"
 
 -- unsafeTLSSettings :: HTTP.ManagerSettings
 -- unsafeTLSSettings =
@@ -71,13 +68,13 @@ classicFMURL =
 --     tlsSettings = TLSSettingsSimple True False False
 
 -- | Start an audio stream and pass chunks of bytes into the callback handler.
-withAudioStream ::
+withAudioStream :: T.Text ->
     (Response BodyReader -> IO ())
     -- ^ Callback to use the bytes
     -> IO ()
-withAudioStream withBodyRsp = do
+withAudioStream url withBodyRsp = do
     manager <- HTTP.newManager HTTPS.tlsManagerSettings
-    let initialRequest = HTTP.parseRequest_ classicFMURL
+    let initialRequest = HTTP.parseRequest_ $ T.unpack url
         request = initialRequest {HTTP.method = "GET"}
     HTTP.withResponse request manager withBodyRsp `catch` \(e :: HTTP.HttpException) -> do
         putStrLn $ "An HTTP Exception occurred: " <> displayException e
@@ -173,13 +170,13 @@ computeFrameSize info =
         <$> getBitrateKPBS info
         <*> getHz info
 
-startAudioStream :: IO ()
-startAudioStream = do
+startAudioStream :: T.Text -> IO ()
+startAudioStream url = do
     mp3Dec <- newMP3Dec
     info <- newMP3DecFrameInfo
 
     allocaArray @Int16 maxSamplesPerFrame $ \pcmData ->
-        withAudioStream $ \rsp -> do
+        withAudioStream url $ \rsp -> do
             if HTTP.responseStatus rsp /= ok200
                 then
                     putStrLn "Bad status from response"

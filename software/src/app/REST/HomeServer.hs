@@ -22,9 +22,10 @@ import Servant (
 import ConnectionManager (Island (..))
 import Control.Concurrent (MVar, readMVar)
 import Control.Monad (void)
+import Data.Map.Strict qualified as Map
 import Envelope (toEnvelope)
 import Home.AudioStream (StreamStatus, streamStatusToprotoRadioStatusResponse)
-import Lens.Micro ((&), (^.))
+import Lens.Micro ((&), (.~), (^.))
 import Lens.Micro.TH (makeLenses)
 import Network.Wai.Application.Static (
     defaultWebAppSettings,
@@ -37,9 +38,8 @@ import ProtoHelper (toMessage)
 import Router (Router, trySendMessage)
 import Servant.Server (Application)
 import State (State, StateId, waitForStateUpdate, withState)
-import WaiAppStatic.Types (unsafeToPiece)
-import qualified Data.Map.Strict as Map
 import System (SystemData)
+import WaiAppStatic.Types (unsafeToPiece)
 
 data Env = Env
     { _streamStatusState :: State StreamStatus
@@ -74,7 +74,14 @@ handleModifyRadioRequest env req (Just stateId) = do
         void $
             if req ^. Proto.start
                 then do
-                    trySendMessage (env ^. router) Home (toEnvelope $ defMessage @Proto.StartRadio)
+                    trySendMessage
+                        (env ^. router)
+                        Home
+                        ( toEnvelope $
+                            defMessage @Proto.StartRadio
+                                & Proto.url
+                                .~ (req ^. Proto.url)
+                        )
                 else
                     trySendMessage (env ^. router) Home (toEnvelope $ defMessage @Proto.StopRadio)
     pure True
