@@ -34,7 +34,7 @@ type Radio =
            )
 
 type System =
-    "system" :> Get '[Proto] Proto.SystemDataMessage
+    "system" :> Get '[Proto] Proto.IslandsSystemData
 
 data RadioCommand = Start | Stop
 

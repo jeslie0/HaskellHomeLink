@@ -1,6 +1,7 @@
 module Requests
   ( fetchStreamStatus
   , modifyStream
+  , fetchSystemsData
   ) where
 
 import Prelude
@@ -20,6 +21,7 @@ import Effect.Ref as Ref
 import Fetch (fetch)
 import Parsing (fail, runParserT)
 import Proto.Messages as Proto
+import System (IslandsSystemData, fromMessage, sayError)
 
 -- * Stream requests
 
@@ -62,3 +64,23 @@ modifyStream ref setStreamStatus bool = do
       }
     pure unit
     liftEffect $ fetchStreamStatus setStreamStatus (\n -> Ref.write n ref)
+
+
+-- | Get the current system data
+fetchSystemsData :: (IslandsSystemData -> Effect Unit) -> Effect Unit
+fetchSystemsData update = do
+  apiUrl <- getApiUrl
+  let requestUrl = apiUrl <> "system"
+  launchAff_ do
+    { arrayBuffer } <- fetch requestUrl { method: GET }
+    body <- whole <$> arrayBuffer
+    result <- liftEffect $ runParserT body do
+      resp <- Proto.parseIslandsSystemData (byteLength body)
+      case fromMessage resp of
+        Left errs -> fail <<< show $ sayError errs
+        Right islandsData -> pure islandsData
+    case result of
+      Left err -> liftEffect $ Console.logShow err
+      Right islandsData -> do
+        liftEffect $ update islandsData
+    pure unit

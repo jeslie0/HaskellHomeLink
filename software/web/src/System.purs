@@ -6,11 +6,9 @@ import Data.Array (null, (:))
 import Data.Array as Array
 import Data.Bifunctor (lmap)
 import Data.Either (Either(..))
-import Data.Enum (class Enum, Cardinality(..), fromEnum, toEnum)
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Traversable (traverse)
 import Proto.Messages as Proto
-import Protobuf.Internal.Prelude (class BoundedEnum)
 
 toEither :: forall a b. b -> Maybe a -> Either b a
 toEither _ (Just a) = Right a
@@ -50,7 +48,7 @@ instance FromMessage Proto.SystemData SystemData SystemDataError where
   fromMessage (Proto.SystemData msg) = do
     cpuDataProt <- toEither MissingCPUData msg.cpuData
     cpuData <- lmap MissingPartOfCPUData $ fromMessage cpuDataProt
-    inDockerContainer <- toEither MissingInDockerContainer msg.inDockerContainer
+    let inDockerContainer = fromMaybe false msg.inDockerContainer
     pure $ SystemData { cpuData, inDockerContainer }
 
 instance SayError SystemDataError where
@@ -60,61 +58,46 @@ instance SayError SystemDataError where
 
 data Island
   = Home
-  | LocalProxy
+  | LocalHTTP
   | RemoteProxy
+
+data IslandError = InvalidIsland
 
 derive instance eqIsland :: Eq Island
 derive instance ordIsland :: Ord Island
 
 instance Show Island where
   show Home = "Home"
-  show LocalProxy = "Local Proxy"
+  show LocalHTTP = "Local Proxy"
   show RemoteProxy = "Remote Proxy"
 
-instance Enum Island where
-  succ Home = Just LocalProxy
-  succ LocalProxy = Just RemoteProxy
-  succ RemoteProxy = Nothing
+instance FromMessage Proto.ISLAND Island IslandError where
+  fromMessage Proto.ISLAND_HOME = Right Home
+  fromMessage Proto.ISLAND_LOCAL_HTTP = Right LocalHTTP
+  fromMessage Proto.ISLAND_REMOTE_PROXY = Right RemoteProxy
 
-  pred Home = Nothing
-  pred LocalProxy = Just Home
-  pred RemoteProxy = Just LocalProxy
-
-instance Bounded Island where
-  bottom = Home
-  top = RemoteProxy
-
-instance BoundedEnum Island where
-  cardinality = Cardinality 3
-
-  toEnum 1 = Just Home
-  toEnum 2 = Just LocalProxy
-  toEnum 3 = Just RemoteProxy
-  toEnum _ = Nothing
-
-  fromEnum Home = 1
-  fromEnum LocalProxy = 2
-  fromEnum RemoteProxy = 3
+instance SayError IslandError where
+  sayError InvalidIsland = pure "Island error: Invalid island"
 
 type IslandSystemDataR = (island :: Island, systemData :: SystemData)
 newtype IslandSystemData = IslandSystemData (Record IslandSystemDataR)
 data IslandSystemDataError
   = MissingIsland
-  | InvalidIsland
+  | SystemDataInvalidIsland IslandError
   | MissingSystemData
   | MissingPartOfSystemData SystemDataError
 
 instance FromMessage Proto.IslandSystemData IslandSystemData IslandSystemDataError where
   fromMessage (Proto.IslandSystemData msg) = do
-    island' <- toEither MissingIsland msg.island
-    island <- toEither InvalidIsland $ toEnum (fromEnum island')
+    let island' = fromMaybe Proto.ISLAND_HOME msg.island
+    island <- lmap SystemDataInvalidIsland $ fromMessage island'
     systemDataProt <- toEither MissingSystemData msg.systemData
     systemData <- lmap MissingPartOfSystemData $ fromMessage systemDataProt
     pure $ IslandSystemData { systemData, island }
 
 instance SayError IslandSystemDataError where
   sayError MissingIsland = pure "IslandSystemData is missing island"
-  sayError InvalidIsland = pure "IslandSystemData has invalid island"
+  sayError (SystemDataInvalidIsland err) = "IslandSystemData has invalid island" : sayError err
   sayError MissingSystemData = pure "IslandSystemData is missing systemData"
   sayError (MissingPartOfSystemData err) = "IslandSystemData has invalid systemData" : sayError err
 

@@ -6,7 +6,7 @@ package proto;
 
 enum ISLAND {
   HOME = 0;
-  LOCAL_PROXY = 1;
+  LOCAL_HTTP = 1;
   REMOTE_PROXY = 2;
 }
 
@@ -74,14 +74,10 @@ message GetRadioStatusResponse {
   int32 stateId = 2;
 }
 
-message SystemDataMessage {
-  repeated IslandSystemData islandSystemData = 1;
-}
-
 message ProxyEnvelope {
   oneof payload {
     ModifyRadioResponse m1 = 1;
     GetRadioStatusResponse m2 = 2;
-    SystemDataMessage m3 = 3;
+    IslandSystemData m3 = 3;
   }
 }

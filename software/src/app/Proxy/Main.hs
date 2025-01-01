@@ -18,16 +18,18 @@ import Proxy.Env (
     mkEnv,
     router,
     streamStatusState,
-    systemDataState,
+    systemMap,
  )
 import Proxy.Handler (ExProxyHandler (..), proxyHandler)
 import REST.HomeServer qualified as HTTP
 import Router (Router, connectionsManager)
 import State (State)
 import Threads (killAsyncComputation, spawnAsyncComputation)
+import System (SystemData)
+import qualified Data.Map.Strict as Map
 
 httpServer ::
-    State StreamStatus -> MVar Proto.SystemDataMessage -> Router -> IO ()
+    State StreamStatus -> MVar (Map.Map Island SystemData) -> Router -> IO ()
 httpServer state systemData rtr = do
     env <- HTTP.mkEnv state systemData rtr
     HTTP.runApp env
@@ -37,7 +39,7 @@ proxyMain island = do
     bracket (mkEnv island) cleanupEnv $ \env ->
         bracket
             ( spawnAsyncComputation $
-                httpServer (env ^. streamStatusState) (env ^. systemDataState) (env ^. router)
+                httpServer (env ^. streamStatusState) (env ^. systemMap) (env ^. router)
             )
             killAsyncComputation
             $ \_async ->

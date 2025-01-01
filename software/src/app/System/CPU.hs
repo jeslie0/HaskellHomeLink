@@ -59,7 +59,7 @@ parseKeyValuePairFile filePath desiredKeys = do
 data CPUData = CPUData
     { _vendor :: T.Text
     , _modelName :: T.Text
-    }
+    } deriving (Show, Eq)
 
 $(makeLenses ''CPUData)
 

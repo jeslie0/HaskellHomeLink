@@ -8,7 +8,7 @@ import Effect (Effect)
 import Effect.Ref as Ref
 import Effect.Timer (setInterval)
 import FRP.Poll (Poll)
-import Requests (fetchStreamStatus, modifyStream)
+import Requests (fetchStreamStatus, fetchSystemsData, modifyStream)
 import System (IslandsSystemData(..))
 
 type Api =
@@ -31,6 +31,8 @@ mkApi = do
   -- Pollers
   fetchStreamStatus setStreamActivePoll (\n -> Ref.write n streamStateIdRef)
   _ <- setInterval 2000 $ fetchStreamStatus setStreamActivePoll (\n -> Ref.write n streamStateIdRef)
+
+  fetchSystemsData setSystemsDataPoll
 
   pure
     { polls: { systemsDataPoll, streamActivePoll }

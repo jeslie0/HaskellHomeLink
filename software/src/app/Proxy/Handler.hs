@@ -9,14 +9,16 @@ import ConnectionManager (Island (..))
 import Control.Concurrent (modifyMVar_)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Reader (ask)
+import Data.Map.Strict qualified as Map
 import EventLoop (EventLoop)
 import Home.AudioStream (StreamStatus (..))
 import Lens.Micro ((^.))
 import Proto.Messages qualified as Proto
 import Proto.Messages_Fields qualified as Proto
-import ProtoHelper (protoRadioStatusResponseToStreamStatus)
-import Proxy.Env (EnvT, streamStatusState, systemDataState)
+import ProtoHelper (FromMessage (..), protoRadioStatusResponseToStreamStatus)
+import Proxy.Env (EnvT, streamStatusState, systemMap)
 import State (fulfilPromise)
+import System (messageToSystemData)
 import TH (makeInstance)
 
 class ProxyHandler msg where
@@ -58,7 +60,12 @@ instance ProxyHandler Proto.GetRadioStatusResponse where
                 (protoRadioStatusResponseToStreamStatus resp)
                 (env ^. streamStatusState)
 
-instance ProxyHandler Proto.SystemDataMessage where
+instance ProxyHandler Proto.IslandSystemData where
     proxyHandler _ _ resp = do
         env <- ask
-        liftIO $ modifyMVar_ (env ^. systemDataState) $ \_ -> pure resp
+        liftIO $ modifyMVar_ (env ^. systemMap) $ \sysMap -> do
+            case fromMessage $ resp ^. Proto.island of
+                Left errs -> print errs >> pure sysMap
+                Right islnd ->
+                    let sysData = messageToSystemData $ resp ^. Proto.systemData
+                     in pure $ Map.insert islnd sysData sysMap

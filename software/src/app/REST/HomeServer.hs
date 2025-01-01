@@ -33,22 +33,24 @@ import Network.Wai.Application.Static (
  )
 import Proto.Messages qualified as Proto
 import Proto.Messages_Fields qualified as Proto
-import ProtoHelper (streamStatusToprotoRadioStatusResponse)
+import ProtoHelper (streamStatusToprotoRadioStatusResponse, toMessage)
 import Router (Router, trySendMessage)
 import Servant.Server (Application)
 import State (State, StateId, waitForStateUpdate, withState)
 import WaiAppStatic.Types (unsafeToPiece)
+import qualified Data.Map.Strict as Map
+import System (SystemData)
 
 data Env = Env
     { _streamStatusState :: State StreamStatus
-    , _systemDataState :: MVar Proto.SystemDataMessage
+    , _systemDataState :: MVar (Map.Map Island SystemData)
     , _router :: Router
     }
 
 $(makeLenses ''Env)
 
 mkEnv ::
-    State StreamStatus -> MVar Proto.SystemDataMessage -> Router -> IO Env
+    State StreamStatus -> MVar (Map.Map Island SystemData) -> Router -> IO Env
 mkEnv streamStatus systemState rtr = do
     pure $
         Env
@@ -77,9 +79,12 @@ handleModifyRadioRequest env req (Just stateId) = do
                     trySendMessage (env ^. router) Home (toEnvelope $ defMessage @Proto.StopRadio)
     pure True
 
-handleGetSystemDataRequest :: Env -> Handler Proto.SystemDataMessage
+handleGetSystemDataRequest :: Env -> Handler Proto.IslandsSystemData
 handleGetSystemDataRequest env = do
-    liftIO $ readMVar (env ^. systemDataState)
+    liftIO $ print "SYS DATA "
+    sysMap <- liftIO $ readMVar (env ^. systemDataState)
+    liftIO $ print sysMap
+    pure . toMessage $ sysMap
 
 -- * Server
 server :: Env -> Server Api
