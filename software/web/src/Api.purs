@@ -30,18 +30,19 @@ mkApi = do
 
   _ /\ setSelectedStreamPoll /\ selectedStreamPoll <- DE.useHot ClassicFM
   selectedStreamRef <- Ref.new ClassicFM
+  let selectStream stream = Ref.write stream selectedStreamRef >>= \_ -> setSelectedStreamPoll stream
 
   -- StateId Refs
   streamStateIdRef <- Ref.new 0
 
   -- Pollers
-  fetchStreamStatus setStreamActivePoll (\n -> Ref.write n streamStateIdRef)
-  _ <- setInterval 2000 $ fetchStreamStatus setStreamActivePoll (\n -> Ref.write n streamStateIdRef)
+  fetchStreamStatus setStreamActivePoll (\n -> Ref.write n streamStateIdRef) selectStream
+  _ <- setInterval 2000 $ fetchStreamStatus setStreamActivePoll (\n -> Ref.write n streamStateIdRef) selectStream
 
   fetchSystemsData setSystemsDataPoll
 
   pure
     { polls: { systemsDataPoll, streamActivePoll, selectedStreamPoll }
-    , requests: { modifyStream: modifyStream streamStateIdRef selectedStreamRef setStreamActivePoll }
-    , setters: { selectStream: \stream -> Ref.write stream selectedStreamRef >>= \_ -> setSelectedStreamPoll stream }
+    , requests: { modifyStream: modifyStream streamStateIdRef selectedStreamRef setStreamActivePoll selectStream }
+    , setters: { selectStream: selectStream }
     }

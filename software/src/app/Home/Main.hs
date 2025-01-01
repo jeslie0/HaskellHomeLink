@@ -42,6 +42,6 @@ main = do
 
     cleanupEnv env = do
         mAudioStream <- readIORef (env ^. audioStreamRef)
-        for_ mAudioStream killThread
+        for_ mAudioStream $ \(thread, _) -> killThread thread
         writeIORef (env ^. audioStreamRef) Nothing
         killConnections (env ^. (router . connectionsManager))

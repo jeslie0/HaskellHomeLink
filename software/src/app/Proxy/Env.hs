@@ -36,7 +36,7 @@ type EnvT = ReaderT Env IO
 mkEnv :: Island -> IO Env
 mkEnv island = do
     _router <- mkRouter island
-    _streamStatusState <- mkState Inactive
+    _streamStatusState <- mkState (StreamStatus Nothing)
     _httpServerMVar <- newEmptyMVar
     _systemMap <- do
         mHomeSystemData <- mkSystemData

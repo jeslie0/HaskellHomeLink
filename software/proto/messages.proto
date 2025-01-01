@@ -11,6 +11,15 @@ enum ISLAND {
   UNKNOWN = 3;
 }
 
+enum STREAM {
+  CLASSIC_FM = 0;
+  CLASSIC_FM_CALM = 1;
+  CLASSIC_FM_MOVIES = 2;
+  RADIO_X_CLASSIC_ROCK = 3;
+  LBC = 4;
+  UNKNOWN_STREAM = 5;
+}
+
 message CPUData {
   string vendor = 1;
   string modelName = 2;
@@ -36,6 +45,7 @@ message IslandsSystemData {
 
 message StartRadio {
   string url = 1;
+  STREAM newStream = 3;
 }
 
 message StopRadio {
@@ -61,11 +71,12 @@ message HomeEnvelope {
 message ModifyRadioRequest {
   bool start = 1;
   string url = 2;
+  STREAM newStream = 3;
 }
 
 // Sent to HTTP Server
 message ModifyRadioResponse {
-  bool mrfRadioOn = 1;
+  optional STREAM newStream = 1;
 }
 
 // Received from HTTP Server.
@@ -75,8 +86,8 @@ message GetRadioStatusRequest {
 
 // Sent to HTTP Server
 message GetRadioStatusResponse {
-  bool radioOn = 1;
-  int32 stateId = 2;
+  int32 stateId = 1;
+  optional STREAM currentStream = 2;
 }
 
 message ProxyEnvelope {

@@ -1,7 +1,6 @@
 module Main (main) where
 
 import Api (mkApi)
-import Data.Tuple (Tuple(..))
 import Data.Tuple.Nested ((/\))
 import Deku.Control as DC
 import Deku.Core (Nut)
@@ -9,16 +8,13 @@ import Deku.DOM as DD
 import Deku.DOM.Attributes (klass, klass_, role_) as DA
 import Deku.DOM.Listeners as DL
 import Deku.Do as Deku
-import Deku.Effect as DE
 import Deku.Hooks ((<#~>))
 import Deku.Hooks as DH
 import Deku.Toplevel (runInBody)
 import Effect (Effect)
 import Effect.Console as Console
-import Effect.Ref as Ref
-import Effect.Timer (setInterval)
 import FRP.Poll (Poll)
-import Pages (ApplicationsPageState, OverviewPageState, Page(..), SystemPageState, applicationsPage, initialApplicationsPageState, overviewPage, pageList, systemPage)
+import Pages (OverviewPageState, Page(..), SystemPageState, overviewPage, pageList, systemPage)
 import Prelude (Unit, bind, discard, pure, show, unit, ($), (<#>), (<>), (==))
 
 main :: Effect Unit

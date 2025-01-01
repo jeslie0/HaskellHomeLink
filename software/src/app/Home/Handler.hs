@@ -23,11 +23,12 @@ import Data.ProtoLens (defMessage)
 import Data.Text qualified as T
 import Envelope (ToProxyEnvelope (..))
 import EventLoop (EventLoop, addMsg)
-import Home.AudioStream (startAudioStream)
+import Home.AudioStream (StreamStatus (..), startAudioStream)
 import Home.Env (EnvT, addRemoteProxyConnection, audioStreamRef, router)
 import Lens.Micro
 import Proto.Messages qualified as Proto
 import Proto.Messages_Fields qualified as Proto
+import ProtoHelper (FromMessage (..), ToMessage (..))
 import Router (Router, trySendMessage)
 import TH (makeInstance)
 
@@ -50,14 +51,14 @@ $( makeInstance
     ''Proto.HomeEnvelope'Payload
  )
 
-notifyProxyRadioStatus :: Router -> Island -> Bool -> IO Bool
-notifyProxyRadioStatus rtr island state =
+notifyProxyRadioStatus :: Router -> Island -> StreamStatus -> IO Bool
+notifyProxyRadioStatus rtr island (StreamStatus state) =
     trySendMessage
         rtr
         island
         ( toProxyEnvelope $
             defMessage @Proto.ModifyRadioResponse
-                & (Proto.mrfRadioOn .~ state)
+                & (Proto.maybe'newStream .~ (toMessage <$> state))
         )
 
 {- | Try to make a new asynchronous audio stream in a separate
@@ -71,15 +72,23 @@ instance HomeHandler Proto.StartRadio where
                 Just _ -> do
                     putStrLn "Audio stream already exists"
                 Nothing -> do
-                    forkFinally
-                        (startAudioStream (req ^. Proto.url))
-                        ( \_ -> do
-                            writeIORef (env ^. audioStreamRef) Nothing
-                            void $ notifyProxyRadioStatus (env ^. router) src False
+                    threadId <-
+                        forkFinally
+                            (startAudioStream (req ^. Proto.url))
+                            ( \_ -> do
+                                writeIORef (env ^. audioStreamRef) Nothing
+                                void $ notifyProxyRadioStatus (env ^. router) src (StreamStatus Nothing)
+                            )
+                    writeIORef
+                        (env ^. audioStreamRef)
+                        ( Just (threadId, fromMessage $ req ^. Proto.newStream)
                         )
-                        >>= writeIORef (env ^. audioStreamRef) . Just
 
-        void . liftIO $ notifyProxyRadioStatus (env ^. router) src True
+        void . liftIO $
+            notifyProxyRadioStatus
+                (env ^. router)
+                src
+                (StreamStatus . Just . fromMessage $ req ^. Proto.newStream)
 
 -- | Stop playing an audio stream if one is playing.
 instance HomeHandler Proto.StopRadio where
@@ -89,11 +98,12 @@ instance HomeHandler Proto.StopRadio where
             readIORef (env ^. audioStreamRef) >>= \case
                 Nothing -> do
                     putStrLn "Radio not playing"
-                Just asyncStream -> do
-                    killThread asyncStream
+                Just (threadId, _) -> do
+                    killThread threadId
                     writeIORef (env ^. audioStreamRef) Nothing
 
-        void . liftIO $ notifyProxyRadioStatus (env ^. router) src False
+        void . liftIO $
+            notifyProxyRadioStatus (env ^. router) src (StreamStatus Nothing)
 
 -- | Spawn a new thread and try to connect to the given TCP server.
 instance HomeHandler Proto.ConnectTCP where

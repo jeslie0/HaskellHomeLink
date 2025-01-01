@@ -81,6 +81,8 @@ handleModifyRadioRequest env req (Just stateId) = do
                             defMessage @Proto.StartRadio
                                 & Proto.url
                                 .~ (req ^. Proto.url)
+                                & Proto.newStream
+                                .~ (req ^. Proto.newStream)
                         )
                 else
                     trySendMessage (env ^. router) Home (toEnvelope $ defMessage @Proto.StopRadio)

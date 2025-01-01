@@ -48,7 +48,7 @@ instance ProxyHandler Proto.ModifyRadioResponse where
         env <- ask
         liftIO $
             fulfilPromise
-                (if resp ^. Proto.mrfRadioOn then Active else Inactive)
+                (StreamStatus (fromMessage <$> resp ^. Proto.maybe'newStream))
                 (env ^. streamStatusState)
 
 {- | Received acknowledgement from Home for ModifyRadioRequest. Update

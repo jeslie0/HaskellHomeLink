@@ -20,10 +20,11 @@ import Lens.Micro.TH (makeLenses)
 import Msg (Msg)
 import Network.Socket (HostName, ServiceName)
 import Router (Router, connectionsManager, handleBytes, mkRouter)
+import Home.AudioStream (Stream)
 
 data Env = Env
     { _router :: Router
-    , _audioStreamRef :: IORef (Maybe ThreadId)
+    , _audioStreamRef :: IORef (Maybe (ThreadId, Stream))
     }
 
 $(makeLenses ''Env)

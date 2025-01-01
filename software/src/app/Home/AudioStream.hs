@@ -1,6 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Home.AudioStream (StreamStatus (..), startAudioStream, streamStatusToprotoRadioStatusResponse, protoRadioStatusResponseToStreamStatus) where
+module Home.AudioStream (
+    StreamStatus (..),
+    startAudioStream,
+    streamStatusToprotoRadioStatusResponse,
+    protoRadioStatusResponseToStreamStatus,
+    Stream(..)
+) where
 
 import Alsa.PCM.Handle (
     DeviceMode (PCMBlocking),
@@ -29,9 +35,12 @@ import Control.Exception (Exception (..), bracket, catch)
 import Control.Monad (void)
 import Data.ByteString qualified as BS
 import Data.ByteString.Internal qualified as BS
+import Data.ProtoLens (defMessage)
+import Data.Text qualified as T
 import Foreign (Int16, Ptr, Word8, allocaArray, withForeignPtr)
 import Foreign.C (Errno (..))
 import Foreign.Ptr (plusPtr)
+import Lens.Micro ((&), (.~), (^.))
 import Minimp3 (
     MP3Dec,
     MP3DecFrameInfo,
@@ -48,18 +57,47 @@ import Network.HTTP.Client (BodyReader, Response)
 import Network.HTTP.Client qualified as HTTP
 import Network.HTTP.Client.TLS qualified as HTTPS
 import Network.HTTP.Types.Status (ok200)
-import System.Timeout (timeout)
-import qualified Proto.Messages as Proto
+import Proto.Messages qualified as Proto
+import Proto.Messages_Fields qualified as Proto
+import ProtoHelper (FromMessage (fromMessage), ToMessage (toMessage))
 import State (StateId)
-import qualified Proto.Messages_Fields as Proto
-import Lens.Micro ((^.), (&), (.~))
-import Data.ProtoLens (defMessage)
-import qualified Data.Text as T
+import System.Timeout (timeout)
 
-data StreamStatus
-    = Inactive
-    | Active
+newtype StreamStatus = StreamStatus (Maybe Stream)
     deriving (Eq, Show)
+
+data Stream
+    = ClassicFM
+    | ClassicFMCalm
+    | ClassicFMMovies
+    | RadioXClassicRock
+    | LBC
+    | Unknown
+    deriving (Eq)
+
+instance Show Stream where
+    show ClassicFM = "Classic FM"
+    show ClassicFMCalm = "Classic FM Calm"
+    show ClassicFMMovies = "Classic FM Movies"
+    show RadioXClassicRock = "Radio X Classic Rock"
+    show LBC = "LBC"
+    show Unknown = "unknown radio station"
+
+instance FromMessage Proto.STREAM Stream where
+    fromMessage Proto.CLASSIC_FM = ClassicFM
+    fromMessage Proto.CLASSIC_FM_CALM = ClassicFMCalm
+    fromMessage Proto.CLASSIC_FM_MOVIES = ClassicFMMovies
+    fromMessage Proto.RADIO_X_CLASSIC_ROCK = RadioXClassicRock
+    fromMessage Proto.LBC = LBC
+    fromMessage _ = Unknown
+
+instance ToMessage Proto.STREAM Stream where
+    toMessage ClassicFM = Proto.CLASSIC_FM
+    toMessage ClassicFMCalm = Proto.CLASSIC_FM_CALM
+    toMessage ClassicFMMovies = Proto.CLASSIC_FM_MOVIES
+    toMessage RadioXClassicRock = Proto.RADIO_X_CLASSIC_ROCK
+    toMessage LBC = Proto.LBC
+    toMessage Unknown = Proto.UNKNOWN_STREAM
 
 -- unsafeTLSSettings :: HTTP.ManagerSettings
 -- unsafeTLSSettings =
@@ -68,8 +106,9 @@ data StreamStatus
 --     tlsSettings = TLSSettingsSimple True False False
 
 -- | Start an audio stream and pass chunks of bytes into the callback handler.
-withAudioStream :: T.Text ->
-    (Response BodyReader -> IO ())
+withAudioStream ::
+    T.Text
+    -> (Response BodyReader -> IO ())
     -- ^ Callback to use the bytes
     -> IO ()
 withAudioStream url withBodyRsp = do
@@ -199,24 +238,24 @@ startAudioStream url = do
     go !bodyReader !handle !mp3Dec !info !pcmData !leftoverBytes = do
         mNewBytes <- timeout (1000000 * 5) $ HTTP.brRead bodyReader
         case mNewBytes of
-          Nothing -> pure ()
-          Just newBytes -> do
-            if BS.length newBytes == 0
-            then putStrLn "Stream over"
-            else do
-                let !mp3Data@(BS.BS !frnPtr !mp3Len) = BS.append leftoverBytes newBytes
-                !eRemainingBytes <- withForeignPtr frnPtr $ \mp3Ptr -> do
-                    eLeftOverAmount <- readFramesAndPlay handle mp3Dec info (mp3Ptr, mp3Len) pcmData
-                    case eLeftOverAmount of
-                        Left err -> do
-                            putStrLn "Underflow occurred"
-                            void $ recoverPCM handle err False
-                            pure . Right $ mp3Data
-                        Right leftOverAmount -> pure . Right $ BS.takeEnd leftOverAmount mp3Data
-                case eRemainingBytes of
-                    Left _ -> pure ()
-                    Right remainingBytes ->
-                        go bodyReader handle mp3Dec info pcmData remainingBytes
+            Nothing -> pure ()
+            Just newBytes -> do
+                if BS.length newBytes == 0
+                    then putStrLn "Stream over"
+                    else do
+                        let !mp3Data@(BS.BS !frnPtr !mp3Len) = BS.append leftoverBytes newBytes
+                        !eRemainingBytes <- withForeignPtr frnPtr $ \mp3Ptr -> do
+                            eLeftOverAmount <- readFramesAndPlay handle mp3Dec info (mp3Ptr, mp3Len) pcmData
+                            case eLeftOverAmount of
+                                Left err -> do
+                                    putStrLn "Underflow occurred"
+                                    void $ recoverPCM handle err False
+                                    pure . Right $ mp3Data
+                                Right leftOverAmount -> pure . Right $ BS.takeEnd leftOverAmount mp3Data
+                        case eRemainingBytes of
+                            Left _ -> pure ()
+                            Right remainingBytes ->
+                                go bodyReader handle mp3Dec info pcmData remainingBytes
 
 makePCMHandleFromBytes ::
     MP3Dec -> MP3DecFrameInfo -> BS.ByteString -> Ptr Int16 -> IO PCMHandle
@@ -230,15 +269,12 @@ makePCMHandleFromBytes mp3Dec info (BS.BS frnPtr mp3Len) pcmData = do
 protoRadioStatusResponseToStreamStatus ::
     Proto.GetRadioStatusResponse -> StreamStatus
 protoRadioStatusResponseToStreamStatus resp =
-    if resp ^. Proto.radioOn then Active else Inactive
+    StreamStatus $ fromMessage <$> resp ^. Proto.maybe'currentStream
 
 streamStatusToprotoRadioStatusResponse ::
     StateId -> StreamStatus -> Proto.GetRadioStatusResponse
-streamStatusToprotoRadioStatusResponse statusId status =
+streamStatusToprotoRadioStatusResponse statusId (StreamStatus status) =
     defMessage
-        & Proto.radioOn
-        .~ ( case status of
-                Active -> True
-                Inactive -> False
-           )
+        & Proto.maybe'currentStream
+        .~ (toMessage <$> status)
         & (Proto.stateId .~ statusId)
