@@ -8,6 +8,7 @@ enum ISLAND {
   HOME = 0;
   LOCAL_HTTP = 1;
   REMOTE_PROXY = 2;
+  UNKNOWN = 3;
 }
 
 message CPUData {

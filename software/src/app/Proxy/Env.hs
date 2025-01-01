@@ -41,7 +41,7 @@ mkEnv island = do
     _systemMap <- do
         mHomeSystemData <- mkSystemData
         mp <- case mHomeSystemData of
-            Nothing -> pure Map.empty
+            Nothing -> putStrLn "Could not extract cpuinfo" >> pure Map.empty
             Just homeSystemData -> pure $ Map.insert Home homeSystemData Map.empty
         newMVar mp
     pure $

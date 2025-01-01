@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Home.AudioStream (StreamStatus (..), startAudioStream) where
+module Home.AudioStream (StreamStatus (..), startAudioStream, streamStatusToprotoRadioStatusResponse, protoRadioStatusResponseToStreamStatus) where
 
 import Alsa.PCM.Handle (
     DeviceMode (PCMBlocking),
@@ -49,6 +49,11 @@ import Network.HTTP.Client qualified as HTTP
 import Network.HTTP.Client.TLS qualified as HTTPS
 import Network.HTTP.Types.Status (ok200)
 import System.Timeout (timeout)
+import qualified Proto.Messages as Proto
+import State (StateId)
+import qualified Proto.Messages_Fields as Proto
+import Lens.Micro ((^.), (&), (.~))
+import Data.ProtoLens (defMessage)
 
 data StreamStatus
     = Inactive
@@ -224,3 +229,19 @@ makePCMHandleFromBytes mp3Dec info (BS.BS frnPtr mp3Len) pcmData = do
         freq <- getHz info
         chans <- getChannels info
         makeAudioHandle (SR freq) (Channels chans)
+
+protoRadioStatusResponseToStreamStatus ::
+    Proto.GetRadioStatusResponse -> StreamStatus
+protoRadioStatusResponseToStreamStatus resp =
+    if resp ^. Proto.radioOn then Active else Inactive
+
+streamStatusToprotoRadioStatusResponse ::
+    StateId -> StreamStatus -> Proto.GetRadioStatusResponse
+streamStatusToprotoRadioStatusResponse statusId status =
+    defMessage
+        & Proto.radioOn
+        .~ ( case status of
+                Active -> True
+                Inactive -> False
+           )
+        & (Proto.stateId .~ statusId)

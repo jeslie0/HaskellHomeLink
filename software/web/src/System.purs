@@ -6,35 +6,23 @@ import Data.Array (null, (:))
 import Data.Array as Array
 import Data.Bifunctor (lmap)
 import Data.Either (Either(..))
-import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Maybe (fromMaybe)
 import Data.Traversable (traverse)
 import Proto.Messages as Proto
+import ProtoHelper (class FromMessage, class SayError, fromMessage, sayError, toEither)
 
-toEither :: forall a b. b -> Maybe a -> Either b a
-toEither _ (Just a) = Right a
-toEither b _ = Left b
-
-class FromMessage msg type_ err | msg -> err where
-  fromMessage :: msg -> Either err type_
-
-class SayError err where
-  sayError :: err -> Array String
-
-type CPUDataR = (vendor :: String, modelName :: String)
+type CPUDataR = ( modelName :: String)
 newtype CPUData = CPUData (Record CPUDataR)
 
 data CPUDataError
-  = MissingVendor
-  | MissingModelName
+  = MissingModelName
 
 instance FromMessage Proto.CPUData CPUData CPUDataError where
   fromMessage (Proto.CPUData msg) = ado
-    vendor <- toEither MissingVendor msg.vendor
-    modelName <- toEither MissingModelName msg.vendor
-    in CPUData { vendor, modelName }
+    modelName <- toEither MissingModelName msg.modelName
+    in CPUData { modelName }
 
 instance SayError CPUDataError where
-  sayError MissingVendor = pure "Vendor is missing from CPUData"
   sayError MissingModelName = pure "Model name is missing from CPUData"
 
 type SystemDataR = (cpuData :: CPUData, inDockerContainer :: Boolean)
@@ -60,6 +48,7 @@ data Island
   = Home
   | LocalHTTP
   | RemoteProxy
+  | UnknownIsland
 
 data IslandError = InvalidIsland
 
@@ -70,11 +59,13 @@ instance Show Island where
   show Home = "Home"
   show LocalHTTP = "Local Proxy"
   show RemoteProxy = "Remote Proxy"
+  show UnknownIsland = "Unknown"
 
 instance FromMessage Proto.ISLAND Island IslandError where
   fromMessage Proto.ISLAND_HOME = Right Home
   fromMessage Proto.ISLAND_LOCAL_HTTP = Right LocalHTTP
   fromMessage Proto.ISLAND_REMOTE_PROXY = Right RemoteProxy
+  fromMessage Proto.ISLAND_UNKNOWN = Right UnknownIsland
 
 instance SayError IslandError where
   sayError InvalidIsland = pure "Island error: Invalid island"

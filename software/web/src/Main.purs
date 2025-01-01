@@ -1,5 +1,4 @@
-module Main where
-
+module Main (main) where
 
 import Api (mkApi)
 import Data.Tuple (Tuple(..))
@@ -56,7 +55,7 @@ pageBody pagePoll states =
 
             _ -> systemPage states.systemPageState
 
-            -- Applications -> applicationsPage states.applicationsPageState
+        -- Applications -> applicationsPage states.applicationsPageState
         ]
     ]
 
@@ -71,7 +70,7 @@ dekuApp = do
   api <- mkApi
 
   pure Deku.do
-    setPage /\page <- DH.useState Overview
+    setPage /\ page <- DH.useState Overview
     let
       changePage newPage = do
         Console.logShow newPage
@@ -79,5 +78,5 @@ dekuApp = do
 
     DD.div [ DA.klass_ "pf-v5-c-page" ]
       [ header page changePage
-      , pageBody page { overviewPageState: {api}, systemPageState: {api} }
+      , pageBody page { overviewPageState: { api }, systemPageState: { api } }
       ]

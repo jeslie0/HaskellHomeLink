@@ -23,7 +23,7 @@ import ConnectionManager (Island (..))
 import Control.Concurrent (MVar, readMVar)
 import Control.Monad (void)
 import Envelope (toEnvelope)
-import Home.AudioStream (StreamStatus)
+import Home.AudioStream (StreamStatus, streamStatusToprotoRadioStatusResponse)
 import Lens.Micro ((&), (^.))
 import Lens.Micro.TH (makeLenses)
 import Network.Wai.Application.Static (
@@ -33,7 +33,7 @@ import Network.Wai.Application.Static (
  )
 import Proto.Messages qualified as Proto
 import Proto.Messages_Fields qualified as Proto
-import ProtoHelper (streamStatusToprotoRadioStatusResponse, toMessage)
+import ProtoHelper (toMessage)
 import Router (Router, trySendMessage)
 import Servant.Server (Application)
 import State (State, StateId, waitForStateUpdate, withState)
@@ -81,9 +81,7 @@ handleModifyRadioRequest env req (Just stateId) = do
 
 handleGetSystemDataRequest :: Env -> Handler Proto.IslandsSystemData
 handleGetSystemDataRequest env = do
-    liftIO $ print "SYS DATA "
     sysMap <- liftIO $ readMVar (env ^. systemDataState)
-    liftIO $ print sysMap
     pure . toMessage $ sysMap
 
 -- * Server

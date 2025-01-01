@@ -5,8 +5,6 @@ module System (
     cpuData,
     mkSystemData,
     inDockerContainer,
-    systemDataToMessage,
-    messageToSystemData,
 ) where
 
 import Control.Monad.IO.Class (MonadIO (liftIO))
@@ -16,30 +14,32 @@ import Lens.Micro ((&), (.~), (^.))
 import Lens.Micro.TH (makeLenses)
 import Proto.Messages qualified as Proto
 import Proto.Messages_Fields qualified as Proto
-import System.CPU (CPUData, cpuDataToMessage, getCPUData, messageToCPUData)
+import ProtoHelper (FromMessage (fromMessage), ToMessage, toMessage)
+import System.CPU (CPUData, getCPUData)
 import System.Directory (doesFileExist)
 
 data SystemData = SystemData
     { _cpuData :: CPUData
     , _inDockerContainer :: Bool
-    } deriving (Show, Eq)
+    }
+    deriving (Show, Eq)
 
 $(makeLenses ''SystemData)
 
-systemDataToMessage :: SystemData -> Proto.SystemData
-systemDataToMessage (SystemData cpuData inDockerContainer) =
-    defMessage
-        & Proto.cpuData
-        .~ cpuDataToMessage cpuData
-        & Proto.inDockerContainer
-        .~ inDockerContainer
+instance ToMessage Proto.SystemData SystemData where
+    toMessage (SystemData cpuData' inDockerContainer') =
+        defMessage
+            & Proto.cpuData
+            .~ toMessage cpuData'
+            & Proto.inDockerContainer
+            .~ inDockerContainer'
 
-messageToSystemData :: Proto.SystemData -> SystemData
-messageToSystemData systemDataMessage =
-    SystemData
-        { _cpuData = messageToCPUData $ systemDataMessage ^. Proto.cpuData
-        , _inDockerContainer = systemDataMessage ^. Proto.inDockerContainer
-        }
+instance FromMessage Proto.SystemData SystemData where
+    fromMessage systemDataMessage =
+        SystemData
+            { _cpuData = fromMessage $ systemDataMessage ^. Proto.cpuData
+            , _inDockerContainer = systemDataMessage ^. Proto.inDockerContainer
+            }
 
 isInDockerContainer :: IO Bool
 isInDockerContainer = do

@@ -38,17 +38,51 @@ import Data.Serialize (
 import Data.Serialize.Put (runPut)
 import GHC.Generics (Generic)
 import Network.Socket
+import Proto.Messages qualified as Proto
+import ProtoHelper (FromMessage (..), ToMessage (..))
 import Socket (sendAll)
+import System (SystemData)
+import Data.ProtoLens (defMessage)
+import qualified Proto.Messages_Fields as Proto
+import Lens.Micro ((&), (.~))
 
 data Island
     = Home
     | RemoteProxy
     | LocalHTTP
+    | Unknown
     deriving (Generic, Eq, Ord, Enum, Show)
+
+instance FromMessage Proto.ISLAND Island where
+    fromMessage Proto.HOME = Home
+    fromMessage Proto.LOCAL_HTTP = LocalHTTP
+    fromMessage Proto.REMOTE_PROXY = RemoteProxy
+    fromMessage _ = Unknown
+
+instance ToMessage Proto.ISLAND Island where
+    toMessage Home = Proto.HOME
+    toMessage LocalHTTP = Proto.LOCAL_HTTP
+    toMessage RemoteProxy = Proto.REMOTE_PROXY
+    toMessage Unknown = Proto.UNKNOWN
+
+instance ToMessage Proto.IslandsSystemData (Map.Map Island SystemData) where
+    toMessage mp =
+        defMessage
+            & Proto.allSystemData
+            .~ ( Map.toList mp
+                    & fmap
+                        ( \(island, sysData) ->
+                            defMessage
+                                & Proto.island
+                                .~ toMessage island
+                                & Proto.systemData
+                                .~ toMessage sysData
+                        )
+               )
 
 islands :: [Island]
 islands =
-  [Home, RemoteProxy, LocalHTTP]
+    [Home, RemoteProxy, LocalHTTP]
 
 instance Serialize Island where
     get = do

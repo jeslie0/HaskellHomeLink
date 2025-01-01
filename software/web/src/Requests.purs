@@ -21,7 +21,8 @@ import Effect.Ref as Ref
 import Fetch (fetch)
 import Parsing (fail, runParserT)
 import Proto.Messages as Proto
-import System (IslandsSystemData, fromMessage, sayError)
+import ProtoHelper (fromMessage, sayError)
+import System (IslandsSystemData)
 
 -- * Stream requests
 

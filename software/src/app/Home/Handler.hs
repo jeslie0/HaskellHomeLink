@@ -18,8 +18,7 @@ import Control.Monad (void)
 import Control.Monad.Reader
 import Data.Bifunctor (second)
 import Data.Foldable (forM_)
-import Data.IORef (modifyIORef, readIORef, writeIORef)
-import Data.Map.Strict qualified as Map
+import Data.IORef (readIORef, writeIORef)
 import Data.ProtoLens (defMessage)
 import Data.Text qualified as T
 import Envelope (ToProxyEnvelope (..))
@@ -30,7 +29,6 @@ import Lens.Micro
 import Proto.Messages qualified as Proto
 import Proto.Messages_Fields qualified as Proto
 import Router (Router, trySendMessage)
-import System (messageToSystemData, systemDataToMessage)
 import TH (makeInstance)
 
 class HomeHandler msg where

@@ -1,7 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module System.CPU (CPUData, vendor, modelName, getCPUData, cpuDataToMessage, messageToCPUData) where
+module System.CPU (
+    CPUData (..),
+    CPUDataError (..),
+    modelName,
+    getCPUData,
+) where
 
 import Control.Applicative ((<|>))
 import Data.Attoparsec.Text
@@ -13,8 +18,9 @@ import Lens.Micro ((&), (.~), (^.))
 import Lens.Micro.TH (makeLenses)
 import Proto.Messages qualified as Proto
 import Proto.Messages_Fields qualified as Proto
+import ProtoHelper (FromMessage (..), ToMessage (..))
 
--- Type for key-value pairs
+-- Types for key-value pairs
 type Key = T.Text
 type Value = T.Text
 type KeyValuePair = (Key, Value)
@@ -56,33 +62,32 @@ parseKeyValuePairFile filePath desiredKeys = do
         Left _ -> pure Nothing
         Right kvMap -> pure $ Just kvMap
 
-data CPUData = CPUData
-    { _vendor :: T.Text
-    , _modelName :: T.Text
-    } deriving (Show, Eq)
+newtype CPUData = CPUData
+    { _modelName :: T.Text
+    }
+    deriving (Show, Eq)
 
 $(makeLenses ''CPUData)
 
-cpuDataToMessage :: CPUData -> Proto.CPUData
-cpuDataToMessage (CPUData vendor' modelName') =
-    defMessage
-        & Proto.vendor
-        .~ vendor'
-        & Proto.modelName
-        .~ modelName'
+data CPUDataError = NoModelName
 
-messageToCPUData :: Proto.CPUData -> CPUData
-messageToCPUData cpuDataMessage =
-    CPUData
-        { _vendor = cpuDataMessage ^. Proto.vendor
-        , _modelName = cpuDataMessage ^. Proto.modelName
-        }
+instance ToMessage Proto.CPUData CPUData where
+    toMessage cpuData =
+        defMessage
+            & Proto.modelName
+            .~ (cpuData ^. modelName)
+
+instance FromMessage Proto.CPUData CPUData where
+    fromMessage msg = do
+        CPUData
+            { _modelName = msg ^. Proto.modelName
+            }
 
 getCPUData :: IO (Maybe CPUData)
 getCPUData = do
-    mMap <- parseKeyValuePairFile "/proc/cpuinfo" ["model name", "vendor_id"]
+    mMap <- parseKeyValuePairFile "/proc/cpuinfo" ["model name"]
     case mMap of
         Nothing -> putStrLn "Couldn't get cpuinfo" >> pure Nothing
         Just cpuDataMap -> do
             pure $
-                CPUData <$> cpuDataMap Map.!? "model name" <*> cpuDataMap Map.!? "vendor_id"
+                CPUData <$> cpuDataMap Map.!? "model name"
