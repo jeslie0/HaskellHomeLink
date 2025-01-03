@@ -6,12 +6,12 @@ import ConnectionManager (
  )
 import Control.Concurrent (forkIO, killThread)
 import Control.Exception (bracket)
-import Control.Monad (void)
 import Control.Monad.Reader
 import Data.Bifunctor (second)
 import Data.Foldable (for_)
 import Data.IORef (readIORef, writeIORef)
 import EventLoop (addMsg, mkEventLoop, run)
+import Home.AudioStream (StreamStatus (Off))
 import Home.Env (
     Env,
     addLocalHTTPServerConnection,
@@ -27,9 +27,9 @@ import Router (connectionsManager)
 
 main :: IO ()
 main = do
-    void $ forkIO (proxyMain LocalHTTP)
-    bracket mkEnv cleanupEnv $ \env ->
-        runReaderT (action env) env
+    bracket (forkIO (proxyMain LocalHTTP)) killThread $ \_ ->
+        bracket mkEnv cleanupEnv $ \env ->
+            runReaderT (action env) env
   where
     action :: Env -> ReaderT Env IO ()
     action env = do
@@ -41,7 +41,7 @@ main = do
         run loop $ \evloop b -> uncurry (homeHandler evloop) b
 
     cleanupEnv env = do
-        mAudioStream <- readIORef (env ^. audioStreamRef)
-        for_ mAudioStream $ \(thread, _) -> killThread thread
-        writeIORef (env ^. audioStreamRef) Nothing
+        (mThread, _, _) <- readIORef (env ^. audioStreamRef)
+        for_ mThread killThread
+        writeIORef (env ^. audioStreamRef) (Nothing, Off, 0)
         killConnections (env ^. (router . connectionsManager))

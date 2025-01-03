@@ -24,7 +24,7 @@ import Control.Concurrent (MVar, readMVar)
 import Control.Monad (void)
 import Data.Map.Strict qualified as Map
 import Envelope (toEnvelope)
-import Home.AudioStream (StreamStatus, streamStatusToprotoRadioStatusResponse)
+import Home.AudioStream (StreamId, StreamStatus)
 import Lens.Micro ((&), (.~), (^.))
 import Lens.Micro.TH (makeLenses)
 import Network.Wai.Application.Static (
@@ -42,7 +42,7 @@ import System (SystemData)
 import WaiAppStatic.Types (unsafeToPiece)
 
 data Env = Env
-    { _streamStatusState :: State StreamStatus
+    { _streamStatusState :: State (StreamStatus, StreamId)
     , _systemDataState :: MVar (Map.Map Island SystemData)
     , _router :: Router
     }
@@ -50,7 +50,10 @@ data Env = Env
 $(makeLenses ''Env)
 
 mkEnv ::
-    State StreamStatus -> MVar (Map.Map Island SystemData) -> Router -> IO Env
+    State (StreamStatus, StreamId)
+    -> MVar (Map.Map Island SystemData)
+    -> Router
+    -> IO Env
 mkEnv streamStatus systemState rtr = do
     pure $
         Env
@@ -63,8 +66,15 @@ mkEnv streamStatus systemState rtr = do
 
 handleGetRadioStatus :: Env -> Handler Proto.GetRadioStatusResponse
 handleGetRadioStatus env = do
-    liftIO $ withState (env ^. streamStatusState) $ \stateId state ->
-        pure $ streamStatusToprotoRadioStatusResponse stateId state
+    liftIO $ withState (env ^. streamStatusState) $ \stateId (status, stationId) ->
+        pure $
+            defMessage
+                & Proto.stateId
+                .~ stateId
+                & Proto.status
+                .~ toMessage status
+                & Proto.currentStationId
+                .~ stationId
 
 handleModifyRadioRequest ::
     Env -> Proto.ModifyRadioRequest -> Maybe StateId -> Handler Bool
@@ -72,20 +82,10 @@ handleModifyRadioRequest _ _ Nothing = pure False
 handleModifyRadioRequest env req (Just stateId) = do
     void . liftIO $ waitForStateUpdate (env ^. streamStatusState) stateId $ \_ _ -> do
         void $
-            if req ^. Proto.start
-                then do
-                    trySendMessage
-                        (env ^. router)
-                        Home
-                        ( toEnvelope $
-                            defMessage @Proto.StartRadio
-                                & Proto.url
-                                .~ (req ^. Proto.url)
-                                & Proto.newStream
-                                .~ (req ^. Proto.newStream)
-                        )
-                else
-                    trySendMessage (env ^. router) Home (toEnvelope $ defMessage @Proto.StopRadio)
+            trySendMessage
+                (env ^. router)
+                Home
+                (toEnvelope req)
     pure True
 
 handleGetSystemDataRequest :: Env -> Handler Proto.IslandsSystemData

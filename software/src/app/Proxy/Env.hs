@@ -15,7 +15,7 @@ import ConnectionManager (Island (..), initTCPServerConnection)
 import Control.Concurrent (MVar, newEmptyMVar, newMVar)
 import Control.Monad.Reader (ReaderT)
 import Data.Map.Strict qualified as Map
-import Home.AudioStream (StreamStatus (..))
+import Home.AudioStream (StreamStatus (..), StreamId)
 import Lens.Micro ((^.))
 import Lens.Micro.TH (makeLenses)
 import Msg (Msg)
@@ -25,7 +25,7 @@ import System (SystemData, mkSystemData)
 
 data Env = Env
     { _router :: Router
-    , _streamStatusState :: State StreamStatus
+    , _streamStatusState :: State (StreamStatus, StreamId)
     , _systemMap :: MVar (Map.Map Island SystemData)
     }
 
@@ -36,7 +36,7 @@ type EnvT = ReaderT Env IO
 mkEnv :: Island -> IO Env
 mkEnv island = do
     _router <- mkRouter island
-    _streamStatusState <- mkState (StreamStatus Nothing)
+    _streamStatusState <- mkState (Off, 0)
     _httpServerMVar <- newEmptyMVar
     _systemMap <- do
         mHomeSystemData <- mkSystemData

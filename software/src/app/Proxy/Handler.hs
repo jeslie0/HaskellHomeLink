@@ -11,10 +11,6 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Reader (ask)
 import Data.Map.Strict qualified as Map
 import EventLoop (EventLoop)
-import Home.AudioStream (
-    StreamStatus (..),
-    protoRadioStatusResponseToStreamStatus,
- )
 import Lens.Micro ((^.))
 import Proto.Messages qualified as Proto
 import Proto.Messages_Fields qualified as Proto
@@ -43,12 +39,12 @@ $( makeInstance
  )
 
 -- | Received acknowledgement from Home for ModifyRadioRequest
-instance ProxyHandler Proto.ModifyRadioResponse where
+instance ProxyHandler Proto.RadioStatusUpdate where
     proxyHandler _ _ resp = do
         env <- ask
         liftIO $
             fulfilPromise
-                (StreamStatus (fromMessage <$> resp ^. Proto.maybe'newStream))
+                (fromMessage $ resp ^. Proto.status, resp ^. Proto.currentStationId)
                 (env ^. streamStatusState)
 
 {- | Received acknowledgement from Home for ModifyRadioRequest. Update
@@ -59,7 +55,7 @@ instance ProxyHandler Proto.GetRadioStatusResponse where
         env <- ask
         liftIO $
             fulfilPromise
-                (protoRadioStatusResponseToStreamStatus resp)
+                (fromMessage $ resp ^. Proto.status, resp ^. Proto.currentStationId)
                 (env ^. streamStatusState)
 
 instance ProxyHandler Proto.IslandSystemData where

@@ -20,11 +20,11 @@ import Lens.Micro.TH (makeLenses)
 import Msg (Msg)
 import Network.Socket (HostName, ServiceName)
 import Router (Router, connectionsManager, handleBytes, mkRouter)
-import Home.AudioStream (Stream)
+import Home.AudioStream (StreamStatus (..), StreamId)
 
 data Env = Env
     { _router :: Router
-    , _audioStreamRef :: IORef (Maybe (ThreadId, Stream))
+    , _audioStreamRef :: IORef (Maybe ThreadId , StreamStatus, StreamId)
     }
 
 $(makeLenses ''Env)
@@ -33,7 +33,7 @@ type EnvT = ReaderT Env IO
 
 mkEnv :: IO Env
 mkEnv = do
-    _audioStreamRef <- newIORef Nothing
+    _audioStreamRef <- newIORef (Nothing, Off, 0)
     _router <- mkRouter Home
     pure $
         Env

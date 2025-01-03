@@ -11,13 +11,10 @@ enum ISLAND {
   UNKNOWN = 3;
 }
 
-enum STREAM {
-  CLASSIC_FM = 0;
-  CLASSIC_FM_CALM = 1;
-  CLASSIC_FM_MOVIES = 2;
-  RADIO_X_CLASSIC_ROCK = 3;
-  LBC = 4;
-  UNKNOWN_STREAM = 5;
+enum STREAM_STATUS {
+  OFF = 0;
+  INITIATED = 1;
+  PLAYING = 2;
 }
 
 message CPUData {
@@ -41,15 +38,23 @@ message IslandsSystemData {
   repeated IslandSystemData allSystemData = 1;
 }
 
-// * Home Received Msgs
-
-message StartRadio {
+message RadioStation {
   string url = 1;
-  STREAM newStream = 3;
+  uint32 id = 2;
 }
 
-message StopRadio {
+// Received from HTTP Server.
+message ModifyRadioRequest {
+  optional RadioStation station = 1;
+
 }
+
+message RadioStatusUpdate {
+  STREAM_STATUS status = 1;
+  uint32 currentStationId = 2;
+}
+
+// * Home Received Msgs
 
 message ConnectTCP {
   string host = 1;
@@ -58,26 +63,13 @@ message ConnectTCP {
 
 message HomeEnvelope {
   oneof payload {
-    StartRadio m1 = 1;
-    StopRadio m2 = 2;
-    ConnectTCP m3 = 3;
-    SystemData m4 = 4;
+    ModifyRadioRequest m1 = 1;
+    ConnectTCP m2 = 2;
+    SystemData m3 = 3;
   }
 }
 
 // * Proxy Received Msgs
-
-// Received from HTTP Server.
-message ModifyRadioRequest {
-  bool start = 1;
-  string url = 2;
-  STREAM newStream = 3;
-}
-
-// Sent to HTTP Server
-message ModifyRadioResponse {
-  optional STREAM newStream = 1;
-}
 
 // Received from HTTP Server.
 message GetRadioStatusRequest {
@@ -87,12 +79,13 @@ message GetRadioStatusRequest {
 // Sent to HTTP Server
 message GetRadioStatusResponse {
   int32 stateId = 1;
-  optional STREAM currentStream = 2;
+  STREAM_STATUS status = 2;
+  uint32 currentStationId = 3;
 }
 
 message ProxyEnvelope {
   oneof payload {
-    ModifyRadioResponse m1 = 1;
+    RadioStatusUpdate m1 = 1;
     GetRadioStatusResponse m2 = 2;
     IslandSystemData m3 = 3;
   }

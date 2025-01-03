@@ -3,9 +3,7 @@
 module Home.AudioStream (
     StreamStatus (..),
     startAudioStream,
-    streamStatusToprotoRadioStatusResponse,
-    protoRadioStatusResponseToStreamStatus,
-    Stream(..)
+    StreamId
 ) where
 
 import Alsa.PCM.Handle (
@@ -35,12 +33,10 @@ import Control.Exception (Exception (..), bracket, catch)
 import Control.Monad (void)
 import Data.ByteString qualified as BS
 import Data.ByteString.Internal qualified as BS
-import Data.ProtoLens (defMessage)
 import Data.Text qualified as T
 import Foreign (Int16, Ptr, Word8, allocaArray, withForeignPtr)
 import Foreign.C (Errno (..))
 import Foreign.Ptr (plusPtr)
-import Lens.Micro ((&), (.~), (^.))
 import Minimp3 (
     MP3Dec,
     MP3DecFrameInfo,
@@ -58,46 +54,25 @@ import Network.HTTP.Client qualified as HTTP
 import Network.HTTP.Client.TLS qualified as HTTPS
 import Network.HTTP.Types.Status (ok200)
 import Proto.Messages qualified as Proto
-import Proto.Messages_Fields qualified as Proto
 import ProtoHelper (FromMessage (fromMessage), ToMessage (toMessage))
-import State (StateId)
 import System.Timeout (timeout)
+import Data.Word (Word32)
 
-newtype StreamStatus = StreamStatus (Maybe Stream)
-    deriving (Eq, Show)
+type StreamId = Word32
 
-data Stream
-    = ClassicFM
-    | ClassicFMCalm
-    | ClassicFMMovies
-    | RadioXClassicRock
-    | LBC
-    | Unknown
+data StreamStatus = Off | Initiated | Playing
     deriving (Eq)
 
-instance Show Stream where
-    show ClassicFM = "Classic FM"
-    show ClassicFMCalm = "Classic FM Calm"
-    show ClassicFMMovies = "Classic FM Movies"
-    show RadioXClassicRock = "Radio X Classic Rock"
-    show LBC = "LBC"
-    show Unknown = "unknown radio station"
+instance FromMessage Proto.STREAM_STATUS StreamStatus where
+    fromMessage Proto.OFF = Off
+    fromMessage Proto.INITIATED = Initiated
+    fromMessage Proto.PLAYING = Playing
+    fromMessage _ = Off
 
-instance FromMessage Proto.STREAM Stream where
-    fromMessage Proto.CLASSIC_FM = ClassicFM
-    fromMessage Proto.CLASSIC_FM_CALM = ClassicFMCalm
-    fromMessage Proto.CLASSIC_FM_MOVIES = ClassicFMMovies
-    fromMessage Proto.RADIO_X_CLASSIC_ROCK = RadioXClassicRock
-    fromMessage Proto.LBC = LBC
-    fromMessage _ = Unknown
-
-instance ToMessage Proto.STREAM Stream where
-    toMessage ClassicFM = Proto.CLASSIC_FM
-    toMessage ClassicFMCalm = Proto.CLASSIC_FM_CALM
-    toMessage ClassicFMMovies = Proto.CLASSIC_FM_MOVIES
-    toMessage RadioXClassicRock = Proto.RADIO_X_CLASSIC_ROCK
-    toMessage LBC = Proto.LBC
-    toMessage Unknown = Proto.UNKNOWN_STREAM
+instance ToMessage Proto.STREAM_STATUS StreamStatus where
+    toMessage Off = Proto.OFF
+    toMessage Initiated = Proto.INITIATED
+    toMessage Playing = Proto.PLAYING
 
 -- unsafeTLSSettings :: HTTP.ManagerSettings
 -- unsafeTLSSettings =
@@ -209,8 +184,12 @@ computeFrameSize info =
         <$> getBitrateKPBS info
         <*> getHz info
 
-startAudioStream :: T.Text -> IO ()
-startAudioStream url = do
+type URL = T.Text
+
+startAudioStream :: URL -> (StreamStatus -> IO ()) -> IO ()
+startAudioStream url updateStreamStatus = do
+    updateStreamStatus Initiated
+
     mp3Dec <- newMP3Dec
     info <- newMP3DecFrameInfo
 
@@ -225,7 +204,11 @@ startAudioStream url = do
                     bracket
                         (makePCMHandleFromBytes mp3Dec info chunk pcmData)
                         dropDevice
-                        $ \handle -> go bodyReader handle mp3Dec info pcmData ""
+                        $ \handle -> do
+                            updateStreamStatus Playing
+                            go bodyReader handle mp3Dec info pcmData ""
+
+    updateStreamStatus Off
   where
     go ::
         BodyReader
@@ -265,16 +248,3 @@ makePCMHandleFromBytes mp3Dec info (BS.BS frnPtr mp3Len) pcmData = do
         freq <- getHz info
         chans <- getChannels info
         makeAudioHandle (SR freq) (Channels chans)
-
-protoRadioStatusResponseToStreamStatus ::
-    Proto.GetRadioStatusResponse -> StreamStatus
-protoRadioStatusResponseToStreamStatus resp =
-    StreamStatus $ fromMessage <$> resp ^. Proto.maybe'currentStream
-
-streamStatusToprotoRadioStatusResponse ::
-    StateId -> StreamStatus -> Proto.GetRadioStatusResponse
-streamStatusToprotoRadioStatusResponse statusId (StreamStatus status) =
-    defMessage
-        & Proto.maybe'currentStream
-        .~ (toMessage <$> status)
-        & (Proto.stateId .~ statusId)
