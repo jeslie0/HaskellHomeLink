@@ -103,25 +103,15 @@ instance HomeHandler Proto.ModifyRadioRequest where
                 liftIO
                     . atomicModifyIORef'
                         (env ^. audioStreamRef)
-                    $ \st -> (st, ())
-                             & _1 . _1 ?~ threadId
-                             & _1 . _3 .~ (station ^. Proto.id)
+                    $ \st ->
+                        (st, ())
+                            & _1
+                            . _1
+                            ?~ threadId
+                            & _1
+                            . _3
+                            .~ (station ^. Proto.id)
         void . liftIO $ notify
-
--- -- | Stop playing an audio stream if one is playing.
--- instance HomeHandler Proto.StopRadio where
---     homeHandler _ src _ = do
---         env <- ask
---         liftIO . void $
---             readIORef (env ^. audioStreamRef) >>= \case
---                 Nothing -> do
---                     putStrLn "Radio not playing"
---                 Just (threadId, _) -> do
---                     killThread threadId
---                     writeIORef (env ^. audioStreamRef) Nothing
-
---         void . liftIO $
---             notifyProxyRadioStatus (env ^. router) src (StreamStatus Nothing)
 
 -- | Spawn a new thread and try to connect to the given TCP server.
 instance HomeHandler Proto.ConnectTCP where

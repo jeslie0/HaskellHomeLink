@@ -9,6 +9,8 @@ import Deku.Core (Nut)
 import Deku.DOM as DD
 import Deku.DOM.Attributes as DA
 import Deku.DOM.Listeners as DL
+import Deku.DOM.SVG as DS
+import Deku.DOM.SVG.Attributes as DSA
 import Deku.Hooks ((<#~>))
 import Radio (StreamStatus(..), radioStreams)
 import Web.Event.Event (preventDefault)
@@ -23,7 +25,27 @@ overviewPage { api } = do
         [ DD.div [ DA.klass_ "pf-v5-c-card pf-m-display-lg pf-m-full-height" ]
             [ DD.div [ DA.klass_ "pf-v5-c-card__title" ]
                 [ DD.h2 [ DA.klass_ "pf-v5-c-card__title-text" ]
-                    [ DC.text_ "Radio" ]
+                    [ DC.text_ "Radio"
+                    , api.polls.streamStatusPoll <#~>
+                        case _ of
+                          Initiated -> DD.div [ DA.style_ "float: right;" ]
+                            [ DS.svg
+                                [ DA.klass_ "pf-v5-c-spinner pf-m-md"
+                                , DA.role_ "progressbar"
+                                , DSA.viewBox_ "0 0 100 100"
+                                ]
+                                [ DS.circle
+                                    [ DA.klass_ "pf-v5-c-spinner__path"
+                                    , DSA.cx_ "50"
+                                    , DSA.cy_ "50"
+                                    , DSA.r_ "45"
+                                    , DSA.fill_ "none"
+                                    ]
+                                    []
+                                ]
+                            ]
+                          _ -> DD.div [] []
+                    ]
                 ]
             , DD.div [ DA.klass_ "pf-v5-c-card__body" ]
                 [ radioCardBody ]
@@ -67,7 +89,7 @@ overviewPage { api } = do
                 , DL.click $ api.polls.streamStatusPoll <#>
                     case _ of
                       Off ->
-                          \_ -> api.setters.selectStream stream.stream
+                        \_ -> api.setters.selectStream stream.stream
                       _ -> \_ -> pure unit
                 ]
                 [ DD.input
@@ -75,8 +97,8 @@ overviewPage { api } = do
                     , DA.xtype_ "radio"
                     , DA.checked_ <<< show $ stream.stream == selectedStream
                     , DA.disabled $ api.polls.streamStatusPoll <#> case _ of
-                      Off -> "false"
-                      _ -> "true"
+                        Off -> "false"
+                        _ -> "true"
                     ]
                     []
                 , DD.label [ DA.klass_ "pf-v5-c-radio__label" ] [ DC.text_ $ show stream.stream ]
@@ -95,9 +117,9 @@ overviewPage { api } = do
           [ DD.button
               [ DA.klass_ "pf-v5-c-button pf-m-primary"
               , DA.disabled $ api.polls.streamStatusPoll <#> case _ of
-                    Off -> "false"
-                    Initiated -> "true"
-                    Playing -> "true"
+                  Off -> "false"
+                  Initiated -> "true"
+                  Playing -> "true"
               , DL.click $ api.polls.selectedStreamPoll <#> \selectedStream ->
                   \_ -> api.requests.modifyStream $ Just selectedStream
               ]
@@ -106,9 +128,9 @@ overviewPage { api } = do
           , DD.button
               [ DA.klass_ "pf-v5-c-button pf-m-primary"
               , DA.disabled $ api.polls.streamStatusPoll <#> case _ of
-                    Off -> "true"
-                    Initiated -> "true"
-                    Playing -> "false"
+                  Off -> "true"
+                  Initiated -> "true"
+                  Playing -> "false"
               , DL.click_ $ \_ -> api.requests.modifyStream $ Nothing
               ]
               [ DD.text_ "Stop radio" ]
