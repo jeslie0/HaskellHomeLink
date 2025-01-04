@@ -19,13 +19,16 @@ renderDiskCapacity freeSpaceGB totalSpaceGB = show freeSpaceGB <> " / " <> show 
 
 mkIslandSystemDataCard :: IslandSystemData -> Nut
 mkIslandSystemDataCard (IslandSystemData { island, systemData }) =
-  DD.div [ DA.klass_ "pf-v5-c-card pf-m-full-height" ]
-    [ DD.div [ DA.klass_ "pf-v5-c-card__title" ]
-        [ DD.h1 [ DA.klass_ "pf-v5-c-card__title-text" ]
-            [ DC.text_ $ show island ]
+  DD.div [ DA.klass_ "pf-v5-l-grid__item" ]
+
+    [ DD.div [ DA.klass_ "pf-v5-c-card pf-m-display-lg pf-m-full-height" ]
+        [ DD.div [ DA.klass_ "pf-v5-c-card__title" ]
+            [ DD.h1 [ DA.klass_ "pf-v5-c-card__title-text" ]
+                [ DC.text_ $ show island ]
+            ]
+        , DD.div [ DA.klass_ "pf-v5-c-card__body" ]
+            [ descriptionList ]
         ]
-    , DD.div [ DA.klass_ "pf-v5-c-card__body" ]
-        [ descriptionList ]
     ]
   where
   descriptionList =
@@ -39,4 +42,6 @@ mkIslandSystemDataCard (IslandSystemData { island, systemData }) =
 systemPage :: SystemPageState -> Nut
 systemPage { api } =
   api.polls.systemsDataPoll <#~> \(IslandsSystemData { allSystemData }) ->
-    gallery $ mkIslandSystemDataCard <$> allSystemData
+    DD.div
+      [ DA.klass_ "pf-v5-l-grid pf-m-gutter pf-m-all-3-col-on-lg pf-m-all-6-col-on-md" ] $
+       mkIslandSystemDataCard <$> allSystemData
