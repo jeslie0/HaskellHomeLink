@@ -24,7 +24,7 @@ import Control.Concurrent (MVar, readMVar)
 import Control.Monad (void)
 import Data.Map.Strict qualified as Map
 import Envelope (toEnvelope)
-import Home.AudioStream (StreamId, StreamStatus)
+import Home.AudioStream (StationId, StreamStatus)
 import Lens.Micro ((&), (.~), (^.))
 import Lens.Micro.TH (makeLenses)
 import Network.Wai.Application.Static (
@@ -42,7 +42,7 @@ import System (SystemData)
 import WaiAppStatic.Types (unsafeToPiece)
 
 data Env = Env
-    { _streamStatusState :: State (StreamStatus, StreamId)
+    { _streamStatusState :: State (StreamStatus, StationId)
     , _systemDataState :: MVar (Map.Map Island SystemData)
     , _router :: Router
     }
@@ -50,7 +50,7 @@ data Env = Env
 $(makeLenses ''Env)
 
 mkEnv ::
-    State (StreamStatus, StreamId)
+    State (StreamStatus, StationId)
     -> MVar (Map.Map Island SystemData)
     -> Router
     -> IO Env

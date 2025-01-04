@@ -23,7 +23,7 @@ import Data.ProtoLens (defMessage)
 import Data.Text qualified as T
 import Envelope (ToProxyEnvelope (..))
 import EventLoop (EventLoop, addMsg)
-import Home.AudioStream (StreamId, StreamStatus (..), startAudioStream)
+import Home.AudioStream (StationId, StreamStatus (..), startAudioStream)
 import Home.Env (EnvT, addRemoteProxyConnection, audioStreamRef, router)
 import Lens.Micro ((&), (.~), (?~), (^.), _1, _2, _3)
 import Proto.Messages qualified as Proto
@@ -52,8 +52,8 @@ $( makeInstance
  )
 
 notifyProxyRadioStatus ::
-    Router -> Island -> StreamStatus -> StreamId -> IO Bool
-notifyProxyRadioStatus rtr island status streamId =
+    Router -> Island -> StreamStatus -> StationId -> IO Bool
+notifyProxyRadioStatus rtr island status stationId =
     trySendMessage
         rtr
         island
@@ -62,7 +62,7 @@ notifyProxyRadioStatus rtr island status streamId =
                 & Proto.status
                 .~ toMessage status
                 & Proto.currentStationId
-                .~ streamId
+                .~ stationId
         )
 
 {- | Try to make a new asynchronous audio stream in a separate

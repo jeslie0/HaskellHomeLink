@@ -9,7 +9,7 @@ import Control.Exception (bracket)
 import Control.Monad.Reader
 import Data.Bifunctor (second)
 import EventLoop (addMsg, mkEventLoop, run)
-import Home.AudioStream (StreamStatus, StreamId)
+import Home.AudioStream (StreamStatus, StationId)
 import Lens.Micro
 import Proto.Messages qualified as Proto
 import Proxy.Env (
@@ -29,7 +29,7 @@ import System (SystemData)
 import qualified Data.Map.Strict as Map
 
 httpServer ::
-    State (StreamStatus, StreamId) -> MVar (Map.Map Island SystemData) -> Router -> IO ()
+    State (StreamStatus, StationId) -> MVar (Map.Map Island SystemData) -> Router -> IO ()
 httpServer state systemData rtr = do
     env <- HTTP.mkEnv state systemData rtr
     HTTP.runApp env

@@ -3,7 +3,7 @@
 module Home.AudioStream (
     StreamStatus (..),
     startAudioStream,
-    StreamId
+    StationId
 ) where
 
 import Alsa.PCM.Handle (
@@ -58,7 +58,7 @@ import ProtoHelper (FromMessage (fromMessage), ToMessage (toMessage))
 import System.Timeout (timeout)
 import Data.Word (Word32)
 
-type StreamId = Word32
+type StationId = Word32
 
 data StreamStatus = Off | Initiated | Playing
     deriving (Eq)
