@@ -5,7 +5,8 @@
 #+author: James Leslie
 #+TODO: TODO IN-PROGRESS WAITING ONGOING POSTPONED | DONE CANCELLED
 
-* [0/5] Tasks
+* [2/5] Tasks
+
 
 ** ONGOING Create detailed design documentation
 :PROPERTIES:
@@ -14,7 +15,7 @@
 :END:
 I need to create a document explaining how the pieces of this project work. Realistically, this will be a constantly updated document and will never be "finished".
 
-** TODO Implement a Message dispatcher
+** CANCELLED Implement a Message dispatcher
 :PROPERTIES:
 :type:     task
 :component: backend
@@ -24,7 +25,7 @@ Some kind of data type needs to manage the connections and routing of messages. 
 
 I think that the Home island will be the core island that everything talks to directly, bar the proxy. The Home island will serve up some data to the frontend, but also send that data to the proxy.
 
-** TODO Make all events have a source
+** DONE Make all events have a source
 This should make replying to an event a bit easier to manage.
 ** WAITING Implement client TLS connection controller
 :PROPERTIES:
@@ -39,16 +40,22 @@ This will depend on completing a basic TCP connection first, since that is simpl
 
 A basic TCP client has been implemented. It needs to be refined. It should try to connect to the given destination every 2 seconds, and then keep trying to reconnect when there is a connection break.
 
-** TODO Rework Nix structure
+** ONGOING Rework Nix structure
 :PROPERTIES:
 :type:     packaging
 :END:
 Currently, the nix structure of this project is a real mess. This should be tidied up and organised.
 
-* [0/0] Bugs
+**** TODO Add memory usage information to system page
+:PROPERTIES:
+:type:     task
+:END:
+It would be use to see how much memory each device is using. This should be shown on the system page as chart.
+Each island should report it's memory usage to home, which will the notify all of the proxies. Each proxy will store up to a certain time period of data, which is sent to the web for viewing.
+* [1/1] Bugs
 
 
-** TODO Fix audio deadlock issue
+** DONE Fix audio deadlock issue
 :PROPERTIES:
 :type:     bug
 :END:
