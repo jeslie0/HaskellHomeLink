@@ -12,8 +12,8 @@ import Data.ArrayBuffer.Builder (execPutM)
 import Data.ArrayBuffer.DataView (byteLength, whole)
 import Data.Either (Either(..))
 import Data.HTTP.Method (Method(..))
-import Data.Maybe (Maybe(..))
-import Data.Tuple (Tuple(..))
+import Data.Maybe (Maybe(..), fromMaybe, maybe)
+import Data.Tuple.Nested ((/\))
 import Effect (Effect)
 import Effect.Aff (launchAff_)
 import Effect.Class (liftEffect)
@@ -23,14 +23,18 @@ import Fetch (fetch)
 import Parsing (fail, runParserT)
 import Proto.Messages as Proto
 import ProtoHelper (fromMessage, sayError, toMessage)
-import Radio (Stream, radioStreams)
+import Radio (Stream(..), StreamStatus(..), StreamStatusError, radioStreams)
 import System (IslandsSystemData)
 
 -- * Stream requests
 
 -- | Get the current stream state and update appropriately.
-fetchStreamStatus :: (Boolean -> Effect Unit) -> (Int -> Effect Unit) -> (Stream -> Effect Unit) -> Effect Unit
-fetchStreamStatus setStreamActiveStatus setStreamStateId setStreamStatus = do
+fetchStreamStatus
+  :: Ref.Ref Int
+  -> (Stream -> Effect Unit)
+  -> (StreamStatus -> Effect Unit)
+  -> Effect Unit
+fetchStreamStatus streamStateIdRef updateStreamStation updateStreamStatus = do
   apiUrl <- getApiUrl
   let requestUrl = apiUrl <> "radio"
   launchAff_ do
@@ -38,35 +42,53 @@ fetchStreamStatus setStreamActiveStatus setStreamStateId setStreamStatus = do
     body <- whole <$> arrayBuffer
     result <- liftEffect $ runParserT body do
       resp <- Proto.parseGetRadioStatusResponse (byteLength body)
-      case resp of
-        Proto.GetRadioStatusResponse { currentStream: mStream, stateId: Just id } -> pure $ Tuple mStream id
-        Proto.GetRadioStatusResponse { currentStream: _, stateId: Nothing } -> fail "Missing all stateId"
-    case result of
-      Left err -> liftEffect $ Console.logShow err
-      Right (Tuple mStream id) -> do
-        liftEffect $ setStreamStateId id
-        liftEffect $ case mStream of
-          Nothing -> setStreamActiveStatus false
-          Just eStream -> do
-            case fromMessage eStream of
-              Left err -> setStreamActiveStatus false >>= \_ -> Console.logShow <<< sayError $ err
-              Right stream -> do
-                setStreamActiveStatus true
-                setStreamStatus $ stream
+      parseResponse resp
+    liftEffect $ actOnResult result
     pure unit
 
+  where
+  setStreamStateId n = Ref.write n streamStateIdRef
+
+  parseResponse (Proto.GetRadioStatusResponse { stateId: mStateId, status: mStatus, currentStationId: mStationId }) =
+    pure $ fromMaybe 0 mStateId
+      /\ maybe (Right Off) (fromMessage @_ @_ @StreamStatusError) mStatus
+      /\ maybe (Right ClassicFM) (fromMessage) mStationId
+
+  actOnResult (Left _) = Console.log "FAIL"
+  actOnResult (Right (stateId /\ eStatus /\ eCurrentStationId)) = do
+    currStateId <- Ref.read streamStateIdRef
+    if currStateId == stateId then pure unit
+    else do
+      setStreamStateId stateId
+      case eStatus of
+        Left _ -> Console.log "Couldn't parse status"
+        Right status -> do
+          case eCurrentStationId of
+            Left _ -> Console.log "Couldn't parse currentStationId"
+            Right station -> do
+              updateStreamStatus status
+              Console.logShow status
+              updateStreamStation station
+
 -- | Start or stop the audio stream.
-modifyStream :: Ref.Ref Int -> Ref.Ref Stream -> (Boolean -> Effect Unit) -> (Stream -> Effect Unit) -> Boolean -> Effect Unit
-modifyStream ref streamRef setStreamStatus setSelectedStream bool = do
-  id <- Ref.read ref
-  stream <- Ref.read streamRef
-  let mRStream = Array.find (\rstream -> rstream.stream == stream) radioStreams
+modifyStream
+  :: Ref.Ref Int
+  -> (Stream -> Effect Unit)
+  -> (StreamStatus -> Effect Unit)
+  -> (Maybe Stream)
+  -> Effect Unit
+modifyStream stateIdRef updateStation updateStreamStatus payload = do
+  id <- Ref.read stateIdRef
   apiUrl <- getApiUrl
   let
     requestUrl = apiUrl <> "radio/modify" <> "?stateId=" <> show id
-    body = Proto.mkModifyRadioRequest { start: Just bool
-                                      , url: mRStream <#> _.url
-                                      , newStream: mRStream <#> toMessage <<< _.stream }
+    body = Proto.mkModifyRadioRequest
+      { station: payload <#> \stream ->
+          Proto.RadioStation $ Proto.defaultRadioStation
+            { url = Array.find (\rstream -> rstream.stream == stream) radioStreams <#> _.url
+            , id = Just $ toMessage stream
+            }
+      }
   bodyBuff <- execPutM $ Proto.putModifyRadioRequest body
   launchAff_ do
     _ <- fetch requestUrl
@@ -75,7 +97,7 @@ modifyStream ref streamRef setStreamStatus setSelectedStream bool = do
       , headers: { "content-type": "application/protobuf" }
       }
     pure unit
-    liftEffect $ fetchStreamStatus setStreamStatus (\n -> Ref.write n ref) setSelectedStream
+    liftEffect $ fetchStreamStatus stateIdRef updateStation updateStreamStatus
 
 -- | Get the current system data
 fetchSystemsData :: (IslandsSystemData -> Effect Unit) -> Effect Unit

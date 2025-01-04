@@ -18,14 +18,14 @@ import Control.Monad (void)
 import Control.Monad.Reader
 import Data.Bifunctor (second)
 import Data.Foldable (forM_)
-import Data.IORef (atomicModifyIORef', readIORef)
+import Data.IORef (atomicModifyIORef')
 import Data.ProtoLens (defMessage)
 import Data.Text qualified as T
 import Envelope (ToProxyEnvelope (..))
 import EventLoop (EventLoop, addMsg)
 import Home.AudioStream (StreamId, StreamStatus (..), startAudioStream)
 import Home.Env (EnvT, addRemoteProxyConnection, audioStreamRef, router)
-import Lens.Micro ((&), (.~), (?~), (^.), _1, _2)
+import Lens.Micro ((&), (.~), (?~), (^.), _1, _2, _3)
 import Proto.Messages qualified as Proto
 import Proto.Messages_Fields qualified as Proto
 import ProtoHelper (ToMessage (..))
@@ -72,9 +72,9 @@ instance HomeHandler Proto.ModifyRadioRequest where
     homeHandler _ src req = do
         env <- ask
         let notify = do
-                (_, status, stationId) <- readIORef (env ^. audioStreamRef)
-                notifyProxyRadioStatus (env ^. router) src status stationId
-        (mThreadId, _, _) <- liftIO . readIORef $ env ^. audioStreamRef
+                (_, status, stationId) <- atomicModifyIORef' (env ^. audioStreamRef) $ \a -> (a, a)
+                void $ notifyProxyRadioStatus (env ^. router) src status stationId
+        (mThreadId, _, _) <- liftIO . atomicModifyIORef' (env ^. audioStreamRef) $ \a -> (a, a)
         case (mThreadId, req ^. Proto.maybe'station) of
             (Just _, Just _) -> do
                 liftIO $ putStrLn "Audio stream already exists"
@@ -82,8 +82,9 @@ instance HomeHandler Proto.ModifyRadioRequest where
                 liftIO $ killThread threadId
             (Nothing, Nothing) -> liftIO $ putStrLn "Radio not playing"
             (Nothing, Just station) -> do
-                let updateStreamStatus status =
+                let updateStreamStatus status = do
                         atomicModifyIORef' (env ^. audioStreamRef) $ \st -> (st, ()) & _1 . _2 .~ status
+                        notify
                 threadId <-
                     liftIO $
                         forkFinally
@@ -102,7 +103,9 @@ instance HomeHandler Proto.ModifyRadioRequest where
                 liftIO
                     . atomicModifyIORef'
                         (env ^. audioStreamRef)
-                    $ \st -> (st, ()) & _1 . _1 ?~ threadId
+                    $ \st -> (st, ())
+                             & _1 . _1 ?~ threadId
+                             & _1 . _3 .~ (station ^. Proto.id)
         void . liftIO $ notify
 
 -- -- | Stop playing an audio stream if one is playing.

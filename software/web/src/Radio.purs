@@ -1,10 +1,12 @@
-module Radio (Format(..), RadioStream(..), Stream(..), radioStreams, StreamError(..)) where
+module Radio (Format(..), RadioStream(..), Stream(..), radioStreams, StreamError(..), StreamStatus(..), StreamStatusError) where
 
 import Prelude
 
 import Data.Either (Either(..))
+import Data.UInt (UInt, fromInt)
 import Proto.Messages as Proto
-import ProtoHelper (class FromMessage, class SayError, class ToMessage)
+import ProtoHelper (class FromMessage, class ToMessage)
+import Protobuf.Internal.Prelude (toInt)
 
 data Format
   = MP3
@@ -20,10 +22,6 @@ data Stream
   | LBC
   | Unknown
 
-data StreamError = MissingStream
-instance SayError StreamError where
-  sayError MissingStream = pure "Missing stream"
-
 derive instance streamEq :: Eq Stream
 
 instance Show Stream where
@@ -34,21 +32,43 @@ instance Show Stream where
   show LBC = "LBC"
   show Unknown = "unknown radio station"
 
-instance FromMessage Proto.STREAM Stream StreamError where
-  fromMessage Proto.STREAM_CLASSIC_FM = Right ClassicFM
-  fromMessage Proto.STREAM_CLASSIC_FM_CALM = Right ClassicFMCalm
-  fromMessage Proto.STREAM_CLASSIC_FM_MOVIES = Right ClassicFMMovies
-  fromMessage Proto.STREAM_RADIO_X_CLASSIC_ROCK = Right RadioXClassicRock
-  fromMessage Proto.STREAM_LBC = Right LBC
-  fromMessage _ = Left MissingStream
+data StreamError
 
-instance ToMessage Proto.STREAM Stream where
-  toMessage ClassicFM = Proto.STREAM_CLASSIC_FM
-  toMessage ClassicFMCalm = Proto.STREAM_CLASSIC_FM_CALM
-  toMessage ClassicFMMovies = Proto.STREAM_CLASSIC_FM_MOVIES
-  toMessage RadioXClassicRock = Proto.STREAM_RADIO_X_CLASSIC_ROCK
-  toMessage LBC = Proto.STREAM_LBC
-  toMessage Unknown = Proto.STREAM_UNKNOWN_STREAM
+instance FromMessage UInt Stream StreamError where
+  fromMessage n = case toInt n of
+    0 -> Right ClassicFM
+    1 -> Right ClassicFMCalm
+    2 -> Right ClassicFMMovies
+    3 -> Right RadioXClassicRock
+    4 -> Right LBC
+    _ -> Right Unknown
+
+instance ToMessage UInt Stream where
+  toMessage ClassicFM = fromInt 0
+  toMessage ClassicFMCalm = fromInt 1
+  toMessage ClassicFMMovies = fromInt 2
+  toMessage RadioXClassicRock = fromInt 3
+  toMessage LBC = fromInt 4
+  toMessage Unknown = fromInt 5
+
+data StreamStatus
+  = Off
+  | Initiated
+  | Playing
+
+instance Show StreamStatus where
+  show Off = "Off"
+  show Initiated = "Initiated"
+  show Playing = "Playing"
+
+derive instance streamStatusEq :: Eq StreamStatus
+
+data StreamStatusError
+
+instance FromMessage Proto.STREAM_STATUS StreamStatus StreamStatusError where
+  fromMessage Proto.STREAM_STATUS_INITIATED = Right Initiated
+  fromMessage Proto.STREAM_STATUS_PLAYING = Right Playing
+  fromMessage _ = Right Off
 
 type RadioStream = { stream :: Stream, url :: String, format :: Format }
 

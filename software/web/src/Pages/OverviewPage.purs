@@ -3,13 +3,14 @@ module Pages.Overview (OverviewPageState, overviewPage) where
 import Prelude
 
 import Api (Api)
+import Data.Maybe (Maybe(..))
 import Deku.Control as DC
 import Deku.Core (Nut)
 import Deku.DOM as DD
 import Deku.DOM.Attributes as DA
 import Deku.DOM.Listeners as DL
 import Deku.Hooks ((<#~>))
-import Radio (radioStreams)
+import Radio (StreamStatus(..), radioStreams)
 import Web.Event.Event (preventDefault)
 
 type OverviewPageState = { api :: Api }
@@ -63,17 +64,19 @@ overviewPage { api } = do
           ( radioStreams <#> \stream ->
               DD.div
                 [ DA.klass_ "pf-v5-c-radio"
-                , DL.click $ api.polls.streamActivePoll <#>
-                    if _ then
-                      \_ -> pure unit
-                    else
-                      \_ -> api.setters.selectStream stream.stream
+                , DL.click $ api.polls.streamStatusPoll <#>
+                    case _ of
+                      Off ->
+                          \_ -> api.setters.selectStream stream.stream
+                      _ -> \_ -> pure unit
                 ]
                 [ DD.input
                     [ DA.klass_ "pf-v5-c-radio__input"
                     , DA.xtype_ "radio"
                     , DA.checked_ <<< show $ stream.stream == selectedStream
-                    , DA.disabled $ show <$> api.polls.streamActivePoll
+                    , DA.disabled $ api.polls.streamStatusPoll <#> case _ of
+                      Off -> "false"
+                      _ -> "true"
                     ]
                     []
                 , DD.label [ DA.klass_ "pf-v5-c-radio__label" ] [ DC.text_ $ show stream.stream ]
@@ -91,15 +94,22 @@ overviewPage { api } = do
       , DD.div [ DA.klass_ "pf-v5-c-form__actions" ]
           [ DD.button
               [ DA.klass_ "pf-v5-c-button pf-m-primary"
-              , DA.disabled $ api.polls.streamActivePoll <#> if _ then "true" else ""
-              , DL.click_ $ \_ -> api.requests.modifyStream true
+              , DA.disabled $ api.polls.streamStatusPoll <#> case _ of
+                    Off -> "false"
+                    Initiated -> "true"
+                    Playing -> "true"
+              , DL.click $ api.polls.selectedStreamPoll <#> \selectedStream ->
+                  \_ -> api.requests.modifyStream $ Just selectedStream
               ]
               [ DD.text_ "Start radio"
               ]
           , DD.button
               [ DA.klass_ "pf-v5-c-button pf-m-primary"
-              , DA.disabled $ api.polls.streamActivePoll <#> if _ then "" else "true"
-              , DL.click_ $ \_ -> api.requests.modifyStream false
+              , DA.disabled $ api.polls.streamStatusPoll <#> case _ of
+                    Off -> "true"
+                    Initiated -> "true"
+                    Playing -> "false"
+              , DL.click_ $ \_ -> api.requests.modifyStream $ Nothing
               ]
               [ DD.text_ "Stop radio" ]
           ]
