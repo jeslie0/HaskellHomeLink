@@ -1,2 +1,16 @@
-#+title: Detailed Design
+#+title: Detailed Design Document
 #+author: James Leslie
+* Introduction
+This document explores the design of the Haskell Home Link applications and how they communicate with each other.
+
+* Tech Stack
+** Frontend
+The front end is written in PureScript using the Deku framework.
+
+** Backend
+The back end is written in Haskell and uses a single threaded event loop for acting on received messages. Multi-threading is to be kept to a minimum, which will lead to more maintainable and easier to read about code. Currently, the only use of multi-threading in the code base is in the radio streaming code. The fetching and playing of radio streams occurs in a separate thread.
+
+The HTTP Server uses Servant and Warp, providing high performance and type safe endpoints.
+
+** Messages
+Messages are all encoded using ProtoBuf. This results in an efficient and uniform way of treating messages. Protobuf is well supported by both Haskell and PureScript and provides a learning experience for me! It is slightly more complicated than JSON, but is much more economical on message sizes. It also provides a small amount of obfuscation, making it harder for a nefarious agent to interact with the HTTP Server.
