@@ -8,6 +8,7 @@ import Data.Bifunctor (lmap)
 import Data.Either (Either(..))
 import Data.Maybe (fromMaybe)
 import Data.Traversable (traverse)
+import Data.UInt (UInt, fromInt)
 import Proto.Messages as Proto
 import ProtoHelper (class FromMessage, class SayError, fromMessage, sayError, toEither)
 
@@ -24,7 +25,7 @@ instance FromMessage Proto.CPUData CPUData CPUDataError where
 instance SayError CPUDataError where
   sayError MissingModelName = pure "Model name is missing from CPUData"
 
-type SystemDataR = (cpuData :: CPUData, inDockerContainer :: Boolean, operatingSystemName :: String, architecture :: String)
+type SystemDataR = (cpuData :: CPUData, inDockerContainer :: Boolean, operatingSystemName :: String, architecture :: String, memTotalKb :: UInt)
 newtype SystemData = SystemData (Record SystemDataR)
 
 data SystemDataError
@@ -34,6 +35,7 @@ data SystemDataError
   | MissingOperatingSystemName
   | MissingArchitecture
 
+
 instance FromMessage Proto.SystemData SystemData SystemDataError where
   fromMessage (Proto.SystemData msg) = do
     let inDockerContainer = fromMaybe false msg.inDockerContainer
@@ -41,7 +43,8 @@ instance FromMessage Proto.SystemData SystemData SystemDataError where
     cpuData <- lmap MissingPartOfCPUData $ fromMessage cpuDataProt
     operatingSystemName <- toEither MissingOperatingSystemName msg.operatingSystemName
     architecture <- toEither MissingArchitecture msg.architecture
-    pure $ SystemData { cpuData, inDockerContainer, operatingSystemName, architecture }
+    memTotalKb <- Right $ fromMaybe (fromInt 10000) msg.memTotalkB
+    pure $ SystemData { cpuData, inDockerContainer, operatingSystemName, architecture, memTotalKb }
 
 instance SayError SystemDataError where
   sayError MissingCPUData = pure "SystemData is missing cpuData"

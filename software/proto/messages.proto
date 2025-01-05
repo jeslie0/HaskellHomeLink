@@ -27,6 +27,7 @@ message SystemData {
   bool inDockerContainer = 2;
   string operatingSystemName = 3;
   string architecture = 4;
+  uint32 memTotalkB = 5;
 }
 
 message IslandSystemData {

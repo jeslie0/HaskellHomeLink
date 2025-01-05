@@ -3,12 +3,14 @@ module Pages.System where
 import Prelude
 
 import Api (Api)
+import Data.UInt (UInt, fromInt)
 import Deku.Control as DC
 import Deku.Core (Nut)
 import Deku.DOM as DD
 import Deku.DOM.Attributes as DA
 import Deku.Hooks ((<#~>))
-import Patternfly (dlistGroup, gallery)
+import Patternfly (dlistGroup)
+import Protobuf.Internal.Prelude (toInt)
 import System (IslandSystemData(..), IslandsSystemData(..))
 import Unsafe.Coerce (unsafeCoerce)
 
@@ -37,6 +39,7 @@ mkIslandSystemDataCard (IslandSystemData { island, systemData }) =
       , dlistGroup "OS" $ pure (unsafeCoerce systemData).operatingSystemName
       , dlistGroup "Architecture" $ pure (unsafeCoerce systemData).architecture
       , dlistGroup "Container" <<< pure <<< show @Boolean $ (unsafeCoerce systemData).inDockerContainer
+      , dlistGroup "Ram (MB)" <<< pure <<< show @Int <<< toInt $ (unsafeCoerce systemData).memTotalKb / fromInt 1000
       ]
 
 systemPage :: SystemPageState -> Nut
