@@ -1,8 +1,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module Proxy.Handler (
-    ProxyHandler (..),
-    ExProxyHandler (..),
+  ProxyHandler (..),
+  ExProxyHandler (..),
 ) where
 
 import ConnectionManager (Island (..))
@@ -20,13 +20,13 @@ import State (fulfilPromise)
 import TH (makeInstance)
 
 class ProxyHandler msg where
-    proxyHandler ::
-        EventLoop EnvT (Island, ExProxyHandler) -> Island -> msg -> EnvT ()
+  proxyHandler ::
+    EventLoop EnvT (Island, ExProxyHandler) -> Island -> msg -> EnvT ()
 
-data ExProxyHandler = forall a. (ProxyHandler a) => ExProxyHandler a
+data ExProxyHandler = forall a. ProxyHandler a => ExProxyHandler a
 
 instance ProxyHandler ExProxyHandler where
-    proxyHandler loop island (ExProxyHandler msg) = proxyHandler loop island msg
+  proxyHandler loop island (ExProxyHandler msg) = proxyHandler loop island msg
 
 -- * Message instances
 
@@ -40,28 +40,29 @@ $( makeInstance
 
 -- | Received acknowledgement from Home for ModifyRadioRequest
 instance ProxyHandler Proto.RadioStatusUpdate where
-    proxyHandler _ _ resp = do
-        env <- ask
-        liftIO $
-            fulfilPromise
-                (fromMessage $ resp ^. Proto.status, resp ^. Proto.currentStationId)
-                (env ^. streamStatusState)
+  proxyHandler _ _ resp = do
+    env <- ask
+    liftIO $
+      fulfilPromise
+        (fromMessage $ resp ^. Proto.status, resp ^. Proto.currentStationId)
+        (env ^. streamStatusState)
 
-{- | Received acknowledgement from Home for ModifyRadioRequest. Update
-promise so HTTP Handler can return.
--}
+-- | Received acknowledgement from Home for ModifyRadioRequest. Update
+-- promise so HTTP Handler can return.
 instance ProxyHandler Proto.GetRadioStatusResponse where
-    proxyHandler _ _ resp = do
-        env <- ask
-        liftIO $
-            fulfilPromise
-                (fromMessage $ resp ^. Proto.status, resp ^. Proto.currentStationId)
-                (env ^. streamStatusState)
+  proxyHandler _ _ resp = do
+    env <- ask
+    liftIO $
+      fulfilPromise
+        (fromMessage $ resp ^. Proto.status, resp ^. Proto.currentStationId)
+        (env ^. streamStatusState)
 
 instance ProxyHandler Proto.IslandSystemData where
-    proxyHandler _ _ resp = do
-        env <- ask
-        liftIO $ modifyMVar_ (env ^. systemMap) $ \sysMap ->
-            let island = fromMessage $ resp ^. Proto.island
-                sysData = fromMessage $ resp ^. Proto.systemData
-             in pure $ Map.insert island sysData sysMap
+  proxyHandler _ _ resp = do
+    env <- ask
+    liftIO $ modifyMVar_ (env ^. systemMap) $ \sysMap ->
+      let
+        island = fromMessage $ resp ^. Proto.island
+        sysData = fromMessage $ resp ^. Proto.systemData
+      in
+        pure $ Map.insert island sysData sysMap

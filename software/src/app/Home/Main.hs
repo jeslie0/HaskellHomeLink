@@ -1,8 +1,8 @@
 module Home.Main (main) where
 
 import ConnectionManager (
-    Island (..),
-    killConnections,
+  Island (..),
+  killConnections,
  )
 import Control.Concurrent (forkIO, killThread)
 import Control.Exception (bracket)
@@ -13,11 +13,11 @@ import Data.IORef (readIORef, writeIORef)
 import EventLoop (addMsg, mkEventLoop, run)
 import Home.AudioStream (StreamStatus (Off))
 import Home.Env (
-    Env,
-    addLocalHTTPServerConnection,
-    audioStreamRef,
-    mkEnv,
-    router,
+  Env,
+  addLocalHTTPServerConnection,
+  audioStreamRef,
+  mkEnv,
+  router,
  )
 import Home.Handler (ExHomeHandler (..), homeHandler)
 import Lens.Micro
@@ -27,21 +27,21 @@ import Router (connectionsManager)
 
 main :: IO ()
 main = do
-    bracket (forkIO (proxyMain LocalHTTP)) killThread $ \_ ->
-        bracket mkEnv cleanupEnv $ \env ->
-            runReaderT (action env) env
-  where
-    action :: Env -> ReaderT Env IO ()
-    action env = do
-        loop <- mkEventLoop @(Island, ExHomeHandler)
-        liftIO
-            $ addLocalHTTPServerConnection @Proto.HomeEnvelope
-                (addMsg loop . second ExHomeHandler)
-            $ env ^. router
-        run loop $ \evloop b -> uncurry (homeHandler evloop) b
+  bracket (forkIO (proxyMain LocalHTTP)) killThread $ \_ ->
+    bracket mkEnv cleanupEnv $ \env ->
+      runReaderT (action env) env
+ where
+  action :: Env -> ReaderT Env IO ()
+  action env = do
+    loop <- mkEventLoop @(Island, ExHomeHandler)
+    liftIO
+      $ addLocalHTTPServerConnection @Proto.HomeEnvelope
+        (addMsg loop . second ExHomeHandler)
+      $ env ^. router
+    run loop $ \evloop b -> uncurry (homeHandler evloop) b
 
-    cleanupEnv env = do
-        (mThread, _, _) <- readIORef (env ^. audioStreamRef)
-        for_ mThread killThread
-        writeIORef (env ^. audioStreamRef) (Nothing, Off, 0)
-        killConnections (env ^. (router . connectionsManager))
+  cleanupEnv env = do
+    (mThread, _, _) <- readIORef (env ^. audioStreamRef)
+    for_ mThread killThread
+    writeIORef (env ^. audioStreamRef) (Nothing, Off, 0)
+    killConnections (env ^. (router . connectionsManager))

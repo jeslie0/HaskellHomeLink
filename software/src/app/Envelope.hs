@@ -1,6 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Envelope (ToEnvelope(..), ToProxyEnvelope(..)) where
+module Envelope (ToEnvelope (..), ToProxyEnvelope (..)) where
 
 import Data.ProtoLens (defMessage)
 import Lens.Micro ((?~))
@@ -9,7 +9,7 @@ import Proto.Messages_Fields qualified as Proto
 import TH (makeToEnvelopeInstances)
 
 class ToEnvelope msg where
-    toEnvelope :: msg -> Proto.HomeEnvelope
+  toEnvelope :: msg -> Proto.HomeEnvelope
 
 $( makeToEnvelopeInstances
     ''ToEnvelope
@@ -19,7 +19,7 @@ $( makeToEnvelopeInstances
  )
 
 class ToProxyEnvelope msg where
-    toProxyEnvelope :: msg -> Proto.ProxyEnvelope
+  toProxyEnvelope :: msg -> Proto.ProxyEnvelope
 
 $( makeToEnvelopeInstances
     ''ToProxyEnvelope

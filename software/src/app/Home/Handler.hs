@@ -2,14 +2,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-{-|
-Module : Home.Handler
-Description : Defines the typeclass and instance for messages being
-handled by the Home application.
--}
+-- |
+-- Module : Home.Handler
+-- Description : Defines the typeclass and instance for messages being
+-- handled by the Home application.
 module Home.Handler (
-    HomeHandler (..),
-    ExHomeHandler (..),
+  HomeHandler (..),
+  ExHomeHandler (..),
 ) where
 
 import ConnectionManager (Island (..), islands)
@@ -33,13 +32,13 @@ import Router (Router, trySendMessage)
 import TH (makeInstance)
 
 class HomeHandler msg where
-    homeHandler ::
-        EventLoop EnvT (Island, ExHomeHandler) -> Island -> msg -> EnvT ()
+  homeHandler ::
+    EventLoop EnvT (Island, ExHomeHandler) -> Island -> msg -> EnvT ()
 
-data ExHomeHandler = forall a. (HomeHandler a) => ExHomeHandler a
+data ExHomeHandler = forall a. HomeHandler a => ExHomeHandler a
 
 instance HomeHandler ExHomeHandler where
-    homeHandler loop island (ExHomeHandler msg) = homeHandler loop island msg
+  homeHandler loop island (ExHomeHandler msg) = homeHandler loop island msg
 
 -- * Message instances
 
@@ -52,81 +51,80 @@ $( makeInstance
  )
 
 notifyProxyRadioStatus ::
-    Router -> Island -> StreamStatus -> StationId -> IO Bool
+  Router -> Island -> StreamStatus -> StationId -> IO Bool
 notifyProxyRadioStatus rtr island status stationId =
-    trySendMessage
-        rtr
-        island
-        ( toProxyEnvelope $
-            defMessage @Proto.RadioStatusUpdate
-                & Proto.status
-                .~ toMessage status
-                & Proto.currentStationId
-                .~ stationId
-        )
+  trySendMessage
+    rtr
+    island
+    ( toProxyEnvelope $
+        defMessage @Proto.RadioStatusUpdate
+          & Proto.status
+          .~ toMessage status
+          & Proto.currentStationId
+          .~ stationId
+    )
 
-{- | Try to make a new asynchronous audio stream in a separate
-thread. If one exists, report the error.
--}
+-- | Try to make a new asynchronous audio stream in a separate
+-- thread. If one exists, report the error.
 instance HomeHandler Proto.ModifyRadioRequest where
-    homeHandler _ src req = do
-        env <- ask
-        let notify = do
-                (_, status, stationId) <- atomicModifyIORef' (env ^. audioStreamRef) $ \a -> (a, a)
-                void $ notifyProxyRadioStatus (env ^. router) src status stationId
-        (mThreadId, _, _) <- liftIO . atomicModifyIORef' (env ^. audioStreamRef) $ \a -> (a, a)
-        case (mThreadId, req ^. Proto.maybe'station) of
-            (Just _, Just _) -> do
-                liftIO $ putStrLn "Audio stream already exists"
-            (Just threadId, Nothing) -> do
-                liftIO $ killThread threadId
-            (Nothing, Nothing) -> liftIO $ putStrLn "Radio not playing"
-            (Nothing, Just station) -> do
-                let updateStreamStatus status = do
-                        atomicModifyIORef' (env ^. audioStreamRef) $ \st -> (st, ()) & _1 . _2 .~ status
-                        notify
-                threadId <-
-                    liftIO $
-                        forkFinally
-                            (startAudioStream (station ^. Proto.url) updateStreamStatus)
-                            ( \_ -> do
-                                atomicModifyIORef' (env ^. audioStreamRef) $ \st ->
-                                    (st, ())
-                                        & _1
-                                        . _1
-                                        .~ Nothing
-                                        & _1
-                                        . _2
-                                        .~ Off
-                                void notify
-                            )
-                liftIO
-                    . atomicModifyIORef'
-                        (env ^. audioStreamRef)
-                    $ \st ->
-                        (st, ())
-                            & _1
-                            . _1
-                            ?~ threadId
-                            & _1
-                            . _3
-                            .~ (station ^. Proto.id)
-        void . liftIO $ notify
+  homeHandler _ src req = do
+    env <- ask
+    let notify = do
+          (_, status, stationId) <- atomicModifyIORef' (env ^. audioStreamRef) $ \a -> (a, a)
+          void $ notifyProxyRadioStatus (env ^. router) src status stationId
+    (mThreadId, _, _) <- liftIO . atomicModifyIORef' (env ^. audioStreamRef) $ \a -> (a, a)
+    case (mThreadId, req ^. Proto.maybe'station) of
+      (Just _, Just _) -> do
+        liftIO $ putStrLn "Audio stream already exists"
+      (Just threadId, Nothing) -> do
+        liftIO $ killThread threadId
+      (Nothing, Nothing) -> liftIO $ putStrLn "Radio not playing"
+      (Nothing, Just station) -> do
+        let updateStreamStatus status = do
+              atomicModifyIORef' (env ^. audioStreamRef) $ \st -> (st, ()) & _1 . _2 .~ status
+              notify
+        threadId <-
+          liftIO $
+            forkFinally
+              (startAudioStream (station ^. Proto.url) updateStreamStatus)
+              ( \_ -> do
+                  atomicModifyIORef' (env ^. audioStreamRef) $ \st ->
+                    (st, ())
+                      & _1
+                      . _1
+                      .~ Nothing
+                      & _1
+                      . _2
+                      .~ Off
+                  void notify
+              )
+        liftIO
+          . atomicModifyIORef'
+            (env ^. audioStreamRef)
+          $ \st ->
+            (st, ())
+              & _1
+              . _1
+              ?~ threadId
+              & _1
+              . _3
+              .~ (station ^. Proto.id)
+    void . liftIO $ notify
 
 -- | Spawn a new thread and try to connect to the given TCP server.
 instance HomeHandler Proto.ConnectTCP where
-    homeHandler loop _ msg = do
-        env <- ask
-        liftIO $
-            addRemoteProxyConnection @Proto.HomeEnvelope
-                (addMsg loop . second ExHomeHandler)
-                (T.unpack $ msg ^. Proto.host)
-                (T.unpack $ msg ^. Proto.port)
-                (env ^. router)
+  homeHandler loop _ msg = do
+    env <- ask
+    liftIO $
+      addRemoteProxyConnection @Proto.HomeEnvelope
+        (addMsg loop . second ExHomeHandler)
+        (T.unpack $ msg ^. Proto.host)
+        (T.unpack $ msg ^. Proto.port)
+        (env ^. router)
 
 --
 instance HomeHandler Proto.SystemData where
-    homeHandler _ _ msg = do
-        env <- ask
-        liftIO . forM_ (filter (/= Home) islands) $ \island ->
-            trySendMessage (env ^. router) island msg
+  homeHandler _ _ msg = do
+    env <- ask
+    liftIO . forM_ (filter (/= Home) islands) $ \island ->
+      trySendMessage (env ^. router) island msg
