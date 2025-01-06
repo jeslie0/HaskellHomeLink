@@ -26,7 +26,7 @@ main = do
 
 header :: Poll Page -> (Page -> Effect Unit) -> Nut
 header ev setPage =
-  DD.header [ DA.klass_ "pf-v5-c-masthead" ]
+  DD.header [ DA.klass_ "pf-v5-c-masthead pf-m-display-inline" ]
     [ DD.div [ DA.klass_ "pf-v5-c-masthead__main" ] []
     , DD.div [ DA.klass_ "pf-v5-c-masthead__content" ]
         [ DD.nav [ DA.klass_ "pf-v5-c-nav pf-m-horizontal" ]

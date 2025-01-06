@@ -22,7 +22,6 @@ renderDiskCapacity freeSpaceGB totalSpaceGB = show freeSpaceGB <> " / " <> show 
 mkIslandSystemDataCard :: IslandSystemData -> Nut
 mkIslandSystemDataCard (IslandSystemData { island, systemData }) =
   DD.div [ DA.klass_ "pf-v5-l-grid__item" ]
-
     [ DD.div [ DA.klass_ "pf-v5-c-card pf-m-display-lg pf-m-full-height" ]
         [ DD.div [ DA.klass_ "pf-v5-c-card__title" ]
             [ DD.h1 [ DA.klass_ "pf-v5-c-card__title-text" ]
@@ -47,10 +46,13 @@ systemPage { api } =
   DD.div []
     [ api.polls.systemsDataPoll <#~> \(IslandsSystemData { allSystemData }) ->
         DD.div
-          [ DA.klass_ "pf-v5-l-grid pf-m-gutter pf-m-all-3-col-on-lg pf-m-all-6-col-on-md" ] $
+          [ DA.klass_ "pf-v5-l-grid pf-m-gutter pf-m-all-4-col-on-lg pf-m-all-4-col-on-md" ] $
           mkIslandSystemDataCard <$> allSystemData
     , api.memoryCharts.existingApexCharts <#~> \islands ->
         DD.div [] $ islands <#> \island ->
-          DD.div [ DA.id_ $ ("chart")] []
+          DD.div [ DA.klass_ "pf-v5-l-grid__item" ]
+          [
+            DD.div [ DA.id_ $ ("chart")] []
+          ]
 
     ]

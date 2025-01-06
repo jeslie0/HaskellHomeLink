@@ -62,3 +62,7 @@ workspace:
       git: "https://github.com/rowtype-yoga/purescript-protobuf"
       ref: "610ef795387663a90ce372338aa91e29d3d5a434"
       subdir: library
+
+    apexcharts:
+      git: "https://github.com/jeslie0/purescript-apexcharts"
+      ref: "6ff396a08e5ec59b8fd8221942ad684af67be282"

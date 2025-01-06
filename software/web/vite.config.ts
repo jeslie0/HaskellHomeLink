@@ -1,7 +1,6 @@
 import { defineConfig } from 'vite'
 import { exec } from "child_process"
-// import pluginPurgeCss from "vite-plugin-purgecss-updated-v5";
-// import simpleHtmlPlugin from 'vite-plugin-simple-html'
+import pluginPurgeCss from "vite-plugin-purgecss-updated-v5";
 
 function purescriptPlugin() {
     return {
@@ -39,10 +38,29 @@ function purescriptPlugin() {
 export default defineConfig({
     plugins: [
         purescriptPlugin(),
-        // pluginPurgeCss({
-        //     variables: true
-        // })
+        pluginPurgeCss({
+            variables: true
+        })
     ],
+    optimizeDeps: {
+        include: ['apexcharts'],
+    },
+    build: {
+        minify: 'esbuild', // Use esbuild for better performance
+        rollupOptions: {
+            treeshake: {
+                preset: "recommended"
+            },
+            output: {
+                manualChunks(id) {
+                    if (id.includes('node_modules/apexcharts')) {
+                        return 'apexcharts';
+                    }
+                },
+            },
+        },
+    },
+
     server: {
         open: true,
         proxy: {

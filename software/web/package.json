@@ -4,15 +4,16 @@
   "description": "Frontent for assistant pi",
   "scripts": {
     "test": "spago test",
-    "start": "vite src --config ./vite.config.js",
-    "build": "vite build src --outDir ../dist --emptyOutDir",
+    "start": "vite src --config ./vite.config.ts",
+    "build": "vite build src --outDir ../dist --emptyOutDir --config ./vite.config.ts",
     "preview": "vite preview src"
   },
   "author": "James Leslie",
   "license": "MIT",
   "dependencies": {
     "@patternfly/patternfly": "^5.4.0",
-    "apexcharts": "^4.3.0"
+    "apexcharts": "^4.3.0",
+    "vite-plugin-purgecss-updated-v5": "^1.2.4"
   },
   "devDependencies": {
     "htmlparser2": "^9.1.0",

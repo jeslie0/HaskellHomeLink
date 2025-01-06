@@ -653,6 +653,10 @@
       }
     },
     "extra_packages": {
+      "apexcharts": {
+        "git": "https://github.com/jeslie0/purescript-apexcharts",
+        "ref": "6ff396a08e5ec59b8fd8221942ad684af67be282"
+      },
       "bolson": {
         "git": "https://github.com/mikesol/purescript-bolson.git",
         "ref": "d87900c",
@@ -719,10 +723,11 @@
       ]
     },
     "apexcharts": {
-      "type": "registry",
-      "version": "0.5.0",
-      "integrity": "sha256-zLjeXCY+MbpPGbB9/+DWovl5BX1HDAnOR90juGbYpsU=",
+      "type": "git",
+      "url": "https://github.com/jeslie0/purescript-apexcharts",
+      "rev": "6ff396a08e5ec59b8fd8221942ad684af67be282",
       "dependencies": [
+        "console",
         "contravariant",
         "effect",
         "foreign",

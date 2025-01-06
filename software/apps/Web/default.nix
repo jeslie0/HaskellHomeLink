@@ -100,7 +100,7 @@ let
       pname = "HaskellHomeLink-web-build";
       version = "0.1.0";
       src = spago;
-      npmDepsHash = "sha256-bw0qZJ9rnci3a2T9/4p0oZdgFenzJNrtX3CDXBbAMb0=";
+      npmDepsHash = "sha256-qX5Ks7pwWcHPf/PaghfXZkwALRBr6rHh51vt8qGSQKI=";
     };
 in
 mkDerivation {
