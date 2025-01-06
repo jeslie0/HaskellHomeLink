@@ -5,6 +5,7 @@
         "path": "./",
         "core": {
           "dependencies": [
+            "apexcharts",
             "arraybuffer-builder",
             "bifunctors",
             "console",
@@ -25,6 +26,7 @@
           ],
           "build_plan": [
             "aff",
+            "apexcharts",
             "arraybuffer",
             "arraybuffer-builder",
             "arraybuffer-types",
@@ -85,6 +87,7 @@
             "now",
             "nullable",
             "numbers",
+            "options",
             "ordered-collections",
             "orders",
             "parallel",
@@ -713,6 +716,19 @@
         "tailrec",
         "transformers",
         "unsafe-coerce"
+      ]
+    },
+    "apexcharts": {
+      "type": "registry",
+      "version": "0.5.0",
+      "integrity": "sha256-zLjeXCY+MbpPGbB9/+DWovl5BX1HDAnOR90juGbYpsU=",
+      "dependencies": [
+        "contravariant",
+        "effect",
+        "foreign",
+        "options",
+        "prelude",
+        "web-dom"
       ]
     },
     "arraybuffer": {
@@ -1540,6 +1556,18 @@
       "dependencies": [
         "functions",
         "maybe"
+      ]
+    },
+    "options": {
+      "type": "registry",
+      "version": "7.0.0",
+      "integrity": "sha256-treC6h+jvzcWhplPaF/aMENCOx+JGk+ysa5pL1BGHtg=",
+      "dependencies": [
+        "contravariant",
+        "foreign",
+        "foreign-object",
+        "maybe",
+        "tuples"
       ]
     },
     "ordered-collections": {

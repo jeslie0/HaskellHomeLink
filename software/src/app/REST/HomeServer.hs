@@ -92,6 +92,11 @@ handleGetSystemDataRequest env = do
   sysMap <- liftIO $ readMVar (env ^. systemDataState)
   pure . toMessage $ sysMap
 
+handleGetAllIslandsMemoryDataRequest :: Env -> Handler Proto.AllIslandMemoryData
+handleGetAllIslandsMemoryDataRequest env = do
+  -- sysMap <- liftIO $ readMVar (env ^. systemDataState)
+  pure defMessage
+
 -- * Server
 
 server :: Env -> Server Api
@@ -100,6 +105,7 @@ server env =
         :<|> handleModifyRadioRequest env
     )
       :<|> handleGetSystemDataRequest env
+      :<|> handleGetAllIslandsMemoryDataRequest env
   )
     :<|> serveDir "/usr/local/haskell-home-link"
 

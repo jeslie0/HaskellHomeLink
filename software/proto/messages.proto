@@ -47,12 +47,25 @@ message RadioStation {
 // Received from HTTP Server.
 message ModifyRadioRequest {
   optional RadioStation station = 1;
-
 }
 
 message RadioStatusUpdate {
   STREAM_STATUS status = 1;
   uint32 currentStationId = 2;
+}
+
+message MemoryInformation {
+  uint32 systemTime = 1;
+  uint32 memUsed = 2;
+}
+
+message IslandMemoryInformation {
+  ISLAND island = 1;
+  MemoryInformation memInfo = 2;
+}
+
+message AllIslandMemoryData {
+  repeated IslandMemoryInformation allIslandMemoryData = 1;
 }
 
 // * Home Received Msgs

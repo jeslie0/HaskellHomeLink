@@ -39,12 +39,18 @@ mkIslandSystemDataCard (IslandSystemData { island, systemData }) =
       , dlistGroup "OS" $ pure (unsafeCoerce systemData).operatingSystemName
       , dlistGroup "Architecture" $ pure (unsafeCoerce systemData).architecture
       , dlistGroup "Container" <<< pure <<< show @Boolean $ (unsafeCoerce systemData).inDockerContainer
-      , dlistGroup "Ram (MB)" <<< pure <<< show @Int <<< toInt $ (unsafeCoerce systemData).memTotalKb / fromInt 1000
+      , dlistGroup "RAM" <<< pure $ (show @Int <<< toInt $ (unsafeCoerce systemData).memTotalKb / fromInt 1000000) <> " GB"
       ]
 
 systemPage :: SystemPageState -> Nut
 systemPage { api } =
-  api.polls.systemsDataPoll <#~> \(IslandsSystemData { allSystemData }) ->
-    DD.div
-      [ DA.klass_ "pf-v5-l-grid pf-m-gutter pf-m-all-3-col-on-lg pf-m-all-6-col-on-md" ] $
-       mkIslandSystemDataCard <$> allSystemData
+  DD.div []
+    [ api.polls.systemsDataPoll <#~> \(IslandsSystemData { allSystemData }) ->
+        DD.div
+          [ DA.klass_ "pf-v5-l-grid pf-m-gutter pf-m-all-3-col-on-lg pf-m-all-6-col-on-md" ] $
+          mkIslandSystemDataCard <$> allSystemData
+    , api.memoryCharts.existingApexCharts <#~> \islands ->
+        DD.div [] $ islands <#> \island ->
+          DD.div [ DA.id_ $ ("chart")] []
+
+    ]

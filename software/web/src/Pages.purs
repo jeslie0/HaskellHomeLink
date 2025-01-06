@@ -15,14 +15,12 @@ import Pages.System (SystemPageState, systemPage)
 data Page
   = Overview
   | System
-  | Applications
 
 pageList :: Array Page
-pageList = [ Overview, Applications, System ]
+pageList = [ Overview, System ]
 
 derive instance eqPages :: Eq Page
 
 instance Show Page where
   show Overview = "Overview"
   show System = "System"
-  show Applications = "Applications"

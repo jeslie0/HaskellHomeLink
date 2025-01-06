@@ -35,7 +35,6 @@ data SystemDataError
   | MissingOperatingSystemName
   | MissingArchitecture
 
-
 instance FromMessage Proto.SystemData SystemData SystemDataError where
   fromMessage (Proto.SystemData msg) = do
     let inDockerContainer = fromMaybe false msg.inDockerContainer
@@ -120,3 +119,48 @@ instance FromMessage Proto.IslandsSystemData IslandsSystemData IslandsSystemData
 instance SayError IslandsSystemDataError where
   sayError MissingIslandsSystemData = pure "IslandsSystemData is missing allSystemData"
   sayError (MissingPartOfAllSystemData err) = "IslandSystemData has invalid allSystemData" : Array.concatMap sayError err
+
+type MemoryInformationR =
+  ( systemTime :: UInt
+  , memUsed :: UInt
+  )
+
+newtype MemoryInformation = MemoryInformation (Record MemoryInformationR)
+data MemoryInformationError
+
+instance FromMessage Proto.MemoryInformation MemoryInformation MemoryInformationError where
+  fromMessage (Proto.MemoryInformation msg) =
+    Right $ MemoryInformation
+      { systemTime: fromMaybe (fromInt 0) msg.systemTime
+      , memUsed: fromMaybe (fromInt 0) msg.memUsed
+      }
+
+type IslandMemoryInformationR = (island :: Island, memInfo :: MemoryInformation)
+newtype IslandMemoryInformation = IslandMemoryInformation (Record IslandMemoryInformationR)
+data IslandMemoryInformationError
+  = MissingMemIsland
+  | InvalidMemIsland IslandError
+  | MissingMemoryInformation
+  | MissingPartOfMemInfo MemoryInformationError
+
+instance FromMessage Proto.IslandMemoryInformation IslandMemoryInformation IslandMemoryInformationError where
+  fromMessage (Proto.IslandMemoryInformation msg) = do
+    islandProt <- toEither MissingMemIsland (msg.island)
+    island <- lmap InvalidMemIsland $ fromMessage islandProt
+    memInfoProt <- toEither MissingMemoryInformation msg.memInfo
+    memInfo <- lmap MissingPartOfMemInfo $ fromMessage memInfoProt
+    pure $ IslandMemoryInformation { island, memInfo }
+
+type AllIslandMemoryDataR = (allIslandMemoryData :: Array IslandMemoryInformation)
+newtype AllIslandsMemoryData = AllIslandsMemoryData (Record AllIslandMemoryDataR)
+data AllIslandsMemoryDataError
+  = MissingAllIslandsMemoryData
+  | MissingPartOfAllMemoryData (Array IslandMemoryInformationError)
+
+instance FromMessage Proto.AllIslandMemoryData AllIslandsMemoryData AllIslandsMemoryDataError where
+  fromMessage (Proto.AllIslandMemoryData msg) =
+    AllIslandsMemoryData <<< { allIslandMemoryData: _ }
+      <$>
+        ( lmap MissingPartOfAllMemoryData
+            $ traverse (lmap pure <<< fromMessage) (msg.allIslandMemoryData)
+        )

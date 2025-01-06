@@ -5,7 +5,7 @@ import Data.Tuple.Nested ((/\))
 import Deku.Control as DC
 import Deku.Core (Nut)
 import Deku.DOM as DD
-import Deku.DOM.Attributes (klass, klass_, role_) as DA
+import Deku.DOM.Attributes as DA
 import Deku.DOM.Listeners as DL
 import Deku.Do as Deku
 import Deku.Hooks ((<#~>))
@@ -16,6 +16,7 @@ import Effect.Console as Console
 import FRP.Poll (Poll)
 import Pages (OverviewPageState, Page(..), SystemPageState, overviewPage, pageList, systemPage)
 import Prelude (Unit, bind, discard, pure, show, unit, ($), (<#>), (<>), (==))
+import Chart as Chart
 
 main :: Effect Unit
 main = do
@@ -58,7 +59,6 @@ pageBody pagePoll states =
 type PageStates =
   { overviewPageState :: OverviewPageState
   , systemPageState :: SystemPageState
-  -- , applicationsPageState :: ApplicationsPageState
   }
 
 dekuApp :: Effect Nut
@@ -66,7 +66,7 @@ dekuApp = do
   api <- mkApi
 
   pure Deku.do
-    setPage /\ page <- DH.useState Overview
+    setPage /\ page <- DH.useState System
     let
       changePage newPage = do
         Console.logShow newPage

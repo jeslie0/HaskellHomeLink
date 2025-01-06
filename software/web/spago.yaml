@@ -1,6 +1,7 @@
 package:
   name: web
   dependencies:
+    - apexcharts
     - arraybuffer-builder
     - bifunctors
     - console

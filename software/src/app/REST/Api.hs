@@ -21,7 +21,7 @@ import Servant.API.ContentTypes.Proto
 import State (StateId)
 
 type Api =
-  "api" :> "v1" :> (Radio :<|> System)
+  "api" :> "v1" :> (Radio :<|> System :<|> Memory)
     :<|> Raw
 
 type Radio =
@@ -32,6 +32,8 @@ type Radio =
             :> QueryParam "stateId" StateId
             :> PostAccepted '[JSON] Bool
        )
+
+type Memory = "memory" :> Get '[Proto] Proto.AllIslandMemoryData
 
 type System =
   "system" :> Get '[Proto] Proto.IslandsSystemData

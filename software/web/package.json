@@ -11,7 +11,8 @@
   "author": "James Leslie",
   "license": "MIT",
   "dependencies": {
-    "@patternfly/patternfly": "^5.4.0"
+    "@patternfly/patternfly": "^5.4.0",
+    "apexcharts": "^4.3.0"
   },
   "devDependencies": {
     "htmlparser2": "^9.1.0",
