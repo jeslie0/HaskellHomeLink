@@ -5,10 +5,10 @@ package proto;
 // * Data types
 
 enum ISLAND {
-  HOME = 0;
-  LOCAL_HTTP = 1;
-  REMOTE_PROXY = 2;
-  UNKNOWN = 3;
+  UNKNOWN = 0;
+  HOME = 1;
+  LOCAL_HTTP = 2;
+  REMOTE_PROXY = 3;
 }
 
 enum STREAM_STATUS {
@@ -54,18 +54,26 @@ message RadioStatusUpdate {
   uint32 currentStationId = 2;
 }
 
+message MemoryUpdate {
+  uint32 systemTimeMs = 1;
+  uint32 memUsedkB = 2;
+}
+
 message MemoryInformation {
-  uint32 systemTime = 1;
-  uint32 memUsed = 2;
+  repeated double pair = 1;
 }
 
 message IslandMemoryInformation {
   ISLAND island = 1;
-  MemoryInformation memInfo = 2;
+  repeated MemoryInformation timeMem = 2;
 }
 
 message AllIslandMemoryData {
   repeated IslandMemoryInformation allIslandMemoryData = 1;
+}
+
+message CheckMemoryUsage {
+
 }
 
 // * Home Received Msgs
@@ -80,6 +88,8 @@ message HomeEnvelope {
     ModifyRadioRequest m1 = 1;
     ConnectTCP m2 = 2;
     SystemData m3 = 3;
+    MemoryInformation m4 = 4;
+    CheckMemoryUsage m5 = 5;
   }
 }
 
@@ -102,5 +112,7 @@ message ProxyEnvelope {
     RadioStatusUpdate m1 = 1;
     GetRadioStatusResponse m2 = 2;
     IslandSystemData m3 = 3;
+    MemoryInformation m4 = 4;
+    CheckMemoryUsage m5 = 5;
   }
 }

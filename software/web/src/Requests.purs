@@ -7,8 +7,8 @@ module Requests
 
 import Prelude
 
-import Apexcharts (Apexchart, updateOptions, render)
-import Chart (example, newOptions)
+import Apexcharts (Apexchart, render)
+import Chart (updateChartData)
 import Constants (getApiUrl)
 import Data.Array as Array
 import Data.ArrayBuffer.Builder (execPutM)
@@ -16,12 +16,14 @@ import Data.ArrayBuffer.DataView (byteLength, whole)
 import Data.Either (Either(..))
 import Data.Foldable (for_)
 import Data.HTTP.Method (Method(..))
+import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
-import Data.Tuple (Tuple(..), fst)
+import Data.Set as Set
+import Data.Time.Duration (Milliseconds(..))
+import Data.Tuple (Tuple(..), fst, snd)
 import Data.Tuple.Nested ((/\))
-import Data.UInt (fromInt)
 import Effect (Effect)
-import Effect.Aff (launchAff_)
+import Effect.Aff (delay, launchAff_)
 import Effect.Class (liftEffect)
 import Effect.Console as Console
 import Effect.Ref as Ref
@@ -31,7 +33,8 @@ import Parsing (fail, runParserT)
 import Proto.Messages as Proto
 import ProtoHelper (fromMessage, sayError, toMessage)
 import Radio (Stream(..), StreamStatus(..), StreamStatusError, radioStreams)
-import System (AllIslandsMemoryData(..), Island(..), IslandMemoryInformation(..), IslandsSystemData, MemoryInformation(..))
+import System (AllIslandsMemoryData(..), Island, IslandMemoryInformation(..), IslandsSystemData)
+import Unsafe.Coerce (unsafeCoerce)
 
 -- * Stream requests
 
@@ -126,8 +129,8 @@ fetchSystemsData update = do
     pure unit
 
 fetchMemoryData
-  :: (Array Island -> Effect Unit)
-  -> Ref.Ref (Array (Tuple Island Apexchart))
+  :: (Set.Set Island -> Effect Unit)
+  -> Ref.Ref (Map.Map Island Apexchart)
   -> Effect Unit
 fetchMemoryData setExistingApexCharts apexRef = do
   apiUrl <- getApiUrl
@@ -135,36 +138,27 @@ fetchMemoryData setExistingApexCharts apexRef = do
   launchAff_ do
     { arrayBuffer } <- fetch requestUrl { method: GET }
     body <- whole <$> arrayBuffer
+    liftEffect $ Console.logShow $ byteLength body
     result <- liftEffect $ runParserT body do
       resp <- Proto.parseAllIslandMemoryData (byteLength body)
       case fromMessage resp of
         Left errs -> fail "Error parsing response"
         Right allIslandsMemoryData -> pure allIslandsMemoryData
     case result of
-      Left err -> liftEffect $ Console.log "Error getting memory data"
+      Left err -> liftEffect $ Console.log $ "Error getting memory data: " <> show err
       Right allIslandsMemoryData -> do
-        liftEffect $ actOnData apexRef allIslandsMemoryData
+        liftEffect $ actOnData allIslandsMemoryData
+        pure unit
     pure unit
 
   where
-  actOnData :: Ref.Ref (Array (Tuple Island Apexchart)) -> AllIslandsMemoryData -> Effect Unit
-  actOnData chartArrayRef (AllIslandsMemoryData { allIslandMemoryData }) =
-    for_ [ IslandMemoryInformation { island: Home, memInfo: (MemoryInformation { systemTime: fromInt 0, memUsed: fromInt 0 }) } ] $ \(IslandMemoryInformation { island, memInfo }) -> do
-      chartArray <- liftEffect $ Ref.read apexRef
-      case Array.find ((==) island <<< fst) chartArray of
-        Nothing -> do
-          setExistingApexCharts $ Array.sort (Array.cons Home $ map fst chartArray)
-          void $ setTimeout 1000 $ do
-            newIslandChart <- liftEffect $ example ("chart")
-            render newIslandChart
-            let
-                newActiveCharts =
-                  Array.sortBy
-                    (\a b -> if fst a < fst b then LT else if fst a == fst b then EQ else GT) $
-                    Array.cons (Tuple island newIslandChart) chartArray
-            Ref.write newActiveCharts chartArrayRef
-
-        Just (Tuple _ chart) -> do
-          -- TODO use chart data here to make plot
-          void $ setTimeout 2000 $ updateOptions newOptions chart
+  actOnData ::AllIslandsMemoryData -> Effect Unit
+  actOnData (AllIslandsMemoryData { allIslandMemoryData }) =
+    for_ allIslandMemoryData $ \(IslandMemoryInformation { island, timeMem }) -> do
+      chartMap <- liftEffect $ Ref.read apexRef
+      case Map.lookup island chartMap of
+        Nothing ->
+          pure unit
+        Just chart -> do
+          updateChartData chart $ unsafeCoerce timeMem
           pure unit

@@ -5,15 +5,18 @@ package:
     - arraybuffer-builder
     - bifunctors
     - console
+    - datetime
     - deku-core
     - deku-css
     - deku-dom
     - effect
     - enums
     - fetch
+    - formatters
     - js-timers
     - maybe
     - numbers
+    - ordered-collections
     - parsing-dataview
     - prelude
     - protobuf

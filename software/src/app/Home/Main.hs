@@ -1,7 +1,6 @@
 module Home.Main (main) where
 
 import ConnectionManager (
-  Island (..),
   killConnections,
  )
 import Control.Concurrent (forkIO, killThread)
@@ -10,7 +9,7 @@ import Control.Monad.Reader
 import Data.Bifunctor (second)
 import Data.Foldable (for_)
 import Data.IORef (readIORef, writeIORef)
-import EventLoop (addMsg, mkEventLoop, run)
+import EventLoop (addMsg, mkEventLoop, run, setInterval)
 import Home.AudioStream (StreamStatus (Off))
 import Home.Env (
   Env,
@@ -20,10 +19,13 @@ import Home.Env (
   router,
  )
 import Home.Handler (ExHomeHandler (..), homeHandler)
+import Islands (Island (..))
 import Lens.Micro
 import Proto.Messages qualified as Proto
 import Proxy.Main (proxyMain)
 import Router (connectionsManager)
+import Control.Monad (void)
+import Data.ProtoLens (defMessage)
 
 main :: IO ()
 main = do
@@ -38,6 +40,9 @@ main = do
       $ addLocalHTTPServerConnection @Proto.HomeEnvelope
         (addMsg loop . second ExHomeHandler)
       $ env ^. router
+
+    void . liftIO . addMsg loop $ (Home, ExHomeHandler (defMessage @Proto.CheckMemoryUsage))
+    void . liftIO $ setInterval loop (Home, ExHomeHandler (defMessage @Proto.CheckMemoryUsage)) $ 30 * 1000
     run loop $ \evloop b -> uncurry (homeHandler evloop) b
 
   cleanupEnv env = do

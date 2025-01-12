@@ -2,7 +2,6 @@
 
 module ConnectionManager (
   ConnectionManager,
-  Island (..),
   mkConnectionManager,
   removeConnection,
   getSrcDest,
@@ -10,7 +9,6 @@ module ConnectionManager (
   initTCPClientConnection,
   initTCPServerConnection,
   trySendBytes,
-  islands,
 ) where
 
 import Connection.TCP (aquireActiveClientSocket, aquireActiveServerSocket)
@@ -24,72 +22,19 @@ import Control.Concurrent (
   newMVar,
   withMVar,
  )
-import Control.Monad (forM_, void)
+import Control.Monad (forM_)
 import Data.ByteString qualified as B
 import Data.Map.Strict qualified as Map
-import Data.ProtoLens (defMessage)
 import Data.Serialize (
   Serialize (..),
-  ensure,
-  getWord8,
   putWord32le,
-  putWord8,
   runGet,
  )
 import Data.Serialize.Put (runPut)
-import GHC.Generics (Generic)
-import Lens.Micro ((&), (.~))
 import Network.Socket
-import Proto.Messages qualified as Proto
-import Proto.Messages_Fields qualified as Proto
-import ProtoHelper (FromMessage (..), ToMessage (..))
 import Socket (sendAll)
-import System (SystemData)
+import Islands (Island)
 
-data Island
-  = Home
-  | RemoteProxy
-  | LocalHTTP
-  | Unknown
-  deriving (Generic, Eq, Ord, Enum, Show)
-
-instance FromMessage Proto.ISLAND Island where
-  fromMessage Proto.HOME = Home
-  fromMessage Proto.LOCAL_HTTP = LocalHTTP
-  fromMessage Proto.REMOTE_PROXY = RemoteProxy
-  fromMessage _ = Unknown
-
-instance ToMessage Proto.ISLAND Island where
-  toMessage Home = Proto.HOME
-  toMessage LocalHTTP = Proto.LOCAL_HTTP
-  toMessage RemoteProxy = Proto.REMOTE_PROXY
-  toMessage Unknown = Proto.UNKNOWN
-
-instance ToMessage Proto.IslandsSystemData (Map.Map Island SystemData) where
-  toMessage mp =
-    defMessage
-      & Proto.allSystemData
-      .~ ( Map.toList mp
-            & fmap
-              ( \(island, sysData) ->
-                  defMessage
-                    & Proto.island
-                    .~ toMessage island
-                    & Proto.systemData
-                    .~ toMessage sysData
-              )
-         )
-
-islands :: [Island]
-islands =
-  [Home, RemoteProxy, LocalHTTP]
-
-instance Serialize Island where
-  get = do
-    void $ ensure 1
-    toEnum . fromIntegral <$> getWord8
-
-  put = putWord8 . fromIntegral . fromEnum
 
 rightToMaybe :: Either a b -> Maybe b
 rightToMaybe (Left _) = Nothing

@@ -9,15 +9,18 @@
             "arraybuffer-builder",
             "bifunctors",
             "console",
+            "datetime",
             "deku-core",
             "deku-css",
             "deku-dom",
             "effect",
             "enums",
             "fetch",
+            "formatters",
             "js-timers",
             "maybe",
             "numbers",
+            "ordered-collections",
             "parsing-dataview",
             "prelude",
             "protobuf",
@@ -55,10 +58,12 @@
             "fast-vect",
             "fetch",
             "filterable",
+            "fixed-points",
             "float32",
             "foldable-traversable",
             "foreign",
             "foreign-object",
+            "formatters",
             "free",
             "functions",
             "functors",
@@ -1146,6 +1151,17 @@
         "ordered-collections"
       ]
     },
+    "fixed-points": {
+      "type": "registry",
+      "version": "7.0.0",
+      "integrity": "sha256-hTl5fzeG4mzAOFzEzAeNH7kJvJgYCH7x3v2NdX9pOE4=",
+      "dependencies": [
+        "exists",
+        "newtype",
+        "prelude",
+        "transformers"
+      ]
+    },
     "float32": {
       "type": "registry",
       "version": "2.0.0",
@@ -1207,6 +1223,20 @@
         "tuples",
         "typelevel-prelude",
         "unfoldable"
+      ]
+    },
+    "formatters": {
+      "type": "registry",
+      "version": "7.0.0",
+      "integrity": "sha256-5JaC9d2p0xoqJWjWxlHH19R4iJwFTBr4j7SlYcLgicE=",
+      "dependencies": [
+        "datetime",
+        "fixed-points",
+        "lists",
+        "numbers",
+        "parsing",
+        "prelude",
+        "transformers"
       ]
     },
     "free": {

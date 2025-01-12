@@ -5,12 +5,23 @@ module EventLoop (
   setTimeout,
   run,
   killEventLoop,
+  TimeoutId,
+  killTimeout,
+  setInterval,
+  killInterval,
+  IntervalId,
 ) where
 
 import Control.Concurrent (
   MVar,
+  ThreadId,
+  forkFinally,
   isEmptyMVar,
+  killThread,
+  modifyMVar,
+  myThreadId,
   newEmptyMVar,
+  newMVar,
   putMVar,
   takeMVar,
   threadDelay,
@@ -21,13 +32,14 @@ import Control.Monad (unless, when)
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.PQueue.Prio.Min qualified as PQueue
-import Data.Time.Clock (UTCTime, addUTCTime, getCurrentTime)
+import Data.Time.Clock (UTCTime, getCurrentTime)
 
 -- | A single threaded event loop that can have messages added to it
 -- from another thread.
 data EventLoop m msg = EventLoop
   { _keepLoopAliveMVar :: MVar ()
   , _pqueueMVar :: MVar (PQueue.MinPQueue UTCTime msg)
+  , _waitingThreads :: MVar [ThreadId]
   }
 
 -- | Create an event loop.
@@ -43,27 +55,62 @@ mkEventLoop = do
   -- the queue is empty or not. An empty MVar means an empty queue.
   _pqueueMVar <- liftIO newEmptyMVar
 
+  _waitingThreads <- liftIO $ newMVar []
+
   return
     EventLoop
       { _keepLoopAliveMVar
       , _pqueueMVar
+      , _waitingThreads
       }
 
 addMsg :: (MonadIO m, MonadIO m1) => EventLoop m1 msg -> msg -> m ()
-addMsg loop msg = setTimeout loop msg 0
-
-setTimeout :: (MonadIO m, MonadIO m1) => EventLoop m1 msg -> msg -> Int -> m ()
-setTimeout (EventLoop {_keepLoopAliveMVar, _pqueueMVar}) msg timeoutMs = do
+addMsg (EventLoop {_keepLoopAliveMVar, _pqueueMVar}) msg = do
   time <- liftIO getCurrentTime
-  -- Insert the messaage into the priority queue with
-  -- current time.
   mPQueue <- liftIO $ tryTakeMVar _pqueueMVar
   case mPQueue of
     Nothing -> liftIO $ putMVar _pqueueMVar $ PQueue.singleton time msg
     Just queue ->
-      liftIO $
-        putMVar _pqueueMVar $
-          (addUTCTime (fromIntegral timeoutMs) time, msg) PQueue.:< queue
+      liftIO . putMVar _pqueueMVar $ (time, msg) PQueue.:< queue
+
+newtype TimeoutId = TimeoutId ThreadId
+
+setTimeout ::
+  (MonadIO m, MonadIO m1) => EventLoop m1 msg -> msg -> Int -> m TimeoutId
+setTimeout loop@(EventLoop {_keepLoopAliveMVar, _pqueueMVar, _waitingThreads}) msg timeoutMs = do
+  newThread <-
+    liftIO
+      . forkFinally (threadDelay (timeoutMs * 1000) >> addMsg loop msg)
+      $ ( \_ -> do
+            thisThread <- myThreadId
+            modifyMVar _waitingThreads $ \threads -> pure (filter (/= thisThread) threads, ())
+        )
+  liftIO . modifyMVar _waitingThreads $ \threads -> pure (newThread : threads, TimeoutId newThread)
+
+killTimeout :: MonadIO m => TimeoutId -> m ()
+killTimeout (TimeoutId threadId) = liftIO $ killThread threadId
+
+newtype IntervalId = IntervalId ThreadId
+
+setInterval ::
+  (MonadIO m, MonadIO m1) => EventLoop m1 msg -> msg -> Int -> m IntervalId
+setInterval loop@(EventLoop {_keepLoopAliveMVar, _pqueueMVar, _waitingThreads}) msg timeoutMs = do
+  let action = do
+        threadDelay (timeoutMs * 1000)
+        addMsg loop msg
+        action
+  newThread <-
+    liftIO
+      . forkFinally
+        action
+      $ ( \_ -> do
+            thisThread <- myThreadId
+            modifyMVar _waitingThreads $ \threads -> pure (filter (/= thisThread) threads, ())
+        )
+  liftIO . modifyMVar _waitingThreads $ \threads -> pure (newThread : threads, IntervalId newThread)
+
+killInterval :: MonadIO m => IntervalId -> m ()
+killInterval (IntervalId threadId) = liftIO $ killThread threadId
 
 killEventLoop :: MonadIO m => EventLoop m msg -> m ()
 killEventLoop (EventLoop {_keepLoopAliveMVar, _pqueueMVar}) = do

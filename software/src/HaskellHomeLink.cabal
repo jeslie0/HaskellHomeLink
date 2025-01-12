@@ -69,6 +69,7 @@ executable Home
                       Home.AudioStream,
                       Home.Handler,
                       Home.Env,
+                      Islands,
                       Msg,
                       Proto.Messages,
                       Proto.Messages_Fields,

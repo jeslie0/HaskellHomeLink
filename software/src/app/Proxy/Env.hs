@@ -9,24 +9,29 @@ module Proxy.Env (
   EnvT,
   addLocalHTTPServerConnection,
   systemMap,
+  memoryMap,
 ) where
 
-import ConnectionManager (Island (..), initTCPServerConnection)
+import ConnectionManager (initTCPServerConnection)
 import Control.Concurrent (MVar, newEmptyMVar, newMVar)
 import Control.Monad.Reader (ReaderT)
 import Data.Map.Strict qualified as Map
+import Data.Vector qualified as V
 import Home.AudioStream (StationId, StreamStatus (..))
+import Islands (Island (..))
 import Lens.Micro ((^.))
 import Lens.Micro.TH (makeLenses)
 import Msg (Msg)
 import Router (Router, connectionsManager, handleBytes, mkRouter)
 import State (State, mkState)
 import System (SystemData, mkSystemData)
+import System.Memory (MemoryInformation)
 
 data Env = Env
   { _router :: Router
   , _streamStatusState :: State (StreamStatus, StationId)
   , _systemMap :: MVar (Map.Map Island SystemData)
+  , _memoryMap :: MVar (Map.Map Island (V.Vector MemoryInformation))
   }
 
 $(makeLenses ''Env)
@@ -44,11 +49,13 @@ mkEnv island = do
       Nothing -> putStrLn "Could not extract cpuinfo" >> pure Map.empty
       Just homeSystemData -> pure $ Map.insert Home homeSystemData Map.empty
     newMVar mp
+  _memoryMap <- newMVar Map.empty
   pure $
     Env
       { _router
       , _streamStatusState
       , _systemMap
+      , _memoryMap
       }
 
 addLocalHTTPServerConnection ::

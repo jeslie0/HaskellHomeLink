@@ -5,18 +5,23 @@ module Proxy.Handler (
   ExProxyHandler (..),
 ) where
 
-import ConnectionManager (Island (..))
 import Control.Concurrent (modifyMVar_)
+import Control.Monad (void)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Reader (ask)
 import Data.Map.Strict qualified as Map
+import Data.Vector qualified as V
+import Envelope (toEnvelope)
 import EventLoop (EventLoop)
+import Islands (Island (..))
 import Lens.Micro ((^.))
 import Proto.Messages qualified as Proto
 import Proto.Messages_Fields qualified as Proto
-import ProtoHelper (FromMessage (..))
-import Proxy.Env (EnvT, streamStatusState, systemMap)
+import ProtoHelper (FromMessage (..), toMessage)
+import Proxy.Env (EnvT, memoryMap, router, streamStatusState, systemMap)
+import Router (trySendMessage)
 import State (fulfilPromise)
+import System.Memory (getMemoryInformation)
 import TH (makeInstance)
 
 class ProxyHandler msg where
@@ -66,3 +71,31 @@ instance ProxyHandler Proto.IslandSystemData where
         sysData = fromMessage $ resp ^. Proto.systemData
       in
         pure $ Map.insert island sysData sysMap
+
+instance ProxyHandler Proto.MemoryInformation where
+  proxyHandler _ src resp = do
+    liftIO $ putStrLn $ "meminfo from " <> show src
+    env <- ask
+    liftIO $ modifyMVar_ (env ^. memoryMap) $ \memMap ->
+      let
+        secondsPerDay = 1440 :: Int
+        alterFunc Nothing = Just $ V.singleton (fromMessage resp)
+        alterFunc (Just vec) =
+          Just $
+            if V.length vec < secondsPerDay * 2
+              then
+                V.snoc vec (fromMessage resp)
+              else V.snoc (V.unsafeDrop 1 vec) (fromMessage resp)
+      in
+        pure $ Map.alter alterFunc src memMap
+
+instance ProxyHandler Proto.CheckMemoryUsage where
+  proxyHandler _ _ _ = do
+    env <- ask
+    mMemInfo <- liftIO getMemoryInformation
+    case mMemInfo of
+      Nothing -> liftIO . putStrLn $ "Failed to get memory info"
+      Just memInfo -> do
+        void . liftIO . trySendMessage (env ^. router) Home $
+          toEnvelope $
+            toMessage @Proto.MemoryInformation memInfo

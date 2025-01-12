@@ -24,6 +24,8 @@ import System.Directory (doesFileExist)
 import System.Info (arch, os)
 import Data.Word (Word32)
 import System.Memory (getTotalMemory)
+import qualified Data.Map.Strict as Map
+import Islands (Island)
 
 data SystemData = SystemData
   { _cpuData :: CPUData
@@ -59,6 +61,22 @@ instance FromMessage Proto.SystemData SystemData where
       , _architecture = systemDataMessage ^. Proto.architecture
       , _memTotalKb = systemDataMessage ^. Proto.memTotalkB
       }
+
+instance ToMessage Proto.IslandsSystemData (Map.Map Island SystemData) where
+  toMessage mp =
+    defMessage
+      & Proto.allSystemData
+      .~ ( Map.toList mp
+            & fmap
+              ( \(island, sysData) ->
+                  defMessage
+                    & Proto.island
+                    .~ toMessage island
+                    & Proto.systemData
+                    .~ toMessage sysData
+              )
+         )
+
 
 isInDockerContainer :: IO Bool
 isInDockerContainer = do

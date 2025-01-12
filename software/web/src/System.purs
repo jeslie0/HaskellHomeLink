@@ -2,15 +2,16 @@ module System where
 
 import Prelude
 
-import Data.Array (null, (:))
+import Data.Array ((:))
 import Data.Array as Array
 import Data.Bifunctor (lmap)
 import Data.Either (Either(..))
 import Data.Maybe (fromMaybe)
-import Data.Traversable (traverse)
+import Data.Traversable (sequence, traverse)
 import Data.UInt (UInt, fromInt)
 import Proto.Messages as Proto
 import ProtoHelper (class FromMessage, class SayError, fromMessage, sayError, toEither)
+import Web.DOM.Document (doctype)
 
 type CPUDataR = (modelName :: String)
 newtype CPUData = CPUData (Record CPUDataR)
@@ -57,6 +58,9 @@ data Island
   | LocalHTTP
   | RemoteProxy
   | UnknownIsland
+
+islands :: Array Island
+islands = [ Home, LocalHTTP, RemoteProxy ]
 
 data IslandError = InvalidIsland
 
@@ -109,8 +113,7 @@ data IslandsSystemDataError
 
 instance FromMessage Proto.IslandsSystemData IslandsSystemData IslandsSystemDataError where
   fromMessage (Proto.IslandsSystemData msg) =
-    if null msg.allSystemData then Left MissingIslandsSystemData
-    else IslandsSystemData <<< { allSystemData: _ }
+    IslandsSystemData <<< { allSystemData: _ }
       <$>
         ( lmap MissingPartOfAllSystemData
             $ traverse (lmap pure <<< fromMessage) (msg.allSystemData)
@@ -120,47 +123,31 @@ instance SayError IslandsSystemDataError where
   sayError MissingIslandsSystemData = pure "IslandsSystemData is missing allSystemData"
   sayError (MissingPartOfAllSystemData err) = "IslandSystemData has invalid allSystemData" : Array.concatMap sayError err
 
-type MemoryInformationR =
-  ( systemTime :: UInt
-  , memUsed :: UInt
-  )
-
-newtype MemoryInformation = MemoryInformation (Record MemoryInformationR)
-data MemoryInformationError
-
-instance FromMessage Proto.MemoryInformation MemoryInformation MemoryInformationError where
-  fromMessage (Proto.MemoryInformation msg) =
-    Right $ MemoryInformation
-      { systemTime: fromMaybe (fromInt 0) msg.systemTime
-      , memUsed: fromMaybe (fromInt 0) msg.memUsed
-      }
-
-type IslandMemoryInformationR = (island :: Island, memInfo :: MemoryInformation)
+type IslandMemoryInformationR = (island :: Island, timeMem :: Array (Array Number))
 newtype IslandMemoryInformation = IslandMemoryInformation (Record IslandMemoryInformationR)
 data IslandMemoryInformationError
   = MissingMemIsland
   | InvalidMemIsland IslandError
   | MissingMemoryInformation
-  | MissingPartOfMemInfo MemoryInformationError
 
 instance FromMessage Proto.IslandMemoryInformation IslandMemoryInformation IslandMemoryInformationError where
   fromMessage (Proto.IslandMemoryInformation msg) = do
     islandProt <- toEither MissingMemIsland (msg.island)
     island <- lmap InvalidMemIsland $ fromMessage islandProt
-    memInfoProt <- toEither MissingMemoryInformation msg.memInfo
-    memInfo <- lmap MissingPartOfMemInfo $ fromMessage memInfoProt
-    pure $ IslandMemoryInformation { island, memInfo }
+    pure $ IslandMemoryInformation { island, timeMem: msg.timeMem <#> \(Proto.MemoryInformation info) -> info.pair }
 
 type AllIslandMemoryDataR = (allIslandMemoryData :: Array IslandMemoryInformation)
 newtype AllIslandsMemoryData = AllIslandsMemoryData (Record AllIslandMemoryDataR)
 data AllIslandsMemoryDataError
   = MissingAllIslandsMemoryData
   | MissingPartOfAllMemoryData (Array IslandMemoryInformationError)
+  | Foo IslandMemoryInformationError
 
 instance FromMessage Proto.AllIslandMemoryData AllIslandsMemoryData AllIslandsMemoryDataError where
-  fromMessage (Proto.AllIslandMemoryData msg) =
-    AllIslandsMemoryData <<< { allIslandMemoryData: _ }
-      <$>
-        ( lmap MissingPartOfAllMemoryData
-            $ traverse (lmap pure <<< fromMessage) (msg.allIslandMemoryData)
-        )
+  fromMessage (Proto.AllIslandMemoryData msg) = do
+    foo <- lmap MissingPartOfAllMemoryData $
+      ( traverse
+          (\e -> lmap (\_ -> []) e)
+          (fromMessage @Proto.IslandMemoryInformation @IslandMemoryInformation <$> msg.allIslandMemoryData)
+      )
+    pure $ AllIslandsMemoryData { allIslandMemoryData: foo }

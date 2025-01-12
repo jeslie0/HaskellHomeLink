@@ -7,13 +7,13 @@ module Router (
   connectionsManager,
   mkRouter,
   trySendMessage,
-  forwardMsg,
+  forwardBytes,
   handleBytes,
+  tryForwardMessage,
 ) where
 
 import ConnectionManager (
   ConnectionManager,
-  Island (..),
   getSrcDest,
   mkConnectionManager,
   trySendBytes,
@@ -22,6 +22,7 @@ import Control.Monad (void)
 import Data.ByteString qualified as B
 import Data.Maybe (fromMaybe)
 import Data.Serialize (Serialize (..), runPut)
+import Islands (Island(..))
 import Lens.Micro ((^.))
 import Lens.Micro.TH (makeLenses)
 import Msg (Msg (..))
@@ -58,8 +59,17 @@ trySendMessage (Router island connMgr) dest msg = do
     addressedBytes = runPut (put island) <> runPut (put dest) <> bytes
   trySendBytes connMgr hop addressedBytes
 
-forwardMsg :: Router -> Island -> B.ByteString -> IO Bool
-forwardMsg (Router _island connMgr) dest bytes = do
+tryForwardMessage :: Msg msg => Router -> Island -> Island -> msg -> IO Bool
+tryForwardMessage (Router island connMgr) src dest msg = do
+  -- Get next hop
+  let
+    hop = fromMaybe dest $ nextHop island dest
+    bytes = toBytes msg
+    addressedBytes = runPut (put src) <> runPut (put dest) <> bytes
+  trySendBytes connMgr hop addressedBytes
+
+forwardBytes :: Router -> Island -> B.ByteString -> IO Bool
+forwardBytes (Router _island connMgr) dest bytes = do
   trySendBytes connMgr dest bytes
 
 handleBytes ::
@@ -78,4 +88,4 @@ handleBytes handleMsg rtr bytes = do
         then case fromBytes @msg payload of
           Left err -> putStrLn err
           Right envelope -> handleMsg (src, envelope)
-        else void $ forwardMsg rtr dest bytes
+        else void $ forwardBytes rtr dest bytes

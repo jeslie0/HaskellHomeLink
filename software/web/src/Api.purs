@@ -3,7 +3,9 @@ module Api (Api(..), mkApi) where
 import Prelude
 
 import Apexcharts (Apexchart)
+import Data.Map as Map
 import Data.Maybe (Maybe)
+import Data.Set as Set
 import Data.Tuple (Tuple)
 import Data.Tuple.Nested ((/\))
 import Deku.Effect as DE
@@ -22,11 +24,14 @@ type Api =
       , selectedStreamPoll :: Poll Stream
       }
   , requests :: { modifyStream :: Maybe Stream -> Effect Unit }
-  , setters :: { selectStream :: Stream -> Effect Unit }
+  , setters ::
+      { selectStream :: Stream -> Effect Unit
+      , setExistingApexCharts :: Set.Set Island -> Effect Unit
+      }
   , memoryCharts ::
-      { apexchartsRef :: Ref.Ref (Array (Tuple Island Apexchart))
-      , existingApexCharts :: Poll (Array Island)
-      , setExistingApexCharts :: Array Island -> Effect Unit
+      { apexchartsRef :: Ref.Ref (Map.Map Island Apexchart)
+      , existingApexCharts :: Poll (Set.Set Island)
+      , setExistingApexCharts :: Set.Set Island -> Effect Unit
       }
   }
 
@@ -41,8 +46,8 @@ mkApi = do
   let selectStream stream = Ref.write stream selectedStreamRef >>= \_ -> setSelectedStreamPoll stream
 
   -- Chart ref and poll
-  _ /\ setExistingApexCharts /\ existingApexCharts <- DE.useHot []
-  apexchartsRef <- Ref.new []
+  _ /\ setExistingApexCharts /\ existingApexCharts <- DE.useHot Set.empty
+  apexchartsRef <- Ref.new Map.empty
 
   -- StateId Refs
   streamStateIdRef <- Ref.new 0
@@ -52,13 +57,13 @@ mkApi = do
   _ <- setInterval 2000 $ fetchStreamStatus streamStateIdRef selectStream setStreamStatusPoll
 
   fetchMemoryData setExistingApexCharts apexchartsRef
-  _ <- setInterval 2000 $ fetchMemoryData  setExistingApexCharts apexchartsRef
+  _ <- setInterval (3 * 1000) $ fetchMemoryData setExistingApexCharts apexchartsRef
 
   fetchSystemsData setSystemsDataPoll
 
   pure
     { polls: { systemsDataPoll, streamStatusPoll, selectedStreamPoll }
     , requests: { modifyStream: modifyStream streamStateIdRef selectStream setStreamStatusPoll }
-    , setters: { selectStream: selectStream }
+    , setters: { setExistingApexCharts, selectStream }
     , memoryCharts: { apexchartsRef, existingApexCharts, setExistingApexCharts }
     }

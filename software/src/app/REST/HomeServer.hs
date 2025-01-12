@@ -4,13 +4,14 @@
 
 module REST.HomeServer (runApp, mkEnv, router) where
 
-import ConnectionManager (Island (..))
+import Islands (Island (..))
 import Control.Concurrent (MVar, readMVar)
 import Control.Exception (SomeAsyncException, catch, throwIO)
 import Control.Monad (void)
 import Control.Monad.IO.Class (liftIO)
 import Data.Map.Strict qualified as Map
 import Data.ProtoLens (defMessage)
+import Data.Vector qualified as V
 import Envelope (toEnvelope)
 import Home.AudioStream (StationId, StreamStatus)
 import Lens.Micro ((&), (.~), (^.))
@@ -38,11 +39,13 @@ import Servant (
 import Servant.Server (Application)
 import State (State, StateId, waitForStateUpdate, withState)
 import System (SystemData)
+import System.Memory (MemoryInformation)
 import WaiAppStatic.Types (unsafeToPiece)
 
 data Env = Env
   { _streamStatusState :: State (StreamStatus, StationId)
   , _systemDataState :: MVar (Map.Map Island SystemData)
+  , _memoryMap :: MVar (Map.Map Island (V.Vector MemoryInformation))
   , _router :: Router
   }
 
@@ -51,13 +54,15 @@ $(makeLenses ''Env)
 mkEnv ::
   State (StreamStatus, StationId)
   -> MVar (Map.Map Island SystemData)
+  -> MVar (Map.Map Island (V.Vector MemoryInformation))
   -> Router
   -> IO Env
-mkEnv streamStatus systemState rtr = do
+mkEnv streamStatus systemState memMap rtr = do
   pure $
     Env
       { _streamStatusState = streamStatus
       , _systemDataState = systemState
+      , _memoryMap = memMap
       , _router = rtr
       }
 
@@ -94,8 +99,10 @@ handleGetSystemDataRequest env = do
 
 handleGetAllIslandsMemoryDataRequest :: Env -> Handler Proto.AllIslandMemoryData
 handleGetAllIslandsMemoryDataRequest env = do
-  -- sysMap <- liftIO $ readMVar (env ^. systemDataState)
-  pure defMessage
+  memMap <- liftIO $ readMVar (env ^. memoryMap)
+  let x = toMessage $ memMap
+  liftIO $ print x
+  pure x
 
 -- * Server
 

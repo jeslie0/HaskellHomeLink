@@ -11,7 +11,8 @@ module Home.Env (
   addRemoteProxyConnection,
 ) where
 
-import ConnectionManager (Island (..), initTCPClientConnection)
+import ConnectionManager (initTCPClientConnection)
+import Islands (Island (..))
 import Control.Concurrent (ThreadId)
 import Control.Monad.Reader (ReaderT)
 import Data.IORef (IORef, newIORef)

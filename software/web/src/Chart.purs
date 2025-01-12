@@ -1,9 +1,12 @@
 module Chart where
 
+import Data.Formatter.DateTime
 import Prelude
 
-import Apexcharts (Apexchart, Apexoptions, createChart, render)
+import Apexcharts (Apexchart, Apexoptions, createChart, updateOptions)
 import Apexcharts.Chart as C
+import Apexcharts.Chart.Animations as A
+import Apexcharts.Chart.Toolbar as TB
 import Apexcharts.Chart.Zoom as Z
 import Apexcharts.Common as CC
 import Apexcharts.DataLabels as DL
@@ -11,17 +14,24 @@ import Apexcharts.Series as SE
 import Apexcharts.Stroke (Curve(..))
 import Apexcharts.Stroke as S
 import Apexcharts.Title as T
+import Apexcharts.Tooltip as TT
 import Apexcharts.Xaxis as X
-import Data.Maybe (Maybe(..))
+import Apexcharts.Xaxis.Labels as XL
+import Apexcharts.Xaxis.Labels.DatetimeFormatter as X
+import Apexcharts.Xaxis.Title as XT
+import Apexcharts.Yaxis as Y
+import Apexcharts.Yaxis.Labels as YL
+import Apexcharts.Yaxis.Title as YT
+import Data.Array as Array
+import Data.DateTime.Instant (instant, toDateTime)
+import Data.List.Types ((:), List(..))
+import Data.Maybe (fromMaybe)
 import Data.Options (Options, (:=))
-import Deku.Control (elementify)
-import Deku.Core (Nut(..))
-import Deku.DOM (Attribute, HTMLDivElement)
-import Deku.DOM as DD
-import Deku.DOM.Attributes as DA
+import Data.Time.Duration (Milliseconds(..))
+import Data.UInt (UInt, toInt, toNumber)
 import Effect (Effect)
-import FRP.Poll (Poll)
-import Type.Proxy (Proxy)
+import Effect.Console as Console
+import System (Island(..))
 
 -- Apex charts work by finding DOM elements with a given label, then
 -- modifying them appropriately. For us, this means that our DOM will
@@ -34,31 +44,75 @@ import Type.Proxy (Proxy)
 
 type ChartID = String
 
-example :: ChartID -> Effect Apexchart
-example chartId = createChart ("#" <> chartId)
-  ( C.chart := (C.type' := CC.Area
-                <> C.height := 350.0
-                <> C.width := "400.0"
-                <> Z.zoom := (Z.enabled := false))
-      <> SE.series := [ SE.name := "STOCK ABC" <> SE.data' := [ 31, 40, 28, 51, 42, 109, 100 ] ]
-      <> T.title := T.text := "Hi"
+islandChartName :: Island -> ChartID
+islandChartName = case _ of
+  Home -> "home-memory-chart"
+  LocalHTTP -> "local-http-memory-chart"
+  RemoteProxy -> "remote-proxy-memory-chart"
+  UnknownIsland -> "unknown-memory-chart"
+
+-- createIslandChart :: Island -> Array UInt -> Array UInt -> Effect Apexchart
+-- createIslandChart island xData yData = do
+--   Console.logShow $ islandChartName island
+--   createChart ("#" <> islandChartName island) options
+--   where
+--   options =
+--     ( C.chart :=
+--         ( C.type' := CC.Area
+--             <> C.height := 350.0
+--             <> C.width := "100%"
+--             <> Z.zoom := (Z.enabled := false)
+--             <> TB.toolbar := (TB.show := false)
+--         )
+--         <> T.title := T.text := (show island <> " Memory")
+--         <> TT.tooltip := (TT.enabled := false)
+--         <> S.stroke := S.curve := Smooth
+--         <> DL.dataLabels := (DL.enabled := false)
+--         <> (updatedChartOptions xData yData)
+--         <> X.xaxis :=
+--           ( XT.title := (XT.text := "Time")
+--               <> X.type' := X.Datetime
+--           )
+--         <> Y.yaxis :=
+--           ( Y.min := 0.0
+--               <> Y.max := 1.05 * 16.0
+--               <> YT.title := (YT.text := "Memory used (GB)")
+--           )
+--     )
+
+updatedChartOptions :: Array (Array Number) -> Options Apexoptions
+updatedChartOptions xyData = do
+  ( C.chart :=
+    ( C.type' := CC.Area
+          <> C.height := 350.0
+          <> C.width := "100%"
+          <> Z.zoom := Z.enabled := false
+          <> TB.toolbar := TB.show := false
+          <> A.animations :=A.enabled := false
+      )
+      <> TT.tooltip := (TT.enabled := false)
       <> S.stroke := S.curve := Smooth
       <> DL.dataLabels := (DL.enabled := false)
-      <> X.xaxis :=
-        ( X.type' := X.Datetime <> X.categories :=
-            [ "2018-09-19T00:00:00.000Z"
-            , "2018-09-19T01:30:00.000Z"
-            , "2018-09-19T02:30:00.000Z"
-            , "2018-09-19T03:30:00.000Z"
-            , "2018-09-19T04:30:00.000Z"
-            , "2018-09-19T05:30:00.000Z"
-            , "2018-09-19T06:30:00.000Z"
-            ]
+      <>
+        ( SE.series := [ SE.name := "Memory used (GB)" <> SE.data' := xyData ]
         )
 
+      <> X.xaxis :=
+        ( XT.title := (XT.text := "Time")
+            <> X.type' := X.Datetime
+        )
+      <> Y.yaxis :=
+        ( Y.min := 0.0
+            <> Y.max := 1.05 * getMaxVal xyData
+            <> YT.title := (YT.text := "Memory used (GB)")
+        )
   )
 
-newOptions :: Options Apexoptions
-newOptions =
-  ( SE.series := [ SE.name := "STOCK ABC" <> SE.data' := [ 31, 40, 28, 51, 42, 109, 100 ] ]
-  )
+getMaxVal :: Array (Array Number) -> Number
+getMaxVal pairs =
+  Array.foldl (\acc pair -> max acc $ fromMaybe acc (pair Array.!!1)) 0.0 pairs
+
+updateChartData :: Apexchart -> Array (Array Number) -> Effect Unit
+updateChartData chart xyData = do
+  Console.log $ "Updating Chart options: " <> show xyData
+  updateOptions (updatedChartOptions xyData) chart

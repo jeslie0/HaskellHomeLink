@@ -11,7 +11,6 @@ module Home.Handler (
   ExHomeHandler (..),
 ) where
 
-import ConnectionManager (Island (..), islands)
 import Control.Concurrent (forkFinally, killThread)
 import Control.Monad (void)
 import Control.Monad.Reader
@@ -24,11 +23,13 @@ import Envelope (ToProxyEnvelope (..))
 import EventLoop (EventLoop, addMsg)
 import Home.AudioStream (StationId, StreamStatus (..), startAudioStream)
 import Home.Env (EnvT, addRemoteProxyConnection, audioStreamRef, router)
+import Islands (Island (..), islands, proxies)
 import Lens.Micro ((&), (.~), (?~), (^.), _1, _2, _3)
 import Proto.Messages qualified as Proto
 import Proto.Messages_Fields qualified as Proto
 import ProtoHelper (ToMessage (..))
-import Router (Router, trySendMessage)
+import Router (Router, tryForwardMessage, trySendMessage)
+import System.Memory (getMemoryInformation)
 import TH (makeInstance)
 
 class HomeHandler msg where
@@ -128,3 +129,17 @@ instance HomeHandler Proto.SystemData where
     env <- ask
     liftIO . forM_ (filter (/= Home) islands) $ \island ->
       trySendMessage (env ^. router) island msg
+
+instance HomeHandler Proto.MemoryInformation where
+  homeHandler _ src msg = do
+    env <- ask
+    forM_ proxies $ \proxy -> do
+      liftIO $ tryForwardMessage (env ^. router) src proxy $ toProxyEnvelope msg
+
+instance HomeHandler Proto.CheckMemoryUsage where
+  homeHandler loop _ _ = do
+    mMemInfo <- liftIO getMemoryInformation
+    case mMemInfo of
+      Nothing -> liftIO . putStrLn $ "Failed to get memory info"
+      Just memInfo -> do
+        addMsg loop (Home, ExHomeHandler $ toMessage @Proto.MemoryInformation memInfo)
