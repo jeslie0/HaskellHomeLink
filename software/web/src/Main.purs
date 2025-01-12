@@ -16,7 +16,6 @@ import Effect.Console as Console
 import FRP.Poll (Poll)
 import Pages (OverviewPageState, Page(..), SystemPageState, overviewPage, pageList, systemPage)
 import Prelude (Unit, bind, discard, pure, show, unit, ($), (<#>), (<>), (==))
-import Chart as Chart
 
 main :: Effect Unit
 main = do

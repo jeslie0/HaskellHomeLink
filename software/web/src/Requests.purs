@@ -7,7 +7,7 @@ module Requests
 
 import Prelude
 
-import Apexcharts (Apexchart, render)
+import Apexcharts (Apexchart)
 import Chart (updateChartData)
 import Constants (getApiUrl)
 import Data.Array as Array
@@ -19,15 +19,12 @@ import Data.HTTP.Method (Method(..))
 import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Set as Set
-import Data.Time.Duration (Milliseconds(..))
-import Data.Tuple (Tuple(..), fst, snd)
 import Data.Tuple.Nested ((/\))
 import Effect (Effect)
-import Effect.Aff (delay, launchAff_)
+import Effect.Aff (launchAff_)
 import Effect.Class (liftEffect)
 import Effect.Console as Console
 import Effect.Ref as Ref
-import Effect.Timer (setTimeout)
 import Fetch (fetch)
 import Parsing (fail, runParserT)
 import Proto.Messages as Proto
@@ -132,7 +129,7 @@ fetchMemoryData
   :: (Set.Set Island -> Effect Unit)
   -> Ref.Ref (Map.Map Island Apexchart)
   -> Effect Unit
-fetchMemoryData setExistingApexCharts apexRef = do
+fetchMemoryData _setExistingApexCharts apexRef = do
   apiUrl <- getApiUrl
   let requestUrl = apiUrl <> "memory"
   launchAff_ do
@@ -142,7 +139,7 @@ fetchMemoryData setExistingApexCharts apexRef = do
     result <- liftEffect $ runParserT body do
       resp <- Proto.parseAllIslandMemoryData (byteLength body)
       case fromMessage resp of
-        Left errs -> fail "Error parsing response"
+        Left _errs -> fail "Error parsing response"
         Right allIslandsMemoryData -> pure allIslandsMemoryData
     case result of
       Left err -> liftEffect $ Console.log $ "Error getting memory data: " <> show err

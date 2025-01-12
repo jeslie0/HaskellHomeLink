@@ -1,9 +1,8 @@
 module Chart where
 
-import Data.Formatter.DateTime
 import Prelude
 
-import Apexcharts (Apexchart, Apexoptions, createChart, updateOptions)
+import Apexcharts (Apexchart, Apexoptions, updateOptions)
 import Apexcharts.Chart as C
 import Apexcharts.Chart.Animations as A
 import Apexcharts.Chart.Toolbar as TB
@@ -13,22 +12,16 @@ import Apexcharts.DataLabels as DL
 import Apexcharts.Series as SE
 import Apexcharts.Stroke (Curve(..))
 import Apexcharts.Stroke as S
-import Apexcharts.Title as T
 import Apexcharts.Tooltip as TT
-import Apexcharts.Xaxis as X
-import Apexcharts.Xaxis.Labels as XL
-import Apexcharts.Xaxis.Labels.DatetimeFormatter as X
+import Apexcharts.Xaxis (AxisType(..), type', xaxis) as X
 import Apexcharts.Xaxis.Title as XT
 import Apexcharts.Yaxis as Y
 import Apexcharts.Yaxis.Labels as YL
 import Apexcharts.Yaxis.Title as YT
 import Data.Array as Array
-import Data.DateTime.Instant (instant, toDateTime)
-import Data.List.Types ((:), List(..))
-import Data.Maybe (fromMaybe)
+import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Number as Number
 import Data.Options (Options, (:=))
-import Data.Time.Duration (Milliseconds(..))
-import Data.UInt (UInt, toInt, toNumber)
 import Effect (Effect)
 import Effect.Console as Console
 import System (Island(..))
@@ -83,12 +76,12 @@ islandChartName = case _ of
 updatedChartOptions :: Array (Array Number) -> Options Apexoptions
 updatedChartOptions xyData = do
   ( C.chart :=
-    ( C.type' := CC.Area
+      ( C.type' := CC.Area
           <> C.height := 350.0
           <> C.width := "100%"
           <> Z.zoom := Z.enabled := false
           <> TB.toolbar := TB.show := false
-          <> A.animations :=A.enabled := false
+          <> A.animations := A.enabled := false
       )
       <> TT.tooltip := (TT.enabled := false)
       <> S.stroke := S.curve := Smooth
@@ -105,12 +98,17 @@ updatedChartOptions xyData = do
         ( Y.min := 0.0
             <> Y.max := 1.05 * getMaxVal xyData
             <> YT.title := (YT.text := "Memory used (GB)")
+            <> YL.labels :=
+              ( YL.formatter := \strF -> case Number.fromString strF of
+                  Just f -> show <<< Number.round $ f / 1000000.0
+                  Nothing -> strF
+              )
         )
   )
 
 getMaxVal :: Array (Array Number) -> Number
 getMaxVal pairs =
-  Array.foldl (\acc pair -> max acc $ fromMaybe acc (pair Array.!!1)) 0.0 pairs
+  Array.foldl (\acc pair -> max acc $ fromMaybe acc (pair Array.!! 1)) 0.0 pairs
 
 updateChartData :: Apexchart -> Array (Array Number) -> Effect Unit
 updateChartData chart xyData = do

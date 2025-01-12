@@ -13,12 +13,9 @@ import Apexcharts.Stroke as S
 import Apexcharts.Tooltip as TT
 import Apexcharts.Xaxis as X
 import Apexcharts.Xaxis.Title as XT
-import Apexcharts.Yaxis as Y
 import Api (Api)
-import Chart (islandChartName, updatedChartOptions)
 import Data.Map as Map
 import Data.Options ((:=))
-import Data.Time (Millisecond)
 import Data.Time.Duration (Milliseconds(..))
 import Data.UInt (fromInt)
 import Deku.Control as DC
@@ -35,12 +32,12 @@ import Patternfly (dlistGroup)
 import Protobuf.Internal.Prelude (toInt)
 import System (IslandSystemData(..), IslandsSystemData(..), islands)
 import Unsafe.Coerce (unsafeCoerce)
-import Web.DOM.Element (tagName)
 
 type SystemPageState = { api :: Api }
 
 renderDiskCapacity :: Number -> Number -> String
-renderDiskCapacity freeSpaceGB totalSpaceGB = show freeSpaceGB <> " / " <> show totalSpaceGB <> " GB"
+renderDiskCapacity freeSpaceGB totalSpaceGB =
+  show freeSpaceGB <> " / " <> show totalSpaceGB <> " GB"
 
 mkIslandSystemDataCard :: IslandSystemData -> Nut
 mkIslandSystemDataCard (IslandSystemData { island, systemData }) =
