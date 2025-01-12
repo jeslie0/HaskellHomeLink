@@ -1,15 +1,11 @@
-module Pages.Login (loginPage) where
+module Pages.Login (loginPage, backgroundImageNut) where
 
 import Prelude
 
-import CSS.Background (background)
-import Deku.Control as DC
 import Deku.Core (Nut)
 import Deku.DOM as DD
 import Deku.DOM.Attributes as DA
-import Deku.Do as Deku
 import Deku.Pursx (pursx)
-import FRP.Poll (Poll)
 import Images (backgroundImage)
 
 backgroundImageNut :: Nut

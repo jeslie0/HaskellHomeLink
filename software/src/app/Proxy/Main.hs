@@ -5,7 +5,7 @@ import ConnectionManager (
  )
 import Control.Concurrent (MVar)
 import Control.Exception (bracket)
-import Control.Monad (void)
+import Control.Monad (void, when)
 import Control.Monad.Reader
 import Data.Bifunctor (second)
 import Data.Map.Strict qualified as Map
@@ -65,9 +65,13 @@ proxyMain island = do
       $ addLocalHTTPServerConnection @Proto.ProxyEnvelope
         (addMsg loop . second ExProxyHandler)
       $ env ^. router
-    void . liftIO $
-      setInterval loop (Home, ExProxyHandler (defMessage @Proto.CheckMemoryUsage)) $
-        30 * 1000
+
+    when (island == RemoteProxy)
+      . void
+      . liftIO
+      $ setInterval loop (Home, ExProxyHandler (defMessage @Proto.CheckMemoryUsage))
+      $ 30 * 1000
+
     run loop $ \evloop b -> uncurry (proxyHandler evloop) b
 
   cleanupEnv env = do

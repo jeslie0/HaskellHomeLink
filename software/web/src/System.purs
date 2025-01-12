@@ -7,11 +7,10 @@ import Data.Array as Array
 import Data.Bifunctor (lmap)
 import Data.Either (Either(..))
 import Data.Maybe (fromMaybe)
-import Data.Traversable (sequence, traverse)
+import Data.Traversable (traverse)
 import Data.UInt (UInt, fromInt)
 import Proto.Messages as Proto
 import ProtoHelper (class FromMessage, class SayError, fromMessage, sayError, toEither)
-import Web.DOM.Document (doctype)
 
 type CPUDataR = (modelName :: String)
 newtype CPUData = CPUData (Record CPUDataR)

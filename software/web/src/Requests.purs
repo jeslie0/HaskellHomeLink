@@ -18,7 +18,6 @@ import Data.Foldable (for_)
 import Data.HTTP.Method (Method(..))
 import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
-import Data.Set as Set
 import Data.Tuple.Nested ((/\))
 import Effect (Effect)
 import Effect.Aff (launchAff_)
@@ -31,7 +30,6 @@ import Proto.Messages as Proto
 import ProtoHelper (fromMessage, sayError, toMessage)
 import Radio (Stream(..), StreamStatus(..), StreamStatusError, radioStreams)
 import System (AllIslandsMemoryData(..), Island, IslandMemoryInformation(..), IslandsSystemData)
-import Unsafe.Coerce (unsafeCoerce)
 
 -- * Stream requests
 
@@ -74,7 +72,6 @@ fetchStreamStatus streamStateIdRef updateStreamStation updateStreamStatus = do
             Left _ -> Console.log "Couldn't parse currentStationId"
             Right station -> do
               updateStreamStatus status
-              Console.logShow status
               updateStreamStation station
 
 -- | Start or stop the audio stream.
@@ -126,16 +123,14 @@ fetchSystemsData update = do
     pure unit
 
 fetchMemoryData
-  :: (Set.Set Island -> Effect Unit)
-  -> Ref.Ref (Map.Map Island Apexchart)
+  :: Ref.Ref (Map.Map Island Apexchart)
   -> Effect Unit
-fetchMemoryData _setExistingApexCharts apexRef = do
+fetchMemoryData apexRef = do
   apiUrl <- getApiUrl
   let requestUrl = apiUrl <> "memory"
   launchAff_ do
     { arrayBuffer } <- fetch requestUrl { method: GET }
     body <- whole <$> arrayBuffer
-    liftEffect $ Console.logShow $ byteLength body
     result <- liftEffect $ runParserT body do
       resp <- Proto.parseAllIslandMemoryData (byteLength body)
       case fromMessage resp of
@@ -149,7 +144,7 @@ fetchMemoryData _setExistingApexCharts apexRef = do
     pure unit
 
   where
-  actOnData ::AllIslandsMemoryData -> Effect Unit
+  actOnData :: AllIslandsMemoryData -> Effect Unit
   actOnData (AllIslandsMemoryData { allIslandMemoryData }) =
     for_ allIslandMemoryData $ \(IslandMemoryInformation { island, timeMem }) -> do
       chartMap <- liftEffect $ Ref.read apexRef
@@ -157,5 +152,5 @@ fetchMemoryData _setExistingApexCharts apexRef = do
         Nothing ->
           pure unit
         Just chart -> do
-          updateChartData chart $ unsafeCoerce timeMem
+          updateChartData chart timeMem
           pure unit

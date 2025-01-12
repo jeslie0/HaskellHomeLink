@@ -5,8 +5,6 @@ import Prelude
 import Apexcharts (Apexchart)
 import Data.Map as Map
 import Data.Maybe (Maybe)
-import Data.Set as Set
-import Data.Tuple (Tuple)
 import Data.Tuple.Nested ((/\))
 import Deku.Effect as DE
 import Effect (Effect)
@@ -23,15 +21,15 @@ type Api =
       , streamStatusPoll :: Poll StreamStatus
       , selectedStreamPoll :: Poll Stream
       }
-  , requests :: { modifyStream :: Maybe Stream -> Effect Unit }
+  , requests ::
+      { modifyStream :: Maybe Stream -> Effect Unit
+      , getMemoryData :: Effect Unit
+      }
   , setters ::
       { selectStream :: Stream -> Effect Unit
-      , setExistingApexCharts :: Set.Set Island -> Effect Unit
       }
   , memoryCharts ::
       { apexchartsRef :: Ref.Ref (Map.Map Island Apexchart)
-      , existingApexCharts :: Poll (Set.Set Island)
-      , setExistingApexCharts :: Set.Set Island -> Effect Unit
       }
   }
 
@@ -46,7 +44,6 @@ mkApi = do
   let selectStream stream = Ref.write stream selectedStreamRef >>= \_ -> setSelectedStreamPoll stream
 
   -- Chart ref and poll
-  _ /\ setExistingApexCharts /\ existingApexCharts <- DE.useHot Set.empty
   apexchartsRef <- Ref.new Map.empty
 
   -- StateId Refs
@@ -56,14 +53,15 @@ mkApi = do
   fetchStreamStatus streamStateIdRef selectStream setStreamStatusPoll
   _ <- setInterval 2000 $ fetchStreamStatus streamStateIdRef selectStream setStreamStatusPoll
 
-  fetchMemoryData setExistingApexCharts apexchartsRef
-  _ <- setInterval (3 * 1000) $ fetchMemoryData setExistingApexCharts apexchartsRef
+  let getMemoryData = fetchMemoryData apexchartsRef
+  getMemoryData
+  _ <- setInterval (30 * 1000) getMemoryData
 
   fetchSystemsData setSystemsDataPoll
 
   pure
     { polls: { systemsDataPoll, streamStatusPoll, selectedStreamPoll }
-    , requests: { modifyStream: modifyStream streamStateIdRef selectStream setStreamStatusPoll }
-    , setters: { setExistingApexCharts, selectStream }
-    , memoryCharts: { apexchartsRef, existingApexCharts, setExistingApexCharts }
+    , requests: { modifyStream: modifyStream streamStateIdRef selectStream setStreamStatusPoll, getMemoryData }
+    , setters: { selectStream }
+    , memoryCharts: { apexchartsRef }
     }

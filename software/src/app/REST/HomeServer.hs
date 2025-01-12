@@ -4,7 +4,6 @@
 
 module REST.HomeServer (runApp, mkEnv, router) where
 
-import Islands (Island (..))
 import Control.Concurrent (MVar, readMVar)
 import Control.Exception (SomeAsyncException, catch, throwIO)
 import Control.Monad (void)
@@ -14,6 +13,7 @@ import Data.ProtoLens (defMessage)
 import Data.Vector qualified as V
 import Envelope (toEnvelope)
 import Home.AudioStream (StationId, StreamStatus)
+import Islands (Island (..))
 import Lens.Micro ((&), (.~), (^.))
 import Lens.Micro.TH (makeLenses)
 import Network.Wai.Application.Static (
@@ -100,9 +100,7 @@ handleGetSystemDataRequest env = do
 handleGetAllIslandsMemoryDataRequest :: Env -> Handler Proto.AllIslandMemoryData
 handleGetAllIslandsMemoryDataRequest env = do
   memMap <- liftIO $ readMVar (env ^. memoryMap)
-  let x = toMessage $ memMap
-  liftIO $ print x
-  pure x
+  pure . toMessage $ memMap
 
 -- * Server
 

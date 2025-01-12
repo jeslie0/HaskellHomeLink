@@ -74,7 +74,6 @@ instance ProxyHandler Proto.IslandSystemData where
 
 instance ProxyHandler Proto.MemoryInformation where
   proxyHandler _ src resp = do
-    liftIO $ putStrLn $ "meminfo from " <> show src
     env <- ask
     liftIO $ modifyMVar_ (env ^. memoryMap) $ \memMap ->
       let
