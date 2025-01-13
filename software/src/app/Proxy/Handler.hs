@@ -6,11 +6,12 @@ module Proxy.Handler (
 ) where
 
 import Control.Concurrent (modifyMVar_)
-import Control.Monad (void)
+import Control.Monad (forM_, void)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Reader (ask)
 import Data.Map.Strict qualified as Map
 import Data.Vector qualified as V
+import Data.Vector.Mutable qualified as VM
 import Envelope (toEnvelope)
 import EventLoop (EventLoop)
 import Islands (Island (..))
@@ -21,7 +22,7 @@ import ProtoHelper (FromMessage (..), toMessage)
 import Proxy.Env (EnvT, memoryMap, router, streamStatusState, systemMap)
 import Router (trySendMessage)
 import State (fulfilPromise)
-import System.Memory (getMemoryInformation)
+import System.Memory (MemoryInformation, getMemoryInformation)
 import TH (makeInstance)
 
 class ProxyHandler msg where
@@ -78,15 +79,23 @@ instance ProxyHandler Proto.MemoryInformation where
     liftIO $ modifyMVar_ (env ^. memoryMap) $ \memMap ->
       let
         secondsPerDay = 1440 :: Int
-        alterFunc Nothing = Just $ V.singleton (fromMessage resp)
+        alterFunc ::
+          Maybe (V.Vector MemoryInformation) -> IO (Maybe (V.Vector MemoryInformation))
+        alterFunc Nothing = pure . Just $ V.singleton (fromMessage resp)
         alterFunc (Just vec) =
-          Just $
-            if V.length vec < secondsPerDay * 2
-              then
-                V.snoc vec (fromMessage resp)
-              else V.snoc (V.unsafeDrop 1 vec) (fromMessage resp)
+          if V.length vec < secondsPerDay * 2
+            then
+              pure . Just $ V.snoc vec (fromMessage resp)
+            else fmap
+              Just
+              $ do
+                mVec <- V.unsafeThaw vec
+                forM_ [0 .. VM.length mVec - 2] $ \(i :: Int) ->
+                  VM.read mVec (i + 1) >>= VM.write mVec i
+                VM.write mVec (VM.length mVec - 1) (fromMessage resp)
+                V.unsafeFreeze mVec
       in
-        pure $ Map.alter alterFunc src memMap
+        liftIO $ Map.alterF alterFunc src memMap
 
 instance ProxyHandler Proto.CheckMemoryUsage where
   proxyHandler _ _ _ = do
