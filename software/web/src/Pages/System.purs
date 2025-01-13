@@ -48,7 +48,7 @@ mkIslandSystemDataCard (IslandSystemData { island, systemData }) =
       , dlistGroup "OS" $ pure (unsafeCoerce systemData).operatingSystemName
       , dlistGroup "Architecture" $ pure (unsafeCoerce systemData).architecture
       , dlistGroup "Container" <<< pure <<< show @Boolean $ (unsafeCoerce systemData).inDockerContainer
-      , dlistGroup "RAM" <<< pure $ (show @Int <<< toInt $ (unsafeCoerce systemData).memTotalKb / fromInt 1000000) <> " GB"
+      , dlistGroup "RAM" <<< pure $ (show $ UInt.toNumber ((unsafeCoerce systemData).memTotalKb) / 1000000.0) <> " GB"
       ]
 
 mkIslandMemoryChartCard :: Api -> IslandSystemData -> Nut

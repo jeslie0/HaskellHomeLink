@@ -65,7 +65,7 @@ defaultChartOptions max =
             <> YT.title := (YT.text := "Memory used (GB)")
             <> YL.labels :=
               ( YL.formatter := \strF -> case Number.fromString strF of
-                  Just f -> show <<< Number.round $ f / 1000000.0
+                  Just f -> show $ (Number.floor $ f / 1000.0) / 1000.0
                   Nothing -> strF
               )
         )
