@@ -90,12 +90,12 @@ getTotalMemory = do
 
 getUsedMemory :: IO (Maybe Word32)
 getUsedMemory = do
-  mMemMap <- parseKeyValuePairFile "/proc/meminfo" ["MemTotal", "MemFree"]
+  mMemMap <- parseKeyValuePairFile "/proc/meminfo" ["MemTotal", "MemAvailable"]
   pure $ do
     memMap <- mMemMap
     memTotalTxt <- memMap Map.!? "MemTotal"
     memTotal <- readMaybe . T.unpack . fst . T.breakOn " " $ memTotalTxt
-    memFreeTxt <- memMap Map.!? "MemFree"
+    memFreeTxt <- memMap Map.!? "MemAvailable"
     memFree <- readMaybe . T.unpack . fst . T.breakOn " " $ memFreeTxt
     pure $ memTotal - memFree
 
