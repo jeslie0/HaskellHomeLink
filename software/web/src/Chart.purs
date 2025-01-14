@@ -13,6 +13,7 @@ import Apexcharts.NoData as ND
 import Apexcharts.Series as SE
 import Apexcharts.Stroke as S
 import Apexcharts.Tooltip as TT
+import Apexcharts.Tooltip.X as TTX
 import Apexcharts.Xaxis (AxisType(..), type', xaxis) as X
 import Apexcharts.Xaxis.Title as XT
 import Apexcharts.Yaxis as Y
@@ -34,7 +35,7 @@ import Effect (Effect)
 
 updatedChartOptions :: Array (Array Number) -> Options Apexoptions
 updatedChartOptions xyData = do
-  SE.series := [ SE.data' := xyData ]
+  SE.series := [ SE.name := "Memory used (GB)" <> SE.data' := xyData ]
 
 updateChartData :: Apexchart -> Array (Array Number) -> Effect Unit
 updateChartData chart xyData = do
@@ -50,7 +51,12 @@ defaultChartOptions max =
           <> TB.toolbar := TB.show := false
           <> A.animations := A.enabled := false
       )
-      <> TT.tooltip := (TT.enabled := false)
+      <> TT.tooltip :=
+        ( TT.enabled := true
+            <> TTX.x :=
+              ( TTX.format := "HH:mm:ss dd-MMM-yyyy"
+              )
+        )
       <> DL.dataLabels := (DL.enabled := false)
       <> S.stroke := S.curve := S.Smooth
       <> X.xaxis :=
@@ -65,7 +71,7 @@ defaultChartOptions max =
             <> YT.title := (YT.text := "Memory used (GB)")
             <> YL.labels :=
               ( YL.formatter := \strF -> case Number.fromString strF of
-                  Just f -> show $ (Number.floor $ f / 1000.0) / 1000.0
+                  Just f -> show $ (Number.round $ f / 1000.0) / 1000.0
                   Nothing -> strF
               )
         )
