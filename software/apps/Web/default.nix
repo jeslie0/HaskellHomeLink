@@ -64,7 +64,8 @@ let
 
       installPhase = ''
         mkdir $out
-        cp -r output $out
+        mv output $out
+        cp -r .spago $out
       '';
     };
 
@@ -86,8 +87,8 @@ let
         "0.1.0";
 
       buildPhase = ''
-        cp -r ${dependenciesOutput}/output ./
-        chmod -R u+w ./output
+        cp -r ${dependenciesOutput}/* .
+        chmod -R 0755 ./output
         spago build
       '';
 
@@ -102,19 +103,22 @@ let
       src = spago;
       npmDepsHash = "sha256-qX5Ks7pwWcHPf/PaghfXZkwALRBr6rHh51vt8qGSQKI=";
     };
+
+  web =
+    mkDerivation {
+    pname =
+        "HaskellHomeLink-Web";
+
+    version =
+        "0.1.0";
+
+    src =
+        npmPkg;
+
+    installPhase = ''
+        mkdir -p $out/usr/local/haskell-home-link;
+        cp -r lib/node_modules/haskell-home-link/dist/* $out/usr/local/haskell-home-link
+        '';
+    };
 in
-mkDerivation {
-  pname =
-    "HaskellHomeLink-Web";
-
-  version =
-    "0.1.0";
-
-  src =
-    npmPkg;
-
-  installPhase = ''
-                 mkdir -p $out/usr/local/haskell-home-link;
-                 cp -r lib/node_modules/haskell-home-link/dist/* $out/usr/local/haskell-home-link
-                 '';
-}
+web
