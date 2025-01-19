@@ -16,6 +16,7 @@ import Effect (Effect)
 import Effect.Ref as Ref
 import FRP.Poll (Poll)
 import Pages (OverviewPageState, Page(..), SystemPageState, overviewPage, pageList, systemPage)
+import Pages.Logs (LogsPageState, logsPage)
 import Prelude (Unit, bind, discard, pure, show, unit, ($), (<#>), (<>), (==))
 
 main :: Effect Unit
@@ -50,6 +51,8 @@ pageBody pagePoll states =
         [ pagePoll <#~> case _ of
             Overview -> overviewPage states.overviewPageState
 
+            Logs -> logsPage states.logsPageState
+
             _ -> systemPage states.systemPageState
 
         -- Applications -> applicationsPage states.applicationsPageState
@@ -58,6 +61,7 @@ pageBody pagePoll states =
 
 type PageStates =
   { overviewPageState :: OverviewPageState
+  , logsPageState :: LogsPageState
   , systemPageState :: SystemPageState
   }
 
@@ -74,5 +78,9 @@ dekuApp = do
 
     DD.div [ DA.klass_ "pf-v5-c-page" ]
       [ header page changePage
-      , pageBody page { overviewPageState: { api }, systemPageState: { api } }
+      , pageBody page
+          { overviewPageState: { api }
+          , systemPageState: { api }
+          , logsPageState: { api }
+          }
       ]

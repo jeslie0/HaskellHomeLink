@@ -17,6 +17,16 @@ enum STREAM_STATUS {
   PLAYING = 2;
 }
 
+enum LOG_LEVEL {
+  UNDEFINED = 0;
+  TRACE = 1;
+  DEBUG = 2;
+  INFO = 3;
+  WARN = 4;
+  ERROR = 5;
+  FATAL = 6;
+}
+
 message CPUData {
   string vendor = 1;
   string modelName = 2;
@@ -74,6 +84,17 @@ message AllIslandMemoryData {
 
 message CheckMemoryUsage {
 
+}
+
+message Log {
+  uint32 timestampMs = 1;
+  ISLAND island = 2;
+  LOG_LEVEL level = 3;
+  repeated string messages = 4;
+}
+
+message Logs {
+  repeated Log logs = 1;
 }
 
 // * Home Received Msgs

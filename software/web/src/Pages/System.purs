@@ -5,6 +5,7 @@ import Prelude
 import Apexcharts (createChartEl, render)
 import Api (Api)
 import Chart (defaultChartOptions)
+import Data.Array as Array
 import Data.Map as Map
 import Data.Time.Duration (Milliseconds(..))
 import Data.UInt (fromInt)
@@ -52,7 +53,7 @@ mkIslandSystemDataCard (IslandSystemData { island, systemData }) =
       ]
 
 mkIslandMemoryChartCard :: Api -> IslandSystemData -> Nut
-mkIslandMemoryChartCard api (IslandSystemData {island, systemData: SystemData systemData}) =
+mkIslandMemoryChartCard api (IslandSystemData { island, systemData: SystemData systemData }) =
   DD.div [ DA.klass_ "pf-v5-l-grid__item" ]
     [ DD.div [ DA.klass_ "pf-v5-c-card pf-m-display-lg pf-m-full-height" ]
         [ DD.div [ DA.klass_ "pf-v5-c-card__body" ]
@@ -86,7 +87,17 @@ systemPage :: SystemPageState -> Nut
 systemPage { api } =
   DD.div []
     [ api.polls.systemsDataPoll <#~> \(IslandsSystemData { allSystemData }) ->
-        DD.div
-          [ DA.klass_ "pf-v5-l-grid pf-m-gutter pf-m-all-12-col-on-lg pf-m-all-12-col-on-md" ] $
-          allSystemData <#> \islandSystemData -> mkIslandGrid api islandSystemData
+        if Array.null allSystemData then noDataCard
+        else
+          DD.div
+            [ DA.klass_ "pf-v5-l-grid pf-m-gutter pf-m-all-12-col-on-lg pf-m-all-12-col-on-md" ] $
+            allSystemData <#> \islandSystemData -> mkIslandGrid api islandSystemData
     ]
+  where
+  noDataCard =
+    DD.div [ DA.klass_ "pf-v5-c-card pf-m-display-lg pf-m-full-height" ]
+      [ DD.div [ DA.klass_ "pf-v5-c-card__title" ]
+          [ DD.h1 [ DA.klass_ "pf-v5-c-card__title-text" ]
+              [ DC.text_ "No data" ]
+          ]
+      ]

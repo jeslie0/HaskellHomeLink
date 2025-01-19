@@ -11,6 +11,7 @@ import Effect (Effect)
 import Effect.Ref as Ref
 import Effect.Timer (setInterval)
 import FRP.Poll (Poll)
+import Logs (Log)
 import Radio (Stream(..), StreamStatus(..))
 import Requests (fetchMemoryData, fetchStreamStatus, fetchSystemsData, modifyStream)
 import System (Island, IslandsSystemData(..))
@@ -31,6 +32,10 @@ type Api =
   , memoryCharts ::
       { apexchartsRef :: Ref.Ref (Map.Map Island Apexchart)
       }
+  , logging ::
+       { logsPoll :: Poll (Array Log)
+       , setLogsPoll :: Array Log -> Effect Unit
+       }
   }
 
 mkApi :: Effect Api
@@ -45,6 +50,10 @@ mkApi = do
 
   -- Chart ref and poll
   apexchartsRef <- Ref.new Map.empty
+
+  -- Log Polls
+  _ /\ setLogsPoll /\ logsPoll <- DE.useHot []
+  
 
   -- StateId Refs
   streamStateIdRef <- Ref.new 0
@@ -64,4 +73,5 @@ mkApi = do
     , requests: { modifyStream: modifyStream streamStateIdRef selectStream setStreamStatusPoll, getMemoryData }
     , setters: { selectStream }
     , memoryCharts: { apexchartsRef }
+    , logging: { logsPoll, setLogsPoll }
     }
