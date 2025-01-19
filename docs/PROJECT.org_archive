@@ -37,3 +37,51 @@ The =proto-lens= package auto generates types for us, however; for it's ~oneOf~ 
 
 ** Complete!
 This is now complete. The envelope types can be made instances of Handler classes now. This allows them to be added straight to the event loop.
+
+* DONE Add memory usage information to system page
+:PROPERTIES:
+:type:     task
+:ARCHIVE_TIME: 2025-01-14 Tue 21:23
+:ARCHIVE_FILE: ~/workspaces/Haskell/AssistantPi/docs/PROJECT.org
+:ARCHIVE_OLPATH: Tasks/Rework Nix structure
+:ARCHIVE_CATEGORY: Project Management
+:ARCHIVE_TODO: DONE
+:END:
+It would be use to see how much memory each device is using. This should be shown on the system page as chart.
+Each island should report it's memory usage to home, which will the notify all of the proxies. Each proxy will store up to a certain time period of data, which is sent to the web for viewing.
+
+* DONE Fix audio deadlock issue
+:PROPERTIES:
+:type:     bug
+:ARCHIVE_TIME: 2025-01-14 Tue 21:23
+:ARCHIVE_FILE: ~/workspaces/Haskell/AssistantPi/docs/PROJECT.org
+:ARCHIVE_OLPATH: Bugs
+:ARCHIVE_CATEGORY: Project Management
+:ARCHIVE_TODO: DONE
+:END:
+It seems like it is possible to get into a bad state by spamming start and stop radio requests. There is probably an issue with the thread access which to  resolved. I think that making sure the audio socket gets safely made and not interrupted by an async exception is key.
+
+* DONE Make all events have a source
+:PROPERTIES:
+:ARCHIVE_TIME: 2025-01-14 Tue 21:24
+:ARCHIVE_FILE: ~/workspaces/Haskell/AssistantPi/docs/PROJECT.org
+:ARCHIVE_OLPATH: Tasks
+:ARCHIVE_CATEGORY: Project Management
+:ARCHIVE_TODO: DONE
+:END:
+This should make replying to an event a bit easier to manage.
+
+* DONE Implement a Message dispatcher
+:PROPERTIES:
+:type:     task
+:component: backend
+:priority: high
+:ARCHIVE_TIME: 2025-01-14 Tue 21:24
+:ARCHIVE_FILE: ~/workspaces/Haskell/AssistantPi/docs/PROJECT.org
+:ARCHIVE_OLPATH: Tasks
+:ARCHIVE_CATEGORY: Project Management
+:ARCHIVE_TODO: DONE
+:END:
+Some kind of data type needs to manage the connections and routing of messages. It should be abstract enough to be able to deal with different types communication (channels/sockets). Each event handler should have access to this.
+
+I think that the Home island will be the core island that everything talks to directly, bar the proxy. The Home island will serve up some data to the frontend, but also send that data to the proxy.

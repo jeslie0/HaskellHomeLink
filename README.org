@@ -21,8 +21,8 @@ This project is primarily packaged with Nix. As it grows, components will also b
 * Project overview
 This project consists of several different applications that run in different locations. These are:
 - Home application (high side);
-- Proxy application (low side);
-- Web GUI (hosted on the low side, run on low side).
+- Web GUI (hosted on both the high and low side);
+- TODO Proxy application (low side).
 
 The Home application controls various devices at the user's home, such as radios, smart lights or smart cameras. It establishes a TLS+ProtoBuf connection to the Proxy application, which is running on a remote server somewhere else. The user then communicates with the Proxy application by a Web GUI, which is served using TLS.
 

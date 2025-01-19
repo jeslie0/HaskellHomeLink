@@ -5,29 +5,8 @@
 #+author: James Leslie
 #+TODO: TODO IN-PROGRESS WAITING ONGOING POSTPONED | DONE CANCELLED
 
-* [2/5] Tasks
-
-
-** ONGOING Create detailed design documentation
-:PROPERTIES:
-:component: documentation
-:type:     task
-:END:
-I need to create a document explaining how the pieces of this project work. Realistically, this will be a constantly updated document and will never be "finished".
-
-** CANCELLED Implement a Message dispatcher
-:PROPERTIES:
-:type:     task
-:component: backend
-:priority: high
-:END:
-Some kind of data type needs to manage the connections and routing of messages. It should be abstract enough to be able to deal with different types communication (channels/sockets). Each event handler should have access to this.
-
-I think that the Home island will be the core island that everything talks to directly, bar the proxy. The Home island will serve up some data to the frontend, but also send that data to the proxy.
-
-** DONE Make all events have a source
-This should make replying to an event a bit easier to manage.
-** WAITING Implement client TLS connection controller
+* [0/4] Tasks
+** TODO Implement client TLS connection controller
 :PROPERTIES:
 :type:     task
 :priority: high
@@ -40,26 +19,29 @@ This will depend on completing a basic TCP connection first, since that is simpl
 
 A basic TCP client has been implemented. It needs to be refined. It should try to connect to the given destination every 2 seconds, and then keep trying to reconnect when there is a connection break.
 
+** ONGOING Create detailed design documentation
+:PROPERTIES:
+:component: documentation
+:type:     task
+:END:
+I need to create a document explaining how the pieces of this project work. Realistically, this will be a constantly updated document and will never be "finished".
+
 ** ONGOING Rework Nix structure
 :PROPERTIES:
 :type:     packaging
 :END:
 Currently, the nix structure of this project is a real mess. This should be tidied up and organised.
 
-**** TODO Add memory usage information to system page
+
+
+** IN-PROGRESS Add Logs page 
 :PROPERTIES:
 :type:     task
 :END:
-It would be use to see how much memory each device is using. This should be shown on the system page as chart.
-Each island should report it's memory usage to home, which will the notify all of the proxies. Each proxy will store up to a certain time period of data, which is sent to the web for viewing.
-* [1/1] Bugs
+The Haskell code needs a method to report info logs and errors. A log controller should me made that stores logs and propogates them to the frontend by a logs endpoint
+* [0/0] Bugs
 
 
-** DONE Fix audio deadlock issue
-:PROPERTIES:
-:type:     bug
-:END:
-It seems like it is possible to get into a bad state by spamming start and stop radio requests. There is probably an issue with the thread access which to  resolved. I think that making sure the audio socket gets safely made and not interrupted by an async exception is key.
 * Milestones
 ** v0.0.1.0 - MVP
 :PROPERTIES:
