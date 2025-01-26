@@ -3,27 +3,16 @@ module Pages.Logs (logsPage, LogsPageState) where
 import Prelude
 
 import Api (Api)
-import Chart (defaultChartOptions)
 import Data.Array as Array
-import Data.Map as Map
-import Data.Time.Duration (Milliseconds(..))
-import Data.Traversable (foldl)
-import Data.UInt (fromInt)
-import Data.UInt as UInt
+import Data.DateTime.Instant (toDateTime)
+import Data.Formatter.DateTime (Formatter, FormatterCommand(..), format)
+import Data.List (List(..), (:))
 import Deku.Control as DC
 import Deku.Core (Nut)
 import Deku.DOM as DD
 import Deku.DOM.Attributes as DA
-import Deku.DOM.Self as Self
 import Deku.Hooks ((<#~>))
-import Effect.Aff (delay, launchAff_)
-import Effect.Class (liftEffect)
-import Effect.Ref as Ref
 import Logs (Log(..))
-import Patternfly (dlistGroup)
-import Protobuf.Internal.Prelude (toInt)
-import System (IslandSystemData(..), IslandsSystemData(..), SystemData(..))
-import Unsafe.Coerce (unsafeCoerce)
 
 type LogsPageState = { api :: Api }
 
@@ -42,11 +31,11 @@ logsPage { api } =
   where
   body =
     DD.table
-      [ DA.klass_ "pf-v5-c-table pf-m-grid-md pf-m-striped"
+      [ DA.klass_ "pf-v5-c-table pf-m-grid-md pf-m-compact"
       , DA.role_ "grid"
       ]
       [ DD.thead [ DA.klass_ "pf-v5-c-table__thead" ]
-          [ DD.tr [ DA.klass_ "pr-v5-c-table__tr", DA.role_ "row" ]
+          [ DD.tr [ DA.klass_ "pf-v5-c-table__tr", DA.role_ "row" ]
               [ DD.th [ DA.klass_ "pf-v5-c-table__th", DA.role_ "columnheader", DA.scope_ "col" ]
                   [ DD.text_ "Time" ]
               , DD.th [ DA.klass_ "pf-v5-c-table__th", DA.role_ "columnheader", DA.scope_ "col" ]
@@ -59,13 +48,13 @@ logsPage { api } =
           ]
       , api.logging.logsPoll <#~> \logs ->
           DD.tbody [ DA.klass_ "pf-v5-c-table__tbody", DA.role_ "rowgroup" ]
-            ( logs
+            ( Array.reverse logs
                 <#> \(Log log) ->
                   DD.tr [ DA.klass_ "pf-v5-c-table__tr", DA.role_ "row" ]
-                    [ makeCell "DATE"
-                    , makeCell $ show log.logLevel
+                    [ makeCell $ format formatter (toDateTime log.timestamp)
                     , makeCell $ show log.island
-                    , makeCell $ foldl (\curr prev -> curr <> "\n " <> prev) "" log.messages
+                    , makeCell $ show log.logLevel
+                    , makeCell $ log.content
                     ]
             )
 
@@ -116,3 +105,8 @@ logsPage { api } =
               ]
           ]
       ]
+
+formatter :: Formatter
+formatter =
+  YearFull : Placeholder "-" : MonthTwoDigits : Placeholder "-" : DayOfMonthTwoDigits : Placeholder " "
+  : Hours24 : Placeholder ":" : MinutesTwoDigits : Placeholder ":" : SecondsTwoDigits : Nil

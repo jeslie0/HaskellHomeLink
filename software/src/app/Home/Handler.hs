@@ -31,6 +31,7 @@ import ProtoHelper (ToMessage (..))
 import Router (Router, tryForwardMessage, trySendMessage)
 import System.Memory (getMemoryInformation)
 import TH (makeInstance)
+import Logger (reportLog, LogLevel (..))
 
 class HomeHandler msg where
   homeHandler ::
@@ -87,7 +88,7 @@ instance HomeHandler Proto.ModifyRadioRequest where
         threadId <-
           liftIO $
             forkFinally
-              (startAudioStream (station ^. Proto.url) updateStreamStatus)
+              (startAudioStream (env ^. router) (station ^. Proto.url) updateStreamStatus)
               ( \_ -> do
                   atomicModifyIORef' (env ^. audioStreamRef) $ \st ->
                     (st, ())
@@ -98,6 +99,7 @@ instance HomeHandler Proto.ModifyRadioRequest where
                       . _2
                       .~ Off
                   void notify
+                  reportLog (env ^. router) Info "Stopping radio stream"
               )
         liftIO
           . atomicModifyIORef'

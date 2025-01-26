@@ -13,7 +13,7 @@ import Effect.Timer (setInterval)
 import FRP.Poll (Poll)
 import Logs (Log)
 import Radio (Stream(..), StreamStatus(..))
-import Requests (fetchMemoryData, fetchStreamStatus, fetchSystemsData, modifyStream)
+import Requests (fetchLogs, fetchMemoryData, fetchStreamStatus, fetchSystemsData, modifyStream)
 import System (Island, IslandsSystemData(..))
 
 type Api =
@@ -67,6 +67,10 @@ mkApi = do
   _ <- setInterval (30 * 1000) getMemoryData
 
   fetchSystemsData setSystemsDataPoll
+
+  -- Log poll
+  fetchLogs setLogsPoll
+  _ <- setInterval (5 * 1000) $ fetchLogs setLogsPoll
 
   pure
     { polls: { systemsDataPoll, streamStatusPoll, selectedStreamPoll }

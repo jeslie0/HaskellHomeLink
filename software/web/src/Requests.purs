@@ -3,6 +3,7 @@ module Requests
   , modifyStream
   , fetchSystemsData
   , fetchMemoryData
+  , fetchLogs
   ) where
 
 import Prelude
@@ -25,6 +26,7 @@ import Effect.Class (liftEffect)
 import Effect.Console as Console
 import Effect.Ref as Ref
 import Fetch (fetch)
+import Logs (Log, Logs(..))
 import Parsing (fail, runParserT)
 import Proto.Messages as Proto
 import ProtoHelper (fromMessage, sayError, toMessage)
@@ -154,3 +156,21 @@ fetchMemoryData apexRef = do
         Just chart -> do
           updateChartData chart timeMem
           pure unit
+
+fetchLogs :: (Array Log -> Effect Unit) -> Effect Unit
+fetchLogs setLogsPoll = do
+  apiUrl <- getApiUrl
+  let requestUrl = apiUrl <> "logs"
+  launchAff_ do
+    { arrayBuffer } <- fetch requestUrl { method: GET }
+    body <- whole <$> arrayBuffer
+    result <- liftEffect $ runParserT body do
+      resp <- Proto.parseLogs (byteLength body)
+      case fromMessage resp of
+        Left _errs -> fail "Error parsing response"
+        Right (Logs logs) -> pure logs
+    case result of
+      Left err -> liftEffect $ Console.log $ "Error getting logs: " <> show err
+      Right logs -> do
+        liftEffect $ setLogsPoll logs
+    pure unit

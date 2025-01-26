@@ -19,11 +19,12 @@ import Lens.Micro ((^.))
 import Proto.Messages qualified as Proto
 import Proto.Messages_Fields qualified as Proto
 import ProtoHelper (FromMessage (..), toMessage)
-import Proxy.Env (EnvT, memoryMap, router, streamStatusState, systemMap)
+import Proxy.Env (EnvT, memoryMap, router, streamStatusState, systemMap, logs)
 import Router (trySendMessage)
 import State (fulfilPromise)
 import System.Memory (MemoryInformation, getMemoryInformation)
 import TH (makeInstance)
+import Logger (addLog)
 
 class ProxyHandler msg where
   proxyHandler ::
@@ -107,3 +108,8 @@ instance ProxyHandler Proto.CheckMemoryUsage where
         void . liftIO . trySendMessage (env ^. router) Home $
           toEnvelope $
             toMessage @Proto.MemoryInformation memInfo
+
+instance ProxyHandler Proto.AddLog where
+  proxyHandler _ _ req = do
+    env <- ask
+    liftIO $ addLog (env ^. logs) (req ^. Proto.log)

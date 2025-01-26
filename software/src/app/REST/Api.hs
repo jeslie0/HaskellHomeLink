@@ -21,7 +21,13 @@ import Servant.API.ContentTypes.Proto
 import State (StateId)
 
 type Api =
-  "api" :> "v1" :> (Radio :<|> System :<|> Memory)
+  "api"
+    :> "v1"
+    :> ( Radio
+          :<|> System
+          :<|> Memory
+          :<|> Logs
+       )
     :<|> Raw
 
 type Radio =
@@ -37,6 +43,9 @@ type Memory = "memory" :> Get '[Proto] Proto.AllIslandMemoryData
 
 type System =
   "system" :> Get '[Proto] Proto.IslandsSystemData
+
+type Logs =
+  "logs" :> Get '[Proto] Proto.Logs
 
 data RadioCommand = Start | Stop
 

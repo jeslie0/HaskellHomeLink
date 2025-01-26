@@ -38,6 +38,7 @@ import Data.Word (Word32)
 import Foreign (Int16, Ptr, Word8, allocaArray, withForeignPtr)
 import Foreign.C (Errno (..))
 import Foreign.Ptr (plusPtr)
+import Logger (LogLevel (..), reportLog)
 import Minimp3 (
   MP3Dec,
   MP3DecFrameInfo,
@@ -56,6 +57,7 @@ import Network.HTTP.Client.TLS qualified as HTTPS
 import Network.HTTP.Types.Status (ok200)
 import Proto.Messages qualified as Proto
 import ProtoHelper (FromMessage (fromMessage), ToMessage (toMessage))
+import Router (Router)
 import System.Timeout (timeout)
 
 type StationId = Word32
@@ -82,17 +84,19 @@ instance ToMessage Proto.STREAM_STATUS StreamStatus where
 
 -- | Start an audio stream and pass chunks of bytes into the callback handler.
 withAudioStream ::
-  T.Text
+  Router
+  -> T.Text
   -> (Response BodyReader -> IO ())
   -- ^ Callback to use the bytes
   -> IO ()
-withAudioStream url withBodyRsp = do
+withAudioStream rtr url withBodyRsp = do
   manager <- HTTP.newManager HTTPS.tlsManagerSettings
   let
     initialRequest = HTTP.parseRequest_ $ T.unpack url
     request = initialRequest {HTTP.method = "GET"}
   HTTP.withResponse request manager withBodyRsp `catch` \(e :: HTTP.HttpException) -> do
-    putStrLn $ "An HTTP Exception occurred: " <> displayException e
+    reportLog rtr Error $
+      "A HTTP exception occurred: " <> T.pack (displayException e)
 
 newtype SR = SR Int
 
@@ -184,18 +188,19 @@ computeFrameSize info =
 
 type URL = T.Text
 
-startAudioStream :: URL -> (StreamStatus -> IO ()) -> IO ()
-startAudioStream url updateStreamStatus = do
+startAudioStream :: Router -> URL -> (StreamStatus -> IO ()) -> IO ()
+startAudioStream rtr url updateStreamStatus = do
+  reportLog rtr Info $ "Initiating radio stream to " <> url
   updateStreamStatus Initiated
 
   mp3Dec <- newMP3Dec
   info <- newMP3DecFrameInfo
 
   allocaArray @Int16 maxSamplesPerFrame $ \pcmData ->
-    withAudioStream url $ \rsp -> do
+    withAudioStream rtr url $ \rsp -> do
       if HTTP.responseStatus rsp /= ok200
         then
-          putStrLn "Bad status from response"
+          reportLog rtr Error "Bad status from response"
         else do
           let bodyReader = HTTP.responseBody rsp
           chunk <- HTTP.brRead bodyReader
@@ -207,6 +212,7 @@ startAudioStream url updateStreamStatus = do
               go bodyReader handle mp3Dec info pcmData ""
 
   updateStreamStatus Off
+  reportLog rtr Error "Radio stream stopped without request"
  where
   go ::
     BodyReader

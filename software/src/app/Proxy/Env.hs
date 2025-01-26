@@ -10,6 +10,7 @@ module Proxy.Env (
   addLocalHTTPServerConnection,
   systemMap,
   memoryMap,
+  logs
 ) where
 
 import ConnectionManager (initTCPServerConnection)
@@ -26,12 +27,14 @@ import Router (Router, connectionsManager, handleBytes, mkRouter)
 import State (State, mkState)
 import System (SystemData, mkSystemData)
 import System.Memory (MemoryInformation)
+import Logger (Logs, mkLogs)
 
 data Env = Env
   { _router :: Router
   , _streamStatusState :: State (StreamStatus, StationId)
   , _systemMap :: MVar (Map.Map Island SystemData)
   , _memoryMap :: MVar (Map.Map Island (V.Vector MemoryInformation))
+  , _logs :: Logs
   }
 
 $(makeLenses ''Env)
@@ -50,12 +53,14 @@ mkEnv island = do
       Just homeSystemData -> pure $ Map.insert Home homeSystemData Map.empty
     newMVar mp
   _memoryMap <- newMVar Map.empty
+  _logs <- mkLogs
   pure $
     Env
       { _router
       , _streamStatusState
       , _systemMap
       , _memoryMap
+      , _logs
       }
 
 addLocalHTTPServerConnection ::

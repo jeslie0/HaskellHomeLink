@@ -16,6 +16,7 @@ import Home.AudioStream (StationId, StreamStatus)
 import Islands (Island (..))
 import Lens.Micro ((&), (.~), (^.))
 import Lens.Micro.TH (makeLenses)
+import Logger (Logs, getLogs)
 import Network.Wai.Application.Static (
   defaultWebAppSettings,
   ssIndices,
@@ -47,6 +48,7 @@ data Env = Env
   , _systemDataState :: MVar (Map.Map Island SystemData)
   , _memoryMap :: MVar (Map.Map Island (V.Vector MemoryInformation))
   , _router :: Router
+  , _logs :: Logs
   }
 
 $(makeLenses ''Env)
@@ -55,15 +57,17 @@ mkEnv ::
   State (StreamStatus, StationId)
   -> MVar (Map.Map Island SystemData)
   -> MVar (Map.Map Island (V.Vector MemoryInformation))
+  -> Logs
   -> Router
   -> IO Env
-mkEnv streamStatus systemState memMap rtr = do
+mkEnv streamStatus systemState memMap logs' rtr = do
   pure $
     Env
       { _streamStatusState = streamStatus
       , _systemDataState = systemState
       , _memoryMap = memMap
       , _router = rtr
+      , _logs = logs'
       }
 
 -- * Server handlers
@@ -102,6 +106,14 @@ handleGetAllIslandsMemoryDataRequest env = do
   memMap <- liftIO $ readMVar (env ^. memoryMap)
   pure . toMessage $ memMap
 
+handleGetLogs :: Env -> Handler Proto.Logs
+handleGetLogs env = do
+  logsVec <- liftIO $ getLogs $ env ^. logs
+  pure $
+    defMessage
+      & Proto.logs
+      .~ V.toList logsVec
+
 -- * Server
 
 server :: Env -> Server Api
@@ -111,6 +123,7 @@ server env =
     )
       :<|> handleGetSystemDataRequest env
       :<|> handleGetAllIslandsMemoryDataRequest env
+      :<|> handleGetLogs env
   )
     :<|> serveDir "/usr/local/haskell-home-link"
 

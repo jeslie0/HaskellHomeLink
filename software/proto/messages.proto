@@ -87,14 +87,18 @@ message CheckMemoryUsage {
 }
 
 message Log {
-  uint32 timestampMs = 1;
+  int64 timestampMs = 1;
   ISLAND island = 2;
   LOG_LEVEL level = 3;
-  repeated string messages = 4;
+  string content = 4;
 }
 
 message Logs {
   repeated Log logs = 1;
+}
+
+message AddLog {
+  Log log = 1;
 }
 
 // * Home Received Msgs
@@ -135,5 +139,6 @@ message ProxyEnvelope {
     IslandSystemData m3 = 3;
     MemoryInformation m4 = 4;
     CheckMemoryUsage m5 = 5;
+    AddLog m6 = 6;
   }
 }

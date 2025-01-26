@@ -23,7 +23,7 @@ import Proxy.Env (
   mkEnv,
   router,
   streamStatusState,
-  systemMap,
+  systemMap, logs,
  )
 import Proxy.Handler (ExProxyHandler (..), proxyHandler)
 import REST.HomeServer qualified as HTTP
@@ -32,15 +32,17 @@ import State (State)
 import System (SystemData)
 import System.Memory (MemoryInformation)
 import Threads (killAsyncComputation, spawnAsyncComputation)
+import Logger (Logs)
 
 httpServer ::
   State (StreamStatus, StationId)
   -> MVar (Map.Map Island SystemData)
   -> MVar (Map.Map Island (V.Vector MemoryInformation))
+  -> Logs
   -> Router
   -> IO ()
-httpServer state systemData memoryData rtr = do
-  env <- HTTP.mkEnv state systemData memoryData rtr
+httpServer state systemData memoryData logs' rtr = do
+  env <- HTTP.mkEnv state systemData memoryData logs' rtr
   HTTP.runApp env
 
 proxyMain :: Island -> IO ()
@@ -52,6 +54,7 @@ proxyMain island = do
             (env ^. streamStatusState)
             (env ^. systemMap)
             (env ^. memoryMap)
+            (env ^. logs)
             (env ^. router)
       )
       killAsyncComputation
