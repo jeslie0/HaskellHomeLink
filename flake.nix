@@ -1,5 +1,5 @@
 {
-  description = "My Haskell project";
+  description = "Haskell Home Link - a controller for your home (in Haskell!)";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
@@ -152,6 +152,7 @@
                     purs-tidy
                     protobuf
                     purescript-protobuf.packages.${system}.protoc-gen-purescript
+                    (import ./nix/hls-wrapper.nix { inherit pkgs ghcVersion; })
                   ];
 
                   inputsFrom = [ self.packages.${system}.web ];
