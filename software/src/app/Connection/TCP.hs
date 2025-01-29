@@ -3,6 +3,9 @@ module Connection.TCP (
   mkServerConnection,
   aquireActiveClientSocket,
   aquireActiveServerSocket,
+  aquireBoundListeningServerSocket,
+  aquireConnectedClientSocket,
+  recvMsg
 ) where
 
 import Control.Concurrent (
