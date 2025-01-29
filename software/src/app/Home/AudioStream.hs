@@ -104,11 +104,14 @@ newtype Channels = Channels Int
 
 -- | Given a sample rate and a number of channels, generate a
 -- PCMHandle to play mp3 data with.
-makeAudioHandle :: SR -> Channels -> IO PCMHandle
-makeAudioHandle sr channels = do
+makeAudioHandle :: Router ->  SR -> Channels -> IO PCMHandle
+makeAudioHandle rtr sr@(SR sr') channels = do
   handle <- newPCMHandle
   _ <- openPCMHandle "default" Playback PCMBlocking handle
-  _ <- configureDevice handle sr channels
+  maybeInt <- configureDevice handle sr channels
+  case maybeInt of
+    Nothing -> reportLog rtr Error "Failed to set sample rate"
+    Just n -> reportLog rtr Debug $ "Input/Output SampleRate: " <> T.pack (show sr') <> "/" <> T.pack (show n)
   _ <- preparePCMHandle handle
   return handle
 
@@ -205,7 +208,7 @@ startAudioStream rtr url updateStreamStatus = do
           let bodyReader = HTTP.responseBody rsp
           chunk <- HTTP.brRead bodyReader
           bracket
-            (makePCMHandleFromBytes mp3Dec info chunk pcmData)
+            (makePCMHandleFromBytes rtr mp3Dec info chunk pcmData)
             dropDevice
             $ \handle -> do
               updateStreamStatus Playing
@@ -228,14 +231,14 @@ startAudioStream rtr url updateStreamStatus = do
       Nothing -> pure ()
       Just newBytes -> do
         if BS.length newBytes == 0
-          then putStrLn "Stream over"
+          then reportLog rtr Debug "Got 0 bytes from request"
           else do
             let !mp3Data@(BS.BS !frnPtr !mp3Len) = BS.append leftoverBytes newBytes
             !eRemainingBytes <- withForeignPtr frnPtr $ \mp3Ptr -> do
               eLeftOverAmount <- readFramesAndPlay handle mp3Dec info (mp3Ptr, mp3Len) pcmData
               case eLeftOverAmount of
                 Left err -> do
-                  putStrLn "Underflow occurred"
+                  reportLog rtr Debug "Buffer underflow occurred. Trying to restart..."
                   void $ recoverPCM handle err False
                   pure . Right $ mp3Data
                 Right leftOverAmount -> pure . Right $ BS.takeEnd leftOverAmount mp3Data
@@ -245,10 +248,10 @@ startAudioStream rtr url updateStreamStatus = do
                 go bodyReader handle mp3Dec info pcmData remainingBytes
 
 makePCMHandleFromBytes ::
-  MP3Dec -> MP3DecFrameInfo -> BS.ByteString -> Ptr Int16 -> IO PCMHandle
-makePCMHandleFromBytes mp3Dec info (BS.BS frnPtr mp3Len) pcmData = do
+  Router -> MP3Dec -> MP3DecFrameInfo -> BS.ByteString -> Ptr Int16 -> IO PCMHandle
+makePCMHandleFromBytes rtr mp3Dec info (BS.BS frnPtr mp3Len) pcmData = do
   withForeignPtr frnPtr $ \mp3Data -> do
     void $ decodeFrame mp3Dec mp3Data mp3Len info pcmData
     freq <- getHz info
     chans <- getChannels info
-    makeAudioHandle (SR freq) (Channels chans)
+    makeAudioHandle rtr (SR freq) (Channels chans)
