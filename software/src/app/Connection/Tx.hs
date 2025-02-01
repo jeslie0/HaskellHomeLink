@@ -26,3 +26,6 @@ instance Msg m => Tx Context m where
 
 instance Tx (Chan a) a where
   send chan = liftIO . writeChan chan
+
+instance Tx (Chan a, Chan b) b where
+  send (_, chan) = liftIO . writeChan chan

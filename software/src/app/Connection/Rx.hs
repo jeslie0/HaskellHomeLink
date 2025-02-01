@@ -51,3 +51,6 @@ data ChannelRxError
 
 instance Rx (Chan a) a ChannelRxError where
   recv chan = Right <$> (liftIO . readChan $ chan)
+
+instance Rx (Chan a, Chan b) a ChannelRxError where
+  recv (chan, _) = Right <$> (liftIO . readChan $ chan)

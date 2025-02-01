@@ -11,9 +11,10 @@ module ConnectionManager (
   initTCPClientConnection,
   initTCPServerConnection,
   trySendMsg,
+  addChannelsConnection,
 ) where
 
-import Connection.Rx (SocketRxError, recv)
+import Connection.Rx (SocketRxError, recv, ChannelRxError)
 import Connection.RxTx (RxTx)
 import Connection.TCP (
   aquireBoundListeningServerSocket,
@@ -28,7 +29,7 @@ import Control.Concurrent (
   modifyMVar_,
   newMVar,
   threadDelay,
-  withMVar,
+  withMVar, Chan,
  )
 import Control.Monad (forM_)
 import Data.ByteString qualified as B
@@ -176,6 +177,22 @@ initTCPServerConnection island connMngr port withMsg = do
     putStrLn "TCP Server connection ended. Trying again in 2 seconds..."
     threadDelay 2000000
     go serverSock
+
+addChannelsConnection ::
+  Island
+  -> ConnectionManager
+  -> (Chan B.ByteString, Chan B.ByteString)
+  -> (B.ByteString -> IO ())
+  -> IO ()
+addChannelsConnection island connMngr chans withBytes = do
+  addRxTxConnection @(Chan B.ByteString, Chan B.ByteString)  @ChannelRxError
+    connMngr
+    withBytes
+    onErr
+    (pure chans)
+    island
+ where
+  onErr _ _ = pure ()
 
 trySendMsg ::
   forall msg.
