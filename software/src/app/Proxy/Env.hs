@@ -10,7 +10,7 @@ module Proxy.Env (
   addLocalHTTPServerConnection,
   systemMap,
   memoryMap,
-  logs
+  logs,
 ) where
 
 import ConnectionManager (initTCPServerConnection)
@@ -22,12 +22,13 @@ import Home.AudioStream (StationId, StreamStatus (..))
 import Islands (Island (..))
 import Lens.Micro ((^.))
 import Lens.Micro.TH (makeLenses)
+import Logger (Logs, mkLogs)
 import Msg (Msg)
+import Network.Socket (Socket)
 import Router (Router, connectionsManager, handleBytes, mkRouter)
 import State (State, mkState)
 import System (SystemData, mkSystemData)
 import System.Memory (MemoryInformation)
-import Logger (Logs, mkLogs)
 
 data Env = Env
   { _router :: Router
@@ -64,7 +65,11 @@ mkEnv island = do
       }
 
 addLocalHTTPServerConnection ::
-  forall msg. Msg msg => ((Island, msg) -> IO ()) -> Router -> IO ()
+  forall msg.
+  Msg msg =>
+  ((Island, msg) -> IO ())
+  -> Router
+  -> IO Socket
 addLocalHTTPServerConnection actOnMsg rtr = do
   initTCPServerConnection Home (rtr ^. connectionsManager) "3000" $
     handleBytes actOnMsg rtr

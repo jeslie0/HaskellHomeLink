@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Socket (
+module Connection.Socket (
   recvNBytes,
   sendAll,
   readHeader,

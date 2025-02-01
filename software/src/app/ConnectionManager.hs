@@ -1,59 +1,108 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE ImpredicativeTypes #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MonoLocalBinds #-}
 
 module ConnectionManager (
   ConnectionManager,
   mkConnectionManager,
   removeConnection,
-  getSrcDest,
   killConnections,
   initTCPClientConnection,
   initTCPServerConnection,
-  trySendBytes,
+  trySendMsg,
 ) where
 
-import Connection.TCP (aquireActiveClientSocket, aquireActiveServerSocket)
+import Connection.Rx (SocketRxError, recv)
+import Connection.RxTx (RxTx)
+import Connection.TCP (
+  aquireBoundListeningServerSocket,
+  aquireConnectedClientSocket,
+ )
+import Connection.Tx (Tx (..))
 import Control.Concurrent (
   MVar,
   ThreadId,
   forkIO,
   killThread,
   modifyMVar_,
-  myThreadId,
   newMVar,
+  threadDelay,
   withMVar,
  )
 import Control.Monad (forM_)
 import Data.ByteString qualified as B
 import Data.Map.Strict qualified as Map
-import Data.Serialize (
-  Serialize (..),
-  putWord32le,
-  runGet,
- )
-import Data.Serialize.Put (runPut)
-import Network.Socket
-import Socket (sendAll)
 import Islands (Island)
+import Msg (Msg (..))
+import Network.Socket
 
-
-rightToMaybe :: Either a b -> Maybe b
-rightToMaybe (Left _) = Nothing
-rightToMaybe (Right b) = Just b
-
-getSrcDest :: B.ByteString -> Maybe (Island, Island)
-getSrcDest bytes
-  | B.length bytes /= 2 = Nothing
-  | otherwise =
-      let (srcByte, destByte) = B.splitAt 1 bytes
-      in rightToMaybe $ do
-          src <- runGet get srcByte
-          dest <- runGet get destByte
-          pure (src, dest)
+data Connection
+  = Connection
+  { _recvThread :: ThreadId
+  , _senderFunc :: Maybe (B.ByteString -> IO ())
+  }
 
 newtype ConnectionManager = ConnectionManager
   { connectionsMVar ::
-      MVar (Map.Map Island (ThreadId, Maybe (B.ByteString -> IO ())))
+      MVar (Map.Map Island Connection)
   }
+
+addRxTxConnection ::
+  forall conn err.
+  RxTx conn B.ByteString B.ByteString err =>
+  ConnectionManager
+  -- ^ Place to store connections
+  -> (B.ByteString -> IO ())
+  -- ^ Callback to act on received msgs
+  -> (conn -> err -> IO ())
+  -- ^ Cleanup action called when an error occurs
+  -> IO conn
+  -- ^ Create RxTx channel
+  -> Island
+  -- ^ The corresponding Island
+  -> IO ()
+addRxTxConnection (ConnectionManager mvar) onRecvMsg onError makeConn island =
+  let
+    mainThread = do
+      conn <- makeConn
+      modifyMVar_ mvar $
+        Map.alterF
+          ( \case
+              Nothing -> pure Nothing
+              Just (Connection threadId _) ->
+                pure . Just $ Connection threadId (Just $ send conn)
+          )
+          island
+      go conn
+
+    go conn = do
+      mMsg <- recv conn
+      case mMsg of
+        Left err -> do
+          disableConnection
+          onError conn err
+        Right msg -> do
+          onRecvMsg msg
+          go conn
+
+    disableConnection =
+      modifyMVar_ mvar $
+        Map.alterF
+          ( \case
+              Nothing -> pure Nothing
+              Just (Connection threadId _) ->
+                pure . Just $ Connection threadId Nothing
+          )
+          island
+  in
+    modifyMVar_ mvar $ \connMap -> do
+      threadId <- forkIO mainThread
+      pure $
+        Map.insert
+          island
+          (Connection threadId Nothing)
+          connMap
 
 mkConnectionManager :: IO ConnectionManager
 mkConnectionManager = do
@@ -65,25 +114,16 @@ removeConnection island (ConnectionManager connectionsMVar) = do
   modifyMVar_ connectionsMVar $
     Map.alterF
       ( \case
-          Just (threadId, _) -> killThread threadId >> pure Nothing
+          Just (Connection threadId _) -> killThread threadId >> pure Nothing
           Nothing -> pure Nothing
       )
       island
-
-trySendBytes :: ConnectionManager -> Island -> B.ByteString -> IO Bool
-trySendBytes (ConnectionManager mapMVar) island bytes = do
-  withMVar mapMVar $ \m -> case Map.lookup island m of
-    Just (_, Just f) -> do
-      f . runPut . putWord32le . fromIntegral $ B.length bytes
-      f bytes
-      pure True
-    _ -> pure False
 
 killConnections :: ConnectionManager -> IO ()
 killConnections (ConnectionManager connectionsMVar) = do
   modifyMVar_ connectionsMVar $
     \connections -> do
-      forM_ connections $ \(threadId, _) -> killThread threadId
+      forM_ connections $ \(Connection threadId _) -> killThread threadId
       pure Map.empty
 
 initTCPClientConnection ::
@@ -93,42 +133,65 @@ initTCPClientConnection ::
   -> ServiceName
   -> (B.ByteString -> IO ())
   -> IO ()
-initTCPClientConnection island (ConnectionManager connectionsMVar) host port withBytes =
-  let handle = do
-        threadId <- myThreadId
-        aquireActiveClientSocket
-          host
-          port
-          withBytes
-          ( \sock -> modifyMVar_ connectionsMVar $ \conns ->
-              pure $ Map.insert island (threadId, Just $ sendAll sock) conns
-          )
-          ( \_ -> do
-              modifyMVar_ connectionsMVar $ pure . Map.insert island (threadId, Nothing)
-              handle
-          )
-  in modifyMVar_ connectionsMVar $ \conns -> do
-      threadId <- forkIO handle
-      pure $ Map.insert island (threadId, Nothing) conns
+initTCPClientConnection island connMngr host port withBytes =
+  addRxTxConnection @Socket @SocketRxError
+    connMngr
+    withBytes
+    onErr
+    (aquireConnectedClientSocket host port)
+    island
+ where
+  onErr sock _err = do
+    close sock
+    putStrLn "TCP Client connection ended. Trying again in 2 seconds..."
+    threadDelay 2000000
+    initTCPClientConnection island connMngr host port withBytes
 
 initTCPServerConnection ::
   Island
   -> ConnectionManager
   -> ServiceName
   -> (B.ByteString -> IO ())
-  -> IO ()
-initTCPServerConnection island (ConnectionManager connectionsMVar) port withBytes = do
-  let handle = do
-        threadId <- myThreadId
-        aquireActiveServerSocket
-          port
-          withBytes
-          ( \sock -> modifyMVar_ connectionsMVar $ \conns ->
-              pure $ Map.insert island (threadId, Just $ sendAll sock) conns
-          )
-          ( do
-              modifyMVar_ connectionsMVar $ pure . Map.insert island (threadId, Nothing)
-          )
-   in modifyMVar_ connectionsMVar $ \conns -> do
-        threadId <- forkIO handle
-        pure $ Map.insert island (threadId, Nothing) conns
+  -> IO Socket
+initTCPServerConnection island connMngr port withMsg = do
+  serverSock <- aquireBoundListeningServerSocket port
+  go serverSock
+  pure serverSock
+ where
+  go serverSock =
+    addRxTxConnection @Socket @SocketRxError
+      connMngr
+      withMsg
+      (onErr serverSock)
+      (open serverSock)
+      island
+
+  open sock = do
+    (conn, peer) <- accept sock
+    putStrLn $ "Accepted connection from " <> show peer
+    pure conn
+
+  onErr serverSock sock _err = do
+    close sock
+    putStrLn "TCP Server connection ended. Trying again in 2 seconds..."
+    threadDelay 2000000
+    go serverSock
+
+trySendMsg ::
+  forall msg.
+  Msg msg =>
+  ConnectionManager
+  -> Island
+  -- ^ Source of msg
+  -> Island
+  -- ^ Target of msg
+  -> Island
+  -- ^ Next hop for message
+  -> msg
+  -> IO Bool
+trySendMsg (ConnectionManager mvar) src finalDest nextDest msg = do
+  withMVar mvar $ \connMap -> case Map.lookup nextDest connMap of
+    Just (Connection _ (Just sender)) -> do
+      sender $ toBytes (src, finalDest, msg)
+      pure True
+    _ -> pure False

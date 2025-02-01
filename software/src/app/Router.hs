@@ -7,22 +7,19 @@ module Router (
   connectionsManager,
   mkRouter,
   trySendMessage,
-  forwardBytes,
   handleBytes,
   tryForwardMessage,
 ) where
 
 import ConnectionManager (
   ConnectionManager,
-  getSrcDest,
   mkConnectionManager,
-  trySendBytes,
+  trySendMsg,
  )
 import Control.Monad (void)
 import Data.ByteString qualified as B
 import Data.Maybe (fromMaybe)
-import Data.Serialize (Serialize (..), runPut)
-import Islands (Island(..))
+import Islands (Island (..))
 import Lens.Micro ((^.))
 import Lens.Micro.TH (makeLenses)
 import Msg (Msg (..))
@@ -51,26 +48,14 @@ mkRouter island = do
   Router island <$> mkConnectionManager
 
 trySendMessage :: Msg msg => Router -> Island -> msg -> IO Bool
-trySendMessage (Router island connMgr) dest msg = do
-  -- Get next hop
-  let
-    hop = fromMaybe dest $ nextHop island dest
-    bytes = toBytes msg
-    addressedBytes = runPut (put island) <> runPut (put dest) <> bytes
-  trySendBytes connMgr hop addressedBytes
+trySendMessage (Router island connMgr) dest msg =
+  let hop = fromMaybe dest $ nextHop island dest
+  in trySendMsg connMgr island dest hop msg
 
 tryForwardMessage :: Msg msg => Router -> Island -> Island -> msg -> IO Bool
-tryForwardMessage (Router island connMgr) src dest msg = do
-  -- Get next hop
-  let
-    hop = fromMaybe dest $ nextHop island dest
-    bytes = toBytes msg
-    addressedBytes = runPut (put src) <> runPut (put dest) <> bytes
-  trySendBytes connMgr hop addressedBytes
-
-forwardBytes :: Router -> Island -> B.ByteString -> IO Bool
-forwardBytes (Router _island connMgr) dest bytes = do
-  trySendBytes connMgr dest bytes
+tryForwardMessage (Router island connMgr) src dest msg =
+  let hop = fromMaybe dest $ nextHop island dest
+  in trySendMsg connMgr src dest hop msg
 
 handleBytes ::
   forall msg.
@@ -80,12 +65,9 @@ handleBytes ::
   -> B.ByteString
   -> IO ()
 handleBytes handleMsg rtr bytes = do
-  let (srcDest, payload) = B.splitAt 2 bytes
-  case getSrcDest srcDest of
-    Nothing -> putStrLn "Could not get source or dest from message"
-    Just (src, dest) -> do
+  case fromBytes bytes of
+    Left errStr -> putStrLn $ "Error extracting bytes: " <> errStr
+    Right (src :: Island, dest :: Island, msg :: msg) ->
       if dest == rtr ^. thisIsland
-        then case fromBytes @msg payload of
-          Left err -> putStrLn err
-          Right envelope -> handleMsg (src, envelope)
-        else void $ forwardBytes rtr dest bytes
+      then handleMsg (src, msg)
+        else void $ tryForwardMessage rtr src dest msg

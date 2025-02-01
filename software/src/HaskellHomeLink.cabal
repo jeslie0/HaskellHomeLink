@@ -62,8 +62,12 @@ executable Home
 
     -- Modules included in this executable, other than Main.
     other-modules:    Connection,
+                      Connection.Socket,
                       Connection.TCP,
                       Connection.TLS,
+                      Connection.Rx,
+                      Connection.RxTx,
+                      Connection.Tx,
                       ConnectionManager,
                       Envelope,
                       EventLoop,
@@ -79,7 +83,6 @@ executable Home
                       REST.Api,
                       REST.HomeServer,
                       Router,
-                      Socket,
                       System,
                       System.CPU,
                       System.Memory,
@@ -89,7 +92,8 @@ executable Home
                       Proxy.Handler,
                       Proxy.Main,
                       TH,
-                      Threads
+                      Threads,
+                      Utilities.Either
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
 

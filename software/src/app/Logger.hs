@@ -81,7 +81,8 @@ formatLog log' =
   in
     "[" <> time <> "] [" <> island <> "] " <> (log' ^. Proto.content)
 
-reportLog :: Router -> LogLevel -> T.Text -> IO ()
+reportLog ::
+  Router -> LogLevel -> T.Text -> IO ()
 reportLog rtr lvl txt = do
   MkSystemTime sec nano <- getSystemTime
   let

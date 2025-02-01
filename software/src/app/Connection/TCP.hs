@@ -26,7 +26,7 @@ import Data.ByteString qualified as B
 import Data.Serialize (putWord32le, runPut)
 import Network.Socket
 import Network.Socket.ByteString (sendAll)
-import Socket (readHeader, recvNBytes)
+import Connection.Socket (readHeader, recvNBytes)
 import Threads (
   killAsyncComputation,
   spawnAsyncComputation,

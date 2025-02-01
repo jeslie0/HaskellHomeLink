@@ -4,7 +4,7 @@ import ConnectionManager (
   killConnections,
  )
 import Control.Concurrent (MVar)
-import Control.Exception (bracket)
+import Control.Exception.Lifted (bracket)
 import Control.Monad (void, when)
 import Control.Monad.Reader
 import Data.Bifunctor (second)
@@ -15,15 +15,17 @@ import EventLoop (addMsg, mkEventLoop, run, setInterval)
 import Home.AudioStream (StationId, StreamStatus)
 import Islands (Island (..))
 import Lens.Micro
+import Logger (Logs)
 import Proto.Messages qualified as Proto
 import Proxy.Env (
   Env,
   addLocalHTTPServerConnection,
+  logs,
   memoryMap,
   mkEnv,
   router,
   streamStatusState,
-  systemMap, logs,
+  systemMap,
  )
 import Proxy.Handler (ExProxyHandler (..), proxyHandler)
 import REST.HomeServer qualified as HTTP
@@ -32,7 +34,7 @@ import State (State)
 import System (SystemData)
 import System.Memory (MemoryInformation)
 import Threads (killAsyncComputation, spawnAsyncComputation)
-import Logger (Logs)
+import Network.Socket (close)
 
 httpServer ::
   State (StreamStatus, StationId)
@@ -64,18 +66,17 @@ proxyMain island = do
   action :: Env -> ReaderT Env IO ()
   action env = do
     loop <- mkEventLoop @(Island, ExProxyHandler)
-    liftIO
-      $ addLocalHTTPServerConnection @Proto.ProxyEnvelope
-        (addMsg loop . second ExProxyHandler)
-      $ env ^. router
+    bracket (liftIO $ mkServerSocket env loop) (liftIO . close) $ \_ -> do
+        when (island == RemoteProxy)
+            . void
+            . liftIO
+            $ setInterval loop (Home, ExProxyHandler (defMessage @Proto.CheckMemoryUsage))
+            $ 30 * 1000
 
-    when (island == RemoteProxy)
-      . void
-      . liftIO
-      $ setInterval loop (Home, ExProxyHandler (defMessage @Proto.CheckMemoryUsage))
-      $ 30 * 1000
+        run loop $ \evloop b -> uncurry (proxyHandler evloop) b
 
-    run loop $ \evloop b -> uncurry (proxyHandler evloop) b
+  mkServerSocket env loop =
+    addLocalHTTPServerConnection @Proto.ProxyEnvelope (addMsg loop . second ExProxyHandler) $ env ^. router
 
   cleanupEnv env = do
     killConnections (env ^. (router . connectionsManager))
