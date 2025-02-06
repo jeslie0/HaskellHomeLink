@@ -21,7 +21,8 @@ import Data.ProtoLens (defMessage)
 import Data.Text qualified as T
 import Envelope (ToProxyEnvelope (..))
 import EventLoop (EventLoop, addMsg)
-import Home.AudioStream (StationId, StreamStatus (..), startAudioStream)
+import Home.AudioStream (startAudioStream)
+import Home.AudioStreamTypes (StationId, StreamStatus (..))
 import Home.Env (EnvT, addRemoteProxyConnection, audioStreamRef, router)
 import Islands (Island (..), islands, proxies)
 import Lens.Micro ((&), (.~), (?~), (^.), _1, _2, _3)
@@ -77,10 +78,10 @@ instance HomeHandler Proto.ModifyRadioRequest where
     (mThreadId, _, _) <- liftIO . atomicModifyIORef' (env ^. audioStreamRef) $ \a -> (a, a)
     case (mThreadId, req ^. Proto.maybe'station) of
       (Just _, Just _) -> do
-        liftIO $ putStrLn "Audio stream already exists"
+        liftIO $ reportLog (env ^. router) Info "Audio stream already exists"
       (Just threadId, Nothing) -> do
         liftIO $ killThread threadId
-      (Nothing, Nothing) -> liftIO $ putStrLn "Radio not playing"
+      (Nothing, Nothing) -> liftIO $ reportLog (env ^. router) Info "Radio not playing"
       (Nothing, Just station) -> do
         let updateStreamStatus status = do
               atomicModifyIORef' (env ^. audioStreamRef) $ \st -> (st, ()) & _1 . _2 .~ status
@@ -135,13 +136,18 @@ instance HomeHandler Proto.SystemData where
 instance HomeHandler Proto.MemoryInformation where
   homeHandler _ src msg = do
     env <- ask
+    liftIO $ reportLog (env ^. router) Error $ "Got mem info from " <> T.pack (show src)
     forM_ proxies $ \proxy -> do
-      liftIO $ tryForwardMessage (env ^. router) src proxy $ toProxyEnvelope msg
+      liftIO $ do
+        bool <- tryForwardMessage (env ^. router) src proxy $ toProxyEnvelope msg
+        putStrLn $ show proxy <> "bool: " <> show bool
 
 instance HomeHandler Proto.CheckMemoryUsage where
   homeHandler loop _ _ = do
+    env <- ask
     mMemInfo <- liftIO getMemoryInformation
     case mMemInfo of
-      Nothing -> liftIO . putStrLn $ "Failed to get memory info"
+      Nothing -> liftIO $ reportLog (env ^. router) Error "Failed to get memory info"
       Just memInfo -> do
+        liftIO $ reportLog (env ^. router) Debug "Got log!"
         addMsg loop (Home, ExHomeHandler $ toMessage @Proto.MemoryInformation memInfo)

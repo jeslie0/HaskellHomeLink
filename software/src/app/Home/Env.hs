@@ -9,14 +9,16 @@ module Home.Env (
   router,
   addLocalHTTPServerConnection,
   addRemoteProxyConnection,
+  cleanupEnv,
 ) where
 
-import ConnectionManager (initTCPClientConnection)
-import Islands (Island (..))
-import Control.Concurrent (ThreadId)
+import ConnectionManager (initTCPClientConnection, killConnections)
+import Control.Concurrent (ThreadId, killThread)
 import Control.Monad.Reader (ReaderT)
-import Data.IORef (IORef, newIORef)
+import Data.Foldable (for_)
+import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Home.AudioStream (StationId, StreamStatus (..))
+import Islands (Island (..))
 import Lens.Micro ((^.))
 import Lens.Micro.TH (makeLenses)
 import Msg (Msg)
@@ -42,11 +44,24 @@ mkEnv = do
       , _router
       }
 
+cleanupEnv :: Env -> IO ()
+cleanupEnv env = do
+  (mThread, _, _) <- readIORef (env ^. audioStreamRef)
+  for_ mThread killThread
+  writeIORef (env ^. audioStreamRef) (Nothing, Off, 0)
+  killConnections (env ^. (router . connectionsManager))
+
 addLocalHTTPServerConnection ::
   forall msg. Msg msg => ((Island, msg) -> IO ()) -> Router -> IO ()
 addLocalHTTPServerConnection actOnMsg rtr = do
-  initTCPClientConnection LocalHTTP (rtr ^. connectionsManager) "127.0.0.1" "3000" $
-    handleBytes actOnMsg rtr
+  initTCPClientConnection
+    LocalHTTP
+    (rtr ^. connectionsManager)
+    "127.0.0.1"
+    "3000"
+    (handleBytes actOnMsg rtr)
+    (pure ())
+    (pure ())
 
 addRemoteProxyConnection ::
   forall msg.
@@ -57,5 +72,11 @@ addRemoteProxyConnection ::
   -> Router
   -> IO ()
 addRemoteProxyConnection actOnMsg host port rtr = do
-  initTCPClientConnection RemoteProxy (rtr ^. connectionsManager) host port $
-    handleBytes actOnMsg rtr
+  initTCPClientConnection
+    RemoteProxy
+    (rtr ^. connectionsManager)
+    host
+    port
+    (handleBytes actOnMsg rtr)
+    (pure ())
+    (pure ())

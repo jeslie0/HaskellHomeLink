@@ -61,7 +61,7 @@ aquireActiveClientSocketTLS ::
   -- ^ Cleanup function to run when socket is closed by server.
   -> IO ()
 aquireActiveClientSocketTLS params host port withBytes withSock cleanupCtx = do
-  bracket (aquireConnectedClientSocket host port) close $ \sock ->
+  bracket (aquireConnectedClientSocket host port (pure ()) (pure ())) close $ \sock ->
     bracket (TLS.contextNew sock params) TLS.bye $ \ctx -> do
       handshake ctx
       withSock ctx

@@ -6,6 +6,7 @@ package:
     - bifunctors
     - console
     - datetime
+    - debug
     - deku-core
     - deku-css
     - deku-dom

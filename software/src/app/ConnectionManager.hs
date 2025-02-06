@@ -60,10 +60,11 @@ addRxTxConnection ::
   -- ^ Cleanup action called when an error occurs
   -> IO conn
   -- ^ Create RxTx channel
+  -> IO ()
   -> Island
   -- ^ The corresponding Island
   -> IO ()
-addRxTxConnection (ConnectionManager mvar) onRecvMsg onError makeConn island =
+addRxTxConnection (ConnectionManager mvar) onRecvMsg onError makeConn onDisconect island =
   let
     mainThread = do
       conn <- makeConn
@@ -87,7 +88,7 @@ addRxTxConnection (ConnectionManager mvar) onRecvMsg onError makeConn island =
           onRecvMsg msg
           go conn
 
-    disableConnection =
+    disableConnection = do
       modifyMVar_ mvar $
         Map.alterF
           ( \case
@@ -96,6 +97,7 @@ addRxTxConnection (ConnectionManager mvar) onRecvMsg onError makeConn island =
                 pure . Just $ Connection threadId Nothing
           )
           island
+      onDisconect
   in
     modifyMVar_ mvar $ \connMap -> do
       threadId <- forkIO mainThread
@@ -134,27 +136,32 @@ initTCPClientConnection ::
   -> ServiceName
   -> (B.ByteString -> IO ())
   -> IO ()
-initTCPClientConnection island connMngr host port withBytes =
+  -> IO ()
+  -> IO ()
+initTCPClientConnection island connMngr host port withBytes onConnect onDisconnect =
   addRxTxConnection @Socket @SocketRxError
     connMngr
     withBytes
     onErr
-    (aquireConnectedClientSocket host port)
+    (aquireConnectedClientSocket host port onConnect onDisconnect)
+    onDisconnect
     island
  where
   onErr sock _err = do
     close sock
     putStrLn "TCP Client connection ended. Trying again in 2 seconds..."
     threadDelay 2000000
-    initTCPClientConnection island connMngr host port withBytes
+    initTCPClientConnection island connMngr host port withBytes onConnect onDisconnect
 
 initTCPServerConnection ::
   Island
   -> ConnectionManager
   -> ServiceName
   -> (B.ByteString -> IO ())
+  -> IO ()
+  -> IO ()
   -> IO Socket
-initTCPServerConnection island connMngr port withMsg = do
+initTCPServerConnection island connMngr port withMsg onConnect onDisconnect = do
   serverSock <- aquireBoundListeningServerSocket port
   go serverSock
   pure serverSock
@@ -165,10 +172,12 @@ initTCPServerConnection island connMngr port withMsg = do
       withMsg
       (onErr serverSock)
       (open serverSock)
+      onDisconnect
       island
 
   open sock = do
     (conn, peer) <- accept sock
+    onConnect
     putStrLn $ "Accepted connection from " <> show peer
     pure conn
 
@@ -179,18 +188,22 @@ initTCPServerConnection island connMngr port withMsg = do
     go serverSock
 
 addChannelsConnection ::
-  Island
-  -> ConnectionManager
+  Island -- ^ Island that this connection is to
+  -> ConnectionManager 
   -> (Chan B.ByteString, Chan B.ByteString)
   -> (B.ByteString -> IO ())
+  -> Maybe (Island -> IO ())
   -> IO ()
-addChannelsConnection island connMngr chans withBytes = do
+addChannelsConnection island connMngr chans withBytes onConnect = do
   addRxTxConnection @(Chan B.ByteString, Chan B.ByteString)  @ChannelRxError
     connMngr
     withBytes
     onErr
     (pure chans)
+    (pure ())
     island
+  forM_ onConnect (\f -> f island)
+
  where
   onErr _ _ = pure ()
 

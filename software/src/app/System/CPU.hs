@@ -43,7 +43,10 @@ getCPUData :: IO (Maybe CPUData)
 getCPUData = do
   mMap <- parseKeyValuePairFile "/proc/cpuinfo" ["model name"]
   case mMap of
-    Nothing -> putStrLn "Couldn't get cpuinfo" >> pure Nothing
+    Nothing -> do
+      putStrLn "Couldn't get cpuinfo"
+      pure $
+        CPUData <$> Just "-"
     Just cpuDataMap -> do
       pure $
         CPUData

@@ -38,6 +38,7 @@ import Data.Word (Word32)
 import Foreign (Int16, Ptr, Word8, allocaArray, withForeignPtr)
 import Foreign.C (Errno (..))
 import Foreign.Ptr (plusPtr)
+import Home.AudioStreamTypes
 import Logger (LogLevel (..), reportLog)
 import Minimp3 (
   MP3Dec,
@@ -59,22 +60,6 @@ import Proto.Messages qualified as Proto
 import ProtoHelper (FromMessage (fromMessage), ToMessage (toMessage))
 import Router (Router)
 import System.Timeout (timeout)
-
-type StationId = Word32
-
-data StreamStatus = Off | Initiated | Playing
-  deriving (Eq)
-
-instance FromMessage Proto.STREAM_STATUS StreamStatus where
-  fromMessage Proto.OFF = Off
-  fromMessage Proto.INITIATED = Initiated
-  fromMessage Proto.PLAYING = Playing
-  fromMessage _ = Off
-
-instance ToMessage Proto.STREAM_STATUS StreamStatus where
-  toMessage Off = Proto.OFF
-  toMessage Initiated = Proto.INITIATED
-  toMessage Playing = Proto.PLAYING
 
 -- unsafeTLSSettings :: HTTP.ManagerSettings
 -- unsafeTLSSettings =
@@ -104,14 +89,16 @@ newtype Channels = Channels Int
 
 -- | Given a sample rate and a number of channels, generate a
 -- PCMHandle to play mp3 data with.
-makeAudioHandle :: Router ->  SR -> Channels -> IO PCMHandle
+makeAudioHandle :: Router -> SR -> Channels -> IO PCMHandle
 makeAudioHandle rtr sr@(SR sr') channels = do
   handle <- newPCMHandle
   _ <- openPCMHandle "default" Playback PCMBlocking handle
   maybeInt <- configureDevice handle sr channels
   case maybeInt of
     Nothing -> reportLog rtr Error "Failed to set sample rate"
-    Just n -> reportLog rtr Debug $ "Input/Output SampleRate: " <> T.pack (show sr') <> "/" <> T.pack (show n)
+    Just n ->
+      reportLog rtr Debug $
+        "Input/Output SampleRate: " <> T.pack (show sr') <> "/" <> T.pack (show n)
   _ <- preparePCMHandle handle
   return handle
 
@@ -248,7 +235,12 @@ startAudioStream rtr url updateStreamStatus = do
                 go bodyReader handle mp3Dec info pcmData remainingBytes
 
 makePCMHandleFromBytes ::
-  Router -> MP3Dec -> MP3DecFrameInfo -> BS.ByteString -> Ptr Int16 -> IO PCMHandle
+  Router
+  -> MP3Dec
+  -> MP3DecFrameInfo
+  -> BS.ByteString
+  -> Ptr Int16
+  -> IO PCMHandle
 makePCMHandleFromBytes rtr mp3Dec info (BS.BS frnPtr mp3Len) pcmData = do
   withForeignPtr frnPtr $ \mp3Data -> do
     void $ decodeFrame mp3Dec mp3Data mp3Len info pcmData

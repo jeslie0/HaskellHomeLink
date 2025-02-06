@@ -12,7 +12,7 @@ import Data.Map.Strict qualified as Map
 import Data.ProtoLens (defMessage)
 import Data.Vector qualified as V
 import Envelope (toEnvelope)
-import Home.AudioStream (StationId, StreamStatus)
+import Home.AudioStreamTypes (StationId, StreamStatus)
 import Islands (Island (..))
 import Lens.Micro ((&), (.~), (^.))
 import Lens.Micro.TH (makeLenses)
@@ -99,7 +99,9 @@ handleModifyRadioRequest env req (Just stateId) = do
 handleGetSystemDataRequest :: Env -> Handler Proto.IslandsSystemData
 handleGetSystemDataRequest env = do
   sysMap <- liftIO $ readMVar (env ^. systemDataState)
-  pure . toMessage $ sysMap
+  let msg = toMessage sysMap
+  liftIO $ print msg
+  pure msg
 
 handleGetAllIslandsMemoryDataRequest :: Env -> Handler Proto.AllIslandMemoryData
 handleGetAllIslandsMemoryDataRequest env = do

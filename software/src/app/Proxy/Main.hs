@@ -1,8 +1,5 @@
-module Proxy.Main (proxyMain) where
+module Proxy.Main (proxyMain, main) where
 
-import ConnectionManager (
-  killConnections,
- )
 import Control.Concurrent (MVar)
 import Control.Exception.Lifted (bracket)
 import Control.Monad (void, when)
@@ -12,7 +9,7 @@ import Data.Map.Strict qualified as Map
 import Data.ProtoLens (defMessage)
 import Data.Vector qualified as V
 import EventLoop (EventLoop, addMsg, mkEventLoop, run, setInterval)
-import Home.AudioStream (StationId, StreamStatus)
+import Home.AudioStreamTypes (StationId, StreamStatus)
 import Islands (Island (..))
 import Lens.Micro
 import Logger (Logs)
@@ -21,6 +18,7 @@ import Proto.Messages qualified as Proto
 import Proxy.Env (
   Env,
   addLocalHTTPServerConnection,
+  cleanupEnv,
   logs,
   memoryMap,
   mkEnv,
@@ -30,7 +28,7 @@ import Proxy.Env (
  )
 import Proxy.Handler (ExProxyHandler (..), proxyHandler)
 import REST.HomeServer qualified as HTTP
-import Router (Router, connectionsManager)
+import Router (Router)
 import State (State)
 import System (SystemData)
 import System.Memory (MemoryInformation)
@@ -58,39 +56,43 @@ mkServerSocket rtr loop =
     rtr
 
 proxyMain ::
-  (Router -> EventLoop (ReaderT Env IO) (Island, ExProxyHandler) -> IO a)
+  Env
+  -> (Router -> EventLoop (ReaderT Env IO) (Island, ExProxyHandler) -> IO a)
   -> (a -> IO ())
   -> Island
   -> IO ()
-proxyMain mkConnection cleanupConn island = do
-  bracket (mkEnv island) cleanupEnv $ \env ->
-    bracket
-      ( spawnAsyncComputation $
-          httpServer
-            (env ^. streamStatusState)
-            (env ^. systemMap)
-            (env ^. memoryMap)
-            (env ^. logs)
-            (env ^. router)
-      )
-      killAsyncComputation
-      $ \_async ->
-        runReaderT (action env) env
+proxyMain env mkConnection cleanupConn island = do
+  bracket
+    ( spawnAsyncComputation $
+        httpServer
+          (env ^. streamStatusState)
+          (env ^. systemMap)
+          (env ^. memoryMap)
+          (env ^. logs)
+          (env ^. router)
+    )
+    killAsyncComputation
+    $ \_async ->
+      runReaderT action env
  where
-  action :: Env -> ReaderT Env IO ()
-  action env = do
+  action :: ReaderT Env IO ()
+  action = do
     loop <- mkEventLoop @(Island, ExProxyHandler)
     bracket (liftIO $ mkConnection (env ^. router) loop) (liftIO . cleanupConn) $ \_ -> do
-      when (island == RemoteProxy)
-        . void
-        . liftIO
-        $ setInterval loop (Home, ExProxyHandler (defMessage @Proto.CheckMemoryUsage))
-        $ 30 * 1000
+      when (island == RemoteProxy) . void . liftIO $ do
+        addMsg loop (RemoteProxy, ExProxyHandler (defMessage @Proto.CheckMemoryUsage))
+        setInterval
+          loop
+          (RemoteProxy, ExProxyHandler (defMessage @Proto.CheckMemoryUsage))
+          $ 30 * 1000
 
       run loop $ \evloop b -> uncurry (proxyHandler evloop) b
 
-  cleanupEnv env = do
-    killConnections (env ^. (router . connectionsManager))
-
--- main :: IO ()
--- main = proxyMain RemoteProxy
+main :: IO ()
+main =
+  bracket (mkEnv RemoteProxy) cleanupEnv $ \env ->
+    proxyMain
+      env
+      mkServerSocket
+      close
+      RemoteProxy

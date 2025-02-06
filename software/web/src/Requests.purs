@@ -20,6 +20,7 @@ import Data.HTTP.Method (Method(..))
 import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Tuple.Nested ((/\))
+import Debug (trace)
 import Effect (Effect)
 import Effect.Aff (launchAff_)
 import Effect.Class (liftEffect)
@@ -115,9 +116,11 @@ fetchSystemsData update = do
     body <- whole <$> arrayBuffer
     result <- liftEffect $ runParserT body do
       resp <- Proto.parseIslandsSystemData (byteLength body)
-      case fromMessage resp of
-        Left errs -> fail <<< show $ sayError errs
-        Right islandsData -> pure islandsData
+      trace resp $ \_ ->
+        case fromMessage resp of
+            Left errs -> fail <<< show $ sayError errs
+            Right islandsData -> do
+              pure islandsData
     case result of
       Left err -> liftEffect $ Console.logShow err
       Right islandsData -> do

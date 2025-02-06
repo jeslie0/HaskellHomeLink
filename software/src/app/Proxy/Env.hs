@@ -11,14 +11,15 @@ module Proxy.Env (
   systemMap,
   memoryMap,
   logs,
+  cleanupEnv,
 ) where
 
-import ConnectionManager (initTCPServerConnection)
+import ConnectionManager (initTCPServerConnection, killConnections)
 import Control.Concurrent (MVar, newEmptyMVar, newMVar)
 import Control.Monad.Reader (ReaderT)
 import Data.Map.Strict qualified as Map
 import Data.Vector qualified as V
-import Home.AudioStream (StationId, StreamStatus (..))
+import Home.AudioStreamTypes (StationId, StreamStatus (..))
 import Islands (Island (..))
 import Lens.Micro ((^.))
 import Lens.Micro.TH (makeLenses)
@@ -48,11 +49,8 @@ mkEnv island = do
   _streamStatusState <- mkState (Off, 0)
   _httpServerMVar <- newEmptyMVar
   _systemMap <- do
-    mHomeSystemData <- mkSystemData
-    mp <- case mHomeSystemData of
-      Nothing -> putStrLn "Could not extract cpuinfo" >> pure Map.empty
-      Just homeSystemData -> pure $ Map.insert Home homeSystemData Map.empty
-    newMVar mp
+    systemData <- mkSystemData $ if island == LocalHTTP then Home else island
+    newMVar $ Map.insert island systemData Map.empty
   _memoryMap <- newMVar Map.empty
   _logs <- mkLogs
   pure $
@@ -64,6 +62,10 @@ mkEnv island = do
       , _logs
       }
 
+cleanupEnv :: Env -> IO ()
+cleanupEnv env = do
+  killConnections (env ^. (router . connectionsManager))
+
 addLocalHTTPServerConnection ::
   forall msg.
   Msg msg =>
@@ -71,5 +73,10 @@ addLocalHTTPServerConnection ::
   -> Router
   -> IO Socket
 addLocalHTTPServerConnection actOnMsg rtr = do
-  initTCPServerConnection Home (rtr ^. connectionsManager) "3000" $
-    handleBytes actOnMsg rtr
+  initTCPServerConnection
+    Home
+    (rtr ^. connectionsManager)
+    "3001"
+    (handleBytes actOnMsg rtr)
+    (pure ())
+    (pure ())

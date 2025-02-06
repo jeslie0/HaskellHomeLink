@@ -1,7 +1,7 @@
 module Connection.TCP (
   mkClientConnection,
   mkServerConnection,
-  aquireActiveClientSocket,
+  -- aquireActiveClientSocket,
   aquireActiveServerSocket,
   aquireBoundListeningServerSocket,
   aquireConnectedClientSocket,
@@ -278,8 +278,10 @@ aquireActiveServerSocket port withBytes withSock cleanupSocket = do
 aquireConnectedClientSocket ::
   HostName
   -> ServiceName
+  -> IO ()
+  -> IO ()
   -> IO Socket
-aquireConnectedClientSocket host port = do
+aquireConnectedClientSocket host port onConnect onDisconnect = do
   addrInfo <- mkAddrInfo host port
   safeNewSocket addrInfo
  where
@@ -307,30 +309,31 @@ aquireConnectedClientSocket host port = do
   -- connection is successful, otherwise throw.
   tryConnect sock sockAddr = do
     connect sock sockAddr
+    onConnect
     putStrLn $ "Connected to server at: " <> show sockAddr
 
-aquireActiveClientSocket ::
-  HostName
-  -> ServiceName
-  -> (B.ByteString -> IO ())
-  -- ^ Function to run when receiving
-  -- messages on the socket.
-  -> (Socket -> IO ())
-  -- ^ Function to run when socket has been acquired.
-  -> (Socket -> IO ())
-  -- ^ Cleanup function to run when socket is closed by server.
-  -> IO ()
-aquireActiveClientSocket host port withBytes withSock cleanupSocket = do
-  bracket (aquireConnectedClientSocket host port) close $ \sock -> do
-    withSock sock
-    recvFunc sock
- where
-  recvFunc sock = do
-    mMsg <- recvMsg sock
-    case mMsg of
-      Nothing -> do
-        -- Socket dead
-        cleanupSocket sock
-      Just msg -> do
-        withBytes msg
-        recvFunc sock
+-- aquireActiveClientSocket ::
+--   HostName
+--   -> ServiceName
+--   -> (B.ByteString -> IO ())
+--   -- ^ Function to run when receiving
+--   -- messages on the socket.
+--   -> (Socket -> IO ())
+--   -- ^ Function to run when socket has been acquired.
+--   -> (Socket -> IO ())
+--   -- ^ Cleanup function to run when socket is closed by server.
+--   -> IO ()
+-- aquireActiveClientSocket host port withBytes withSock cleanupSocket = do
+--   bracket (aquireConnectedClientSocket host port) close $ \sock -> do
+--     withSock sock
+--     recvFunc sock
+--  where
+--   recvFunc sock = do
+--     mMsg <- recvMsg sock
+--     case mMsg of
+--       Nothing -> do
+--         -- Socket dead
+--         cleanupSocket sock
+--       Just msg -> do
+--         withBytes msg
+--         recvFunc sock

@@ -10,6 +10,7 @@ import Data.Map as Map
 import Data.Time.Duration (Milliseconds(..))
 import Data.UInt (fromInt)
 import Data.UInt as UInt
+import Debug (trace)
 import Deku.Control as DC
 import Deku.Core (Nut)
 import Deku.DOM as DD

@@ -33,11 +33,12 @@ message CPUData {
 }
 
 message SystemData {
-  CPUData cpuData = 1;
+  optional CPUData cpuData = 1;
   bool inDockerContainer = 2;
   string operatingSystemName = 3;
   string architecture = 4;
-  uint32 memTotalkB = 5;
+  optional uint32 memTotalkB = 5;
+  ISLAND island = 6;
 }
 
 message IslandSystemData {

@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Proxy.Handler (
@@ -10,21 +11,22 @@ import Control.Monad (forM_, void)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Reader (ask)
 import Data.Map.Strict qualified as Map
+import Data.Text qualified as T
 import Data.Vector qualified as V
 import Data.Vector.Mutable qualified as VM
 import Envelope (toEnvelope)
 import EventLoop (EventLoop)
 import Islands (Island (..))
 import Lens.Micro ((^.))
+import Logger (LogLevel (..), addLog, reportLog)
 import Proto.Messages qualified as Proto
 import Proto.Messages_Fields qualified as Proto
 import ProtoHelper (FromMessage (..), toMessage)
-import Proxy.Env (EnvT, memoryMap, router, streamStatusState, systemMap, logs)
+import Proxy.Env (EnvT, logs, memoryMap, router, streamStatusState, systemMap)
 import Router (trySendMessage)
 import State (fulfilPromise)
 import System.Memory (MemoryInformation, getMemoryInformation)
 import TH (makeInstance)
-import Logger (addLog)
 
 class ProxyHandler msg where
   proxyHandler ::
@@ -85,7 +87,9 @@ instance ProxyHandler Proto.MemoryInformation where
         alterFunc Nothing = pure . Just $ V.singleton (fromMessage resp)
         alterFunc (Just vec) =
           if V.length vec < secondsPerDay * 2
-            then
+            then do
+              reportLog (env ^. router) Debug $
+                "Adding memory info for src: " <> (T.pack $ show src)
               pure . Just $ V.snoc vec (fromMessage resp)
             else fmap
               Just
@@ -103,8 +107,9 @@ instance ProxyHandler Proto.CheckMemoryUsage where
     env <- ask
     mMemInfo <- liftIO getMemoryInformation
     case mMemInfo of
-      Nothing -> liftIO . putStrLn $ "Failed to get memory info"
+      Nothing -> liftIO $ reportLog (env ^. router) Error "Failed to get memory info"
       Just memInfo -> do
+        liftIO $ reportLog (env ^. router) Debug "Got Memory usage"
         void . liftIO . trySendMessage (env ^. router) Home $
           toEnvelope $
             toMessage @Proto.MemoryInformation memInfo

@@ -106,6 +106,17 @@
                     nix-filter.lib;
                 };
 
+              ProxyAArch64 =
+                import ./software/apps/Proxy/default.nix {
+                  inherit self pkgs ghcVersion web;
+
+                  packageName =
+                    packageName system;
+
+                  nix-filter =
+                    nix-filter.lib;
+                };
+
               linux =
                 import ./nix/linux.nix {
                   inherit self pkgs ghcVersion;
@@ -129,6 +140,7 @@
                 linux.project;
 
             } // HomeArmv7
+              // ProxyAArch64
           );
 
 
@@ -166,7 +178,7 @@
                   false;
 
                 crossPlatforms =
-                  ps: [ ps.armv7l-hf-multiplatform ];
+                  ps: [ ps.armv7l-hf-multiplatform ps.aarch64-multiplatform ];
 
                 inputsFrom =
                   [ toolsShell ];
