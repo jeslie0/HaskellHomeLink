@@ -34,7 +34,6 @@ import Control.Monad (void)
 import Data.ByteString qualified as BS
 import Data.ByteString.Internal qualified as BS
 import Data.Text qualified as T
-import Data.Word (Word32)
 import Foreign (Int16, Ptr, Word8, allocaArray, withForeignPtr)
 import Foreign.C (Errno (..))
 import Foreign.Ptr (plusPtr)
@@ -56,16 +55,8 @@ import Network.HTTP.Client (BodyReader, Response)
 import Network.HTTP.Client qualified as HTTP
 import Network.HTTP.Client.TLS qualified as HTTPS
 import Network.HTTP.Types.Status (ok200)
-import Proto.Messages qualified as Proto
-import ProtoHelper (FromMessage (fromMessage), ToMessage (toMessage))
 import Router (Router)
 import System.Timeout (timeout)
-
--- unsafeTLSSettings :: HTTP.ManagerSettings
--- unsafeTLSSettings =
---     HTTPS.mkManagerSettings tlsSettings Nothing
---   where
---     tlsSettings = TLSSettingsSimple True False False
 
 -- | Start an audio stream and pass chunks of bytes into the callback handler.
 withAudioStream ::
@@ -215,7 +206,7 @@ startAudioStream rtr url updateStreamStatus = do
   go !bodyReader !handle !mp3Dec !info !pcmData !leftoverBytes = do
     mNewBytes <- timeout (1000000 * 5) $ HTTP.brRead bodyReader
     case mNewBytes of
-      Nothing -> pure ()
+      Nothing -> reportLog rtr Error "Request timed out"
       Just newBytes -> do
         if BS.length newBytes == 0
           then reportLog rtr Debug "Got 0 bytes from request"
@@ -230,7 +221,7 @@ startAudioStream rtr url updateStreamStatus = do
                   pure . Right $ mp3Data
                 Right leftOverAmount -> pure . Right $ BS.takeEnd leftOverAmount mp3Data
             case eRemainingBytes of
-              Left _ -> pure ()
+              Left _ -> reportLog rtr Debug "This should be impossible"
               Right remainingBytes ->
                 go bodyReader handle mp3Dec info pcmData remainingBytes
 
