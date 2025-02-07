@@ -73,20 +73,19 @@ makeInstance className typeName payloadConstructorName payloadType = do
    where
     mkClause methodName = do
       envelopeName <- newName "envelope"
-      loopName <- newName "loop"
       islandName <- newName "islandName"
-      matches <- mkMatches methodName loopName islandName
+      matches <- mkMatches methodName islandName
       let caseExpression =
             UInfixE (VarE envelopeName) (VarE $ mkName "^.") (VarE payloadConstructorName)
       let bodyExpression =
             CaseE caseExpression matches
       pure $
         Clause
-          [VarP loopName, VarP islandName, VarP envelopeName]
+          [VarP islandName, VarP envelopeName]
           (NormalB bodyExpression)
           []
 
-    mkMatches methodName loopName islandName = do
+    mkMatches methodName islandName = do
       constructorNames <- getConstructorNames payloadType
       constructors <- forM constructorNames $ \constructorName -> do
         varName <- newName "variable"
@@ -95,7 +94,7 @@ makeInstance className typeName payloadConstructorName payloadType = do
             (ConP 'Just [] [ConP constructorName [] [VarP varName]])
             ( NormalB $
                 AppE
-                  (AppE (AppE (VarE methodName) (VarE loopName)) (VarE islandName))
+                  (AppE (VarE methodName) (VarE islandName))
                   (VarE varName)
             )
             []

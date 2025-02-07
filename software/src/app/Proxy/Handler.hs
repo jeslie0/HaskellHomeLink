@@ -9,20 +9,19 @@ module Proxy.Handler (
 import Control.Concurrent (modifyMVar_)
 import Control.Monad (forM_, void)
 import Control.Monad.IO.Class (MonadIO (..))
-import Control.Monad.Trans.Reader (ask)
 import Data.Map.Strict qualified as Map
 import Data.Text qualified as T
 import Data.Vector qualified as V
 import Data.Vector.Mutable qualified as VM
 import Envelope (toEnvelope)
-import EventLoop (EventLoop)
+import EventLoop (EventLoopT, getEnv)
 import Islands (Island (..))
 import Lens.Micro ((^.))
 import Logger (LogLevel (..), addLog, reportLog)
 import Proto.Messages qualified as Proto
 import Proto.Messages_Fields qualified as Proto
 import ProtoHelper (FromMessage (..), toMessage)
-import Proxy.Env (EnvT, logs, memoryMap, router, streamStatusState, systemMap)
+import Proxy.Env (Env, logs, memoryMap, router, streamStatusState, systemMap)
 import Router (trySendMessage)
 import State (fulfilPromise)
 import System.Memory (MemoryInformation, getMemoryInformation)
@@ -30,12 +29,12 @@ import TH (makeInstance)
 
 class ProxyHandler msg where
   proxyHandler ::
-    EventLoop EnvT (Island, ExProxyHandler) -> Island -> msg -> EnvT ()
+    Island -> msg -> EventLoopT Env (Island, ExProxyHandler) IO ()
 
 data ExProxyHandler = forall a. ProxyHandler a => ExProxyHandler a
 
 instance ProxyHandler ExProxyHandler where
-  proxyHandler loop island (ExProxyHandler msg) = proxyHandler loop island msg
+  proxyHandler island (ExProxyHandler msg) = proxyHandler island msg
 
 -- * Message instances
 
@@ -49,8 +48,8 @@ $( makeInstance
 
 -- | Received acknowledgement from Home for ModifyRadioRequest
 instance ProxyHandler Proto.RadioStatusUpdate where
-  proxyHandler _ _ resp = do
-    env <- ask
+  proxyHandler _ resp = do
+    env <- getEnv
     liftIO $
       fulfilPromise
         (fromMessage $ resp ^. Proto.status, resp ^. Proto.currentStationId)
@@ -59,16 +58,16 @@ instance ProxyHandler Proto.RadioStatusUpdate where
 -- | Received acknowledgement from Home for ModifyRadioRequest. Update
 -- promise so HTTP Handler can return.
 instance ProxyHandler Proto.GetRadioStatusResponse where
-  proxyHandler _ _ resp = do
-    env <- ask
+  proxyHandler  _ resp = do
+    env <- getEnv
     liftIO $
       fulfilPromise
         (fromMessage $ resp ^. Proto.status, resp ^. Proto.currentStationId)
         (env ^. streamStatusState)
 
 instance ProxyHandler Proto.IslandSystemData where
-  proxyHandler _ _ resp = do
-    env <- ask
+  proxyHandler  _ resp = do
+    env <- getEnv
     liftIO $ modifyMVar_ (env ^. systemMap) $ \sysMap ->
       let
         island = fromMessage $ resp ^. Proto.island
@@ -77,8 +76,8 @@ instance ProxyHandler Proto.IslandSystemData where
         pure $ Map.insert island sysData sysMap
 
 instance ProxyHandler Proto.MemoryInformation where
-  proxyHandler _ src resp = do
-    env <- ask
+  proxyHandler  src resp = do
+    env <- getEnv
     liftIO $ modifyMVar_ (env ^. memoryMap) $ \memMap ->
       let
         secondsPerDay = 1440 :: Int
@@ -89,7 +88,7 @@ instance ProxyHandler Proto.MemoryInformation where
           if V.length vec < secondsPerDay * 2
             then do
               reportLog (env ^. router) Debug $
-                "Adding memory info for src: " <> (T.pack $ show src)
+                "Adding memory info for src: " <> T.pack (show src)
               pure . Just $ V.snoc vec (fromMessage resp)
             else fmap
               Just
@@ -103,8 +102,8 @@ instance ProxyHandler Proto.MemoryInformation where
         liftIO $ Map.alterF alterFunc src memMap
 
 instance ProxyHandler Proto.CheckMemoryUsage where
-  proxyHandler _ _ _ = do
-    env <- ask
+  proxyHandler  _ _ = do
+    env <- getEnv
     mMemInfo <- liftIO getMemoryInformation
     case mMemInfo of
       Nothing -> liftIO $ reportLog (env ^. router) Error "Failed to get memory info"
@@ -115,6 +114,6 @@ instance ProxyHandler Proto.CheckMemoryUsage where
             toMessage @Proto.MemoryInformation memInfo
 
 instance ProxyHandler Proto.AddLog where
-  proxyHandler _ _ req = do
-    env <- ask
+  proxyHandler  _ req = do
+    env <- getEnv
     liftIO $ addLog (env ^. logs) (req ^. Proto.log)

@@ -1,14 +1,21 @@
 module Proxy.Main (proxyMain, main) where
 
-import Control.Concurrent (MVar)
+import Control.Concurrent (MVar, forkIO, killThread)
 import Control.Exception.Lifted (bracket)
 import Control.Monad (void, when)
-import Control.Monad.Reader
-import Data.Bifunctor (second)
+import Control.Monad.Trans (liftIO)
 import Data.Map.Strict qualified as Map
 import Data.ProtoLens (defMessage)
 import Data.Vector qualified as V
-import EventLoop (EventLoop, addMsg, mkEventLoop, run, setInterval)
+import EventLoop (
+  EventLoop,
+  EventLoopT,
+  addMsg,
+  addMsgIO,
+  getLoop,
+  runEventLoopT,
+  setInterval, MonadEventLoop (..),
+ )
 import Home.AudioStreamTypes (StationId, StreamStatus)
 import Islands (Island (..))
 import Lens.Micro
@@ -32,7 +39,6 @@ import Router (Router)
 import State (State)
 import System (SystemData)
 import System.Memory (MemoryInformation)
-import Threads (killAsyncComputation, spawnAsyncComputation)
 
 httpServer ::
   State (StreamStatus, StationId)
@@ -46,47 +52,45 @@ httpServer state systemData memoryData logs' rtr = do
   HTTP.runApp env
 
 mkServerSocket ::
-  MonadIO m =>
   Router
-  -> EventLoop m (Island, ExProxyHandler)
+  -> EventLoop (Island, ExProxyHandler)
   -> IO Socket
 mkServerSocket rtr loop =
   addLocalHTTPServerConnection @Proto.ProxyEnvelope
-    (addMsg loop . second ExProxyHandler)
+    (\(island, msg') -> addMsgIO (island, ExProxyHandler msg') loop)
     rtr
+
+createHttpServerThread :: Env -> IO ()
+createHttpServerThread env =
+  httpServer
+    (env ^. streamStatusState)
+    (env ^. systemMap)
+    (env ^. memoryMap)
+    (env ^. logs)
+    (env ^. router)
+
+startCheckMemoryPoll :: EventLoopT Env (Island, ExProxyHandler) IO ()
+startCheckMemoryPoll = do
+  addMsg (RemoteProxy, ExProxyHandler (defMessage @Proto.CheckMemoryUsage))
+  void . setInterval (RemoteProxy, ExProxyHandler (defMessage @Proto.CheckMemoryUsage)) $ 30 * 1000
 
 proxyMain ::
   Env
-  -> (Router -> EventLoop (ReaderT Env IO) (Island, ExProxyHandler) -> IO a)
+  -> (Router -> EventLoop (Island, ExProxyHandler) -> IO a)
   -> (a -> IO ())
   -> Island
   -> IO ()
 proxyMain env mkConnection cleanupConn island = do
-  bracket
-    ( spawnAsyncComputation $
-        httpServer
-          (env ^. streamStatusState)
-          (env ^. systemMap)
-          (env ^. memoryMap)
-          (env ^. logs)
-          (env ^. router)
-    )
-    killAsyncComputation
-    $ \_async ->
-      runReaderT action env
+  bracket (forkIO $ createHttpServerThread env) killThread $
+    \_threadId ->
+      runEventLoopT action env
  where
-  action :: ReaderT Env IO ()
+  action :: EventLoopT Env (Island, ExProxyHandler) IO ()
   action = do
-    loop <- mkEventLoop @(Island, ExProxyHandler)
-    bracket (liftIO $ mkConnection (env ^. router) loop) (liftIO . cleanupConn) $ \_ -> do
-      when (island == RemoteProxy) . void . liftIO $ do
-        addMsg loop (RemoteProxy, ExProxyHandler (defMessage @Proto.CheckMemoryUsage))
-        setInterval
-          loop
-          (RemoteProxy, ExProxyHandler (defMessage @Proto.CheckMemoryUsage))
-          $ 30 * 1000
-
-      run loop $ \evloop b -> uncurry (proxyHandler evloop) b
+    loop <- getLoop
+    bracket (liftIO $ mkConnection (env ^. router) loop) (liftIO . cleanupConn)$ \_ -> do
+      when (island == RemoteProxy) startCheckMemoryPoll
+      start $ uncurry proxyHandler
 
 main :: IO ()
 main =

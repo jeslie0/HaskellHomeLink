@@ -1,150 +1,184 @@
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
+
 module EventLoop (
   EventLoop,
-  mkEventLoop,
-  addMsg,
-  setTimeout,
-  run,
-  killEventLoop,
+  addMsgIO,
+  EventLoopT,
+  getLoop,
+  MonadEventLoop (..),
   TimeoutId,
-  killTimeout,
-  setInterval,
-  killInterval,
   IntervalId,
+  runEventLoopT,
 ) where
 
 import Control.Concurrent (
+  Chan,
   MVar,
   ThreadId,
   forkFinally,
   isEmptyMVar,
   killThread,
-  modifyMVar,
+  modifyMVar_,
   myThreadId,
+  newChan,
   newEmptyMVar,
   newMVar,
-  putMVar,
-  takeMVar,
+  readChan,
   threadDelay,
+  tryPutMVar,
   tryTakeMVar,
+  writeChan,
  )
-import Control.Exception (throwIO)
-import Control.Monad (unless, when)
+import Control.Monad (unless, void)
+import Control.Monad.Base (MonadBase (..))
 import Control.Monad.IO.Class
-import Control.Monad.Trans.Control (MonadBaseControl)
-import Data.PQueue.Prio.Min qualified as PQueue
-import Data.Time.Clock (UTCTime, getCurrentTime)
+import Control.Monad.Reader (MonadReader (..), ReaderT (..))
+import Control.Monad.Trans
+import Control.Monad.Trans.Control (
+  MonadBaseControl (..),
+  MonadTransControl (..),
+ )
+import Data.Set qualified as Set
+import Lens.Micro ((^.))
+import Lens.Micro.TH (makeLenses)
 
 -- | A single threaded event loop that can have messages added to it
 -- from another thread.
-data EventLoop m msg = EventLoop
-  { _keepLoopAliveMVar :: MVar ()
-  , _pqueueMVar :: MVar (PQueue.MinPQueue UTCTime msg)
-  , _waitingThreads :: MVar [ThreadId]
+data EventLoop msg = EventLoop
+  { _shouldStopMVar :: MVar ()
+  , _events :: Chan msg
+  , _waitingThreads :: MVar (Set.Set ThreadId)
   }
 
--- | Create an event loop.
-mkEventLoop ::
-  forall msg m.
-  (MonadIO m, MonadBaseControl IO m) =>
-  m (EventLoop m msg)
+$(makeLenses ''EventLoop)
+
+addMsgIO :: msg -> EventLoop msg -> IO ()
+addMsgIO msg loop =
+  writeChan (loop ^. events) msg
+
+mkEventLoop :: IO (EventLoop msg)
 mkEventLoop = do
-  -- Kill the loop when this mvar is empty.
-  _keepLoopAliveMVar <- liftIO $ newEmptyMVar @()
+  shouldStop <- newEmptyMVar
+  eventsChan <- newChan
+  threads <- newMVar Set.empty
+  pure $ EventLoop shouldStop eventsChan threads
 
-  -- MVar around the priority queue. We use the MVar to determine if
-  -- the queue is empty or not. An empty MVar means an empty queue.
-  _pqueueMVar <- liftIO newEmptyMVar
-
-  _waitingThreads <- liftIO $ newMVar []
-
-  return
-    EventLoop
-      { _keepLoopAliveMVar
-      , _pqueueMVar
-      , _waitingThreads
-      }
-
-addMsg :: (MonadIO m, MonadIO m1) => EventLoop m1 msg -> msg -> m ()
-addMsg (EventLoop {_keepLoopAliveMVar, _pqueueMVar}) msg = do
-  time <- liftIO getCurrentTime
-  mPQueue <- liftIO $ tryTakeMVar _pqueueMVar
-  case mPQueue of
-    Nothing -> liftIO $ putMVar _pqueueMVar $ PQueue.singleton time msg
-    Just queue ->
-      liftIO . putMVar _pqueueMVar $ (time, msg) PQueue.:< queue
+newtype EventLoopT env msg m a
+  = EventLoopT (ReaderT (EventLoop msg, env) m a)
+  deriving
+    ( Functor
+    , Applicative
+    , Monad
+    , MonadIO
+    , MonadReader (EventLoop msg, env)
+    , MonadTrans
+    , MonadFail
+    , MonadTransControl
+    )
 
 newtype TimeoutId = TimeoutId ThreadId
 
-setTimeout ::
-  (MonadIO m, MonadIO m1) => EventLoop m1 msg -> msg -> Int -> m TimeoutId
-setTimeout loop@(EventLoop {_keepLoopAliveMVar, _pqueueMVar, _waitingThreads}) msg timeoutMs = do
-  newThread <-
-    liftIO
-      . forkFinally (threadDelay (timeoutMs * 1000) >> addMsg loop msg)
-      $ ( \_ -> do
-            thisThread <- myThreadId
-            modifyMVar _waitingThreads $ \threads -> pure (filter (/= thisThread) threads, ())
-        )
-  liftIO . modifyMVar _waitingThreads $ \threads -> pure (newThread : threads, TimeoutId newThread)
-
-killTimeout :: MonadIO m => TimeoutId -> m ()
-killTimeout (TimeoutId threadId) = liftIO $ killThread threadId
-
 newtype IntervalId = IntervalId ThreadId
 
-setInterval ::
-  (MonadIO m, MonadIO m1) => EventLoop m1 msg -> msg -> Int -> m IntervalId
-setInterval loop@(EventLoop {_keepLoopAliveMVar, _pqueueMVar, _waitingThreads}) msg timeoutMs = do
-  let action = do
-        threadDelay (timeoutMs * 1000)
-        addMsg loop msg
-        action
-  newThread <-
-    liftIO
-      . forkFinally
-        action
-      $ ( \_ -> do
-            thisThread <- myThreadId
-            modifyMVar _waitingThreads $ \threads -> pure (filter (/= thisThread) threads, ())
-        )
-  liftIO . modifyMVar _waitingThreads $ \threads -> pure (newThread : threads, IntervalId newThread)
+-- | The MonadEventLoop class describes a computation returning value of
+-- type a, running in the context of an event loop. Typically, a will
+-- be ().
+class MonadEventLoop env msg m | m -> env, m -> msg where
+  getEnv :: m env
 
-killInterval :: MonadIO m => IntervalId -> m ()
-killInterval (IntervalId threadId) = liftIO $ killThread threadId
+  addMsg :: msg -> m ()
 
-killEventLoop :: MonadIO m => EventLoop m msg -> m ()
-killEventLoop (EventLoop {_keepLoopAliveMVar, _pqueueMVar}) = do
-  liftIO $ putMVar _keepLoopAliveMVar ()
+  start :: (msg -> m ()) -> m ()
 
-run ::
-  MonadIO m =>
-  EventLoop m msg
-  -> (EventLoop m msg -> msg -> m ())
-  -> m ()
-run loop@(EventLoop {_keepLoopAliveMVar, _pqueueMVar}) handle =
-  actOnQueue
- where
-  actOnQueue = do
-    keepLoopAlive <- liftIO $ isEmptyMVar _keepLoopAliveMVar
-    when keepLoopAlive $ do
-      -- This blocks until pauseLoopMVar is filled, which happens
-      -- when we add an event.
-      queue <- liftIO $ takeMVar _pqueueMVar
-      case queue of
-        PQueue.Empty -> do
-          liftIO $ putStrLn "This should never happen"
-          liftIO . throwIO $ userError "Empty event loop queue detected"
-        (PQueue.:<) (msgTime, msg) remQueue -> do
-          curTime <- liftIO getCurrentTime
-          if msgTime <= curTime
-            then do
-              -- If the remaning queue is empty, don't put it
-              -- back in the MVar.
-              unless (null remQueue) (liftIO $ putMVar _pqueueMVar remQueue)
-              handle loop msg
-            else do
-              -- If the time isn't up yet, try waiting a
-              -- short perid of time before checking again.
-              liftIO $ putMVar _pqueueMVar queue
-              liftIO $ threadDelay 1000
-      actOnQueue
+  stop :: m ()
+
+  setInterval :: msg -> Int -> m IntervalId
+
+  killInterval :: IntervalId -> m ()
+
+  setTimeout :: msg -> Int -> m TimeoutId
+
+  killTimeout :: TimeoutId -> m ()
+
+instance MonadIO m => MonadEventLoop env msg (EventLoopT env msg m) where
+  getEnv = EventLoopT $ do
+    (_, env) <- ask
+    pure env
+
+  addMsg msg = EventLoopT $ do
+    (loop, _) <- ask
+    liftIO $ writeChan (loop ^. events) msg
+
+  start dispatch = do
+    loop <- getLoop
+    void . liftIO $ tryPutMVar (loop ^. shouldStopMVar) ()
+    go (loop ^. events) (loop ^. shouldStopMVar)
+   where
+    go chan stopperMVar = do
+      shouldStop <- liftIO $ isEmptyMVar stopperMVar
+      unless shouldStop $ do
+        msg <- liftIO $ readChan chan
+        dispatch msg
+        go chan stopperMVar
+
+  stop = EventLoopT $ do
+    (loop, _) <- ask
+    void . liftIO $ tryTakeMVar $ loop ^. shouldStopMVar
+
+  setInterval msg n = EventLoopT $ do
+    (loop, _) <- ask
+    threadId <- liftIO . forkFinally (action loop) $ \case
+      Left _ -> pure ()
+      Right _ -> do
+        thisThread <- myThreadId
+        liftIO . modifyMVar_ (loop ^. waitingThreads) $ pure . Set.delete thisThread
+    liftIO . modifyMVar_ (loop ^. waitingThreads) $ pure . Set.insert threadId
+    pure $ IntervalId threadId
+   where
+    action loop = do
+      threadDelay (n * 1000)
+      writeChan (loop ^. events) msg
+      action loop
+
+  setTimeout msg n = EventLoopT $ do
+    (loop, _) <- ask
+    threadId <- liftIO . forkFinally (threadDelay (n * 1000) >> writeChan (loop ^. events) msg) $ \case
+      Left _ -> pure ()
+      Right _ -> do
+        thisThread <- myThreadId
+        liftIO . modifyMVar_ (loop ^. waitingThreads) $ pure . Set.delete thisThread
+    liftIO . modifyMVar_ (loop ^. waitingThreads) $ pure . Set.insert threadId
+    pure $ TimeoutId threadId
+
+  killInterval (IntervalId threadId) = EventLoopT $ do
+    liftIO $ killThread threadId
+
+  killTimeout (TimeoutId threadId) = EventLoopT $ do
+    liftIO $ killThread threadId
+
+instance MonadBase b m => MonadBase b (EventLoopT env msg m) where
+  liftBase = EventLoopT . liftBase
+
+instance MonadBaseControl b m => MonadBaseControl b (EventLoopT env msg m) where
+  type StM (EventLoopT env msg m) a = StM (ReaderT (EventLoop msg, env) m) a
+  liftBaseWith f =
+    EventLoopT $ liftBaseWith (\runInBase -> f (runInBase . coerce))
+   where
+    coerce (EventLoopT r) = r
+
+  restoreM = EventLoopT . restoreM
+
+getLoop :: Monad m => EventLoopT env msg m (EventLoop msg)
+getLoop = EventLoopT $ do
+  (loop, _) <- ask
+  pure loop
+
+runEventLoopT :: MonadIO m => EventLoopT env msg m a -> env -> m a
+runEventLoopT (EventLoopT r) env = do
+  loop <- liftIO mkEventLoop
+  runReaderT r (loop, env)

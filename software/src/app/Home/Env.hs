@@ -3,7 +3,6 @@
 
 module Home.Env (
   Env,
-  EnvT,
   mkEnv,
   audioStreamRef,
   router,
@@ -14,7 +13,6 @@ module Home.Env (
 
 import ConnectionManager (initTCPClientConnection, killConnections)
 import Control.Concurrent (ThreadId, killThread)
-import Control.Monad.Reader (ReaderT)
 import Data.Foldable (for_)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Home.AudioStream (StationId, StreamStatus (..))
@@ -31,8 +29,6 @@ data Env = Env
   }
 
 $(makeLenses ''Env)
-
-type EnvT = ReaderT Env IO
 
 mkEnv :: IO Env
 mkEnv = do

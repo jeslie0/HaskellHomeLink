@@ -14,16 +14,15 @@ module Home.Handler (
 import Control.Concurrent (forkFinally, killThread)
 import Control.Monad (void)
 import Control.Monad.Reader
-import Data.Bifunctor (second)
 import Data.Foldable (forM_)
 import Data.IORef (atomicModifyIORef')
 import Data.ProtoLens (defMessage)
 import Data.Text qualified as T
 import Envelope (ToProxyEnvelope (..))
-import EventLoop (EventLoop, addMsg)
+import EventLoop (MonadEventLoop(..), addMsg, EventLoopT, getLoop, addMsgIO)
 import Home.AudioStream (startAudioStream)
 import Home.AudioStreamTypes (StationId, StreamStatus (..))
-import Home.Env (EnvT, addRemoteProxyConnection, audioStreamRef, router)
+import Home.Env (addRemoteProxyConnection, audioStreamRef, router, Env)
 import Islands (Island (..), islands, proxies)
 import Lens.Micro ((&), (.~), (?~), (^.), _1, _2, _3)
 import Proto.Messages qualified as Proto
@@ -36,12 +35,12 @@ import Logger (reportLog, LogLevel (..))
 
 class HomeHandler msg where
   homeHandler ::
-    EventLoop EnvT (Island, ExHomeHandler) -> Island -> msg -> EnvT ()
+     Island -> msg -> EventLoopT Env (Island, ExHomeHandler) IO ()
 
 data ExHomeHandler = forall a. HomeHandler a => ExHomeHandler a
 
 instance HomeHandler ExHomeHandler where
-  homeHandler loop island (ExHomeHandler msg) = homeHandler loop island msg
+  homeHandler island (ExHomeHandler msg) = homeHandler island msg
 
 -- * Message instances
 
@@ -70,8 +69,8 @@ notifyProxyRadioStatus rtr island status stationId =
 -- | Try to make a new asynchronous audio stream in a separate
 -- thread. If one exists, report the error.
 instance HomeHandler Proto.ModifyRadioRequest where
-  homeHandler _ src req = do
-    env <- ask
+  homeHandler src req = do
+    env <- getEnv 
     let notify = do
           (_, status, stationId) <- atomicModifyIORef' (env ^. audioStreamRef) $ \a -> (a, a)
           void $ notifyProxyRadioStatus (env ^. router) src status stationId
@@ -117,25 +116,26 @@ instance HomeHandler Proto.ModifyRadioRequest where
 
 -- | Spawn a new thread and try to connect to the given TCP server.
 instance HomeHandler Proto.ConnectTCP where
-  homeHandler loop _ msg = do
-    env <- ask
+  homeHandler _ msg = do
+    env <- getEnv
+    loop <- getLoop
     liftIO $
       addRemoteProxyConnection @Proto.HomeEnvelope
-        (addMsg loop . second ExHomeHandler)
+        (\ (island, msg') -> addMsgIO (island, ExHomeHandler msg') loop )
         (T.unpack $ msg ^. Proto.host)
         (T.unpack $ msg ^. Proto.port)
         (env ^. router)
 
 --
 instance HomeHandler Proto.SystemData where
-  homeHandler _ _ msg = do
-    env <- ask
+  homeHandler _ msg = do
+    env <- getEnv
     liftIO . forM_ (filter (/= Home) islands) $ \island ->
       trySendMessage (env ^. router) island msg
 
 instance HomeHandler Proto.MemoryInformation where
-  homeHandler _ src msg = do
-    env <- ask
+  homeHandler src msg = do
+    env <- getEnv
     liftIO $ reportLog (env ^. router) Error $ "Got mem info from " <> T.pack (show src)
     forM_ proxies $ \proxy -> do
       liftIO $ do
@@ -143,11 +143,11 @@ instance HomeHandler Proto.MemoryInformation where
         putStrLn $ show proxy <> "bool: " <> show bool
 
 instance HomeHandler Proto.CheckMemoryUsage where
-  homeHandler loop _ _ = do
-    env <- ask
+  homeHandler _ _ = do
+    env <- getEnv
     mMemInfo <- liftIO getMemoryInformation
     case mMemInfo of
       Nothing -> liftIO $ reportLog (env ^. router) Error "Failed to get memory info"
       Just memInfo -> do
         liftIO $ reportLog (env ^. router) Debug "Got log!"
-        addMsg loop (Home, ExHomeHandler $ toMessage @Proto.MemoryInformation memInfo)
+        addMsg (Home, ExHomeHandler $ toMessage @Proto.MemoryInformation memInfo)

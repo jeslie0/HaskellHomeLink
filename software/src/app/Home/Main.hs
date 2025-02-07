@@ -1,14 +1,22 @@
 module Home.Main (main) where
 
 import ConnectionManager (addChannelsConnection, initTCPClientConnection)
-import Control.Concurrent (Chan, newChan)
+import Control.Concurrent (Chan, ThreadId, forkIO, killThread, newChan)
 import Control.Exception.Lifted (bracket)
 import Control.Monad (void)
-import Control.Monad.Reader
-import Data.Bifunctor (second)
+import Control.Monad.Trans (liftIO)
 import Data.ByteString qualified as B
 import Data.ProtoLens (defMessage)
-import EventLoop (EventLoop, addMsg, mkEventLoop, run, setInterval)
+import EventLoop (
+  EventLoop,
+  EventLoopT,
+  MonadEventLoop (..),
+  addMsg,
+  addMsgIO,
+  getLoop,
+  runEventLoopT,
+  setInterval,
+ )
 import Home.Env (Env, cleanupEnv, mkEnv, router)
 import Home.Handler (ExHomeHandler (..), homeHandler)
 import Islands (Island (..))
@@ -21,7 +29,7 @@ import Router (Router, connectionsManager, handleBytes)
 
 addLocalHostConnection ::
   Env
-  -> EventLoop (ReaderT Env IO) (Island, ExHomeHandler)
+  -> EventLoop (Island, ExHomeHandler)
   -> (Chan B.ByteString, Chan B.ByteString)
   -> IO ()
 addLocalHostConnection env loop clientConn =
@@ -30,14 +38,14 @@ addLocalHostConnection env loop clientConn =
     (env ^. router . connectionsManager)
     clientConn
     ( handleBytes @Proto.HomeEnvelope
-        (addMsg loop . second ExHomeHandler)
+        (\(island, msg) -> addMsgIO (island, ExHomeHandler msg) loop)
         (env ^. router)
     )
     Nothing
 
 mkRemoteProxyConn ::
   Env
-  -> EventLoop (ReaderT Env IO) (Island, ExHomeHandler)
+  -> EventLoop (Island, ExHomeHandler)
   -> IO ()
 mkRemoteProxyConn env loop =
   initTCPClientConnection
@@ -46,29 +54,26 @@ mkRemoteProxyConn env loop =
     "127.0.0.1"
     "3001"
     ( handleBytes @Proto.HomeEnvelope
-        (addMsg loop . second ExHomeHandler)
+        (\(island, msg) -> addMsgIO (island, ExHomeHandler msg) loop)
         (env ^. router)
     )
     (pure ())
     (pure ())
 
 startCheckMemoryPoll ::
-  EventLoop (ReaderT Env IO) (Island, ExHomeHandler)
-  -> IO ()
-startCheckMemoryPoll loop = do
-  addMsg
-    loop
-    (Home, ExHomeHandler (defMessage @Proto.CheckMemoryUsage))
+  EventLoopT Env (Island, ExHomeHandler) IO ()
+startCheckMemoryPoll = do
+  addMsg (Home, ExHomeHandler (defMessage @Proto.CheckMemoryUsage))
   void $
-    setInterval loop (Home, ExHomeHandler (defMessage @Proto.CheckMemoryUsage)) $
+    setInterval (Home, ExHomeHandler (defMessage @Proto.CheckMemoryUsage)) $
       30 * 1000
 
 -- Use channels to communicate with local proxy
-mkLocalProxyConn ::
+mkLocalProxyThread ::
   (Chan B.ByteString, Chan B.ByteString)
-  -> IO ()
-mkLocalProxyConn serverConn =
-  bracket (Proxy.mkEnv LocalHTTP) Proxy.cleanupEnv $ \env -> do
+  -> IO ThreadId
+mkLocalProxyThread serverConn =
+  forkIO $ bracket (Proxy.mkEnv LocalHTTP) Proxy.cleanupEnv $ \env -> do
     proxyMain
       env
       (mkChannelsConnection serverConn)
@@ -78,33 +83,36 @@ mkLocalProxyConn serverConn =
 mkChannelsConnection ::
   (Chan B.ByteString, Chan B.ByteString)
   -> Router
-  -> EventLoop (ReaderT Proxy.Env IO) (Island, ExProxyHandler)
+  -> EventLoop (Island, ExProxyHandler)
   -> IO ()
 mkChannelsConnection serverConn rtr loop =
   addChannelsConnection
     Home
     (rtr ^. connectionsManager)
     serverConn
-    (handleBytes @Proto.ProxyEnvelope (addMsg loop . second ExProxyHandler) rtr)
+    ( handleBytes @Proto.ProxyEnvelope
+        (\(island, msg) -> addMsgIO (island, ExProxyHandler msg) loop)
+        rtr
+    )
     Nothing
 
 main :: IO ()
 main = do
   bracket mkEnv cleanupEnv $ \env ->
-    runReaderT (action env) env
+    runEventLoopT action env
  where
-  action :: Env -> ReaderT Env IO ()
-  action env = do
+  action :: EventLoopT Env (Island, ExHomeHandler) IO ()
+  action = do
     ch1 <- liftIO newChan
     ch2 <- liftIO newChan
     let
       clientConn = (ch1, ch2)
       serverConn = (ch2, ch1)
 
-    loop <- mkEventLoop @(Island, ExHomeHandler)
-    liftIO $ mkLocalProxyConn serverConn
-    liftIO $ addLocalHostConnection env loop clientConn
-    liftIO $ mkRemoteProxyConn env loop
-    liftIO $ startCheckMemoryPoll loop
-
-    run loop $ \evloop b -> uncurry (homeHandler evloop) b
+    loop <- getLoop
+    env <- getEnv
+    bracket (liftIO $ mkLocalProxyThread serverConn) (liftIO . killThread) $ \_threadId -> do
+      liftIO $ addLocalHostConnection env loop clientConn
+      liftIO $ mkRemoteProxyConn env loop
+      startCheckMemoryPoll
+      start $ uncurry homeHandler
