@@ -26,6 +26,7 @@ import Router (trySendMessage)
 import State (fulfilPromise)
 import System.Memory (MemoryInformation, getMemoryInformation)
 import TH (makeInstance)
+import System (island)
 
 class ProxyHandler msg where
   proxyHandler ::
@@ -34,7 +35,7 @@ class ProxyHandler msg where
 data ExProxyHandler = forall a. ProxyHandler a => ExProxyHandler a
 
 instance ProxyHandler ExProxyHandler where
-  proxyHandler island (ExProxyHandler msg) = proxyHandler island msg
+  proxyHandler island' (ExProxyHandler msg) = proxyHandler island' msg
 
 -- * Message instances
 
@@ -58,25 +59,24 @@ instance ProxyHandler Proto.RadioStatusUpdate where
 -- | Received acknowledgement from Home for ModifyRadioRequest. Update
 -- promise so HTTP Handler can return.
 instance ProxyHandler Proto.GetRadioStatusResponse where
-  proxyHandler  _ resp = do
+  proxyHandler _ resp = do
     env <- getEnv
     liftIO $
       fulfilPromise
         (fromMessage $ resp ^. Proto.status, resp ^. Proto.currentStationId)
         (env ^. streamStatusState)
 
-instance ProxyHandler Proto.IslandSystemData where
-  proxyHandler  _ resp = do
+instance ProxyHandler Proto.SystemData where
+  proxyHandler _ resp = do
     env <- getEnv
     liftIO $ modifyMVar_ (env ^. systemMap) $ \sysMap ->
       let
-        island = fromMessage $ resp ^. Proto.island
-        sysData = fromMessage $ resp ^. Proto.systemData
+        sysData = fromMessage resp 
       in
-        pure $ Map.insert island sysData sysMap
+        pure $ Map.insert (sysData ^. island) sysData sysMap
 
 instance ProxyHandler Proto.MemoryInformation where
-  proxyHandler  src resp = do
+  proxyHandler src resp = do
     env <- getEnv
     liftIO $ modifyMVar_ (env ^. memoryMap) $ \memMap ->
       let
@@ -102,7 +102,7 @@ instance ProxyHandler Proto.MemoryInformation where
         liftIO $ Map.alterF alterFunc src memMap
 
 instance ProxyHandler Proto.CheckMemoryUsage where
-  proxyHandler  _ _ = do
+  proxyHandler _ _ = do
     env <- getEnv
     mMemInfo <- liftIO getMemoryInformation
     case mMemInfo of
@@ -114,6 +114,6 @@ instance ProxyHandler Proto.CheckMemoryUsage where
             toMessage @Proto.MemoryInformation memInfo
 
 instance ProxyHandler Proto.AddLog where
-  proxyHandler  _ req = do
+  proxyHandler _ req = do
     env <- getEnv
     liftIO $ addLog (env ^. logs) (req ^. Proto.log)

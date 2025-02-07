@@ -99,9 +99,7 @@ handleModifyRadioRequest env req (Just stateId) = do
 handleGetSystemDataRequest :: Env -> Handler Proto.IslandsSystemData
 handleGetSystemDataRequest env = do
   sysMap <- liftIO $ readMVar (env ^. systemDataState)
-  let msg = toMessage sysMap
-  liftIO $ print msg
-  pure msg
+  pure $ toMessage sysMap
 
 handleGetAllIslandsMemoryDataRequest :: Env -> Handler Proto.AllIslandMemoryData
 handleGetAllIslandsMemoryDataRequest env = do

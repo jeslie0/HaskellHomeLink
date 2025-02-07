@@ -309,7 +309,6 @@ aquireConnectedClientSocket host port onConnect onDisconnect = do
   -- connection is successful, otherwise throw.
   tryConnect sock sockAddr = do
     connect sock sockAddr
-    onConnect
     putStrLn $ "Connected to server at: " <> show sockAddr
 
 -- aquireActiveClientSocket ::

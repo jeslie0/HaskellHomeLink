@@ -25,7 +25,10 @@ import Proto.Messages qualified as Proto
 import Proxy.Env qualified as Proxy
 import Proxy.Handler (ExProxyHandler (..))
 import Proxy.Main (proxyMain)
-import Router (Router, connectionsManager, handleBytes)
+import Router (Router, connectionsManager, handleBytes, trySendMessage)
+import System (mkSystemData, SystemData)
+import ProtoHelper (toMessage)
+import Envelope (toProxyEnvelope)
 
 addLocalHostConnection ::
   Env
@@ -41,7 +44,7 @@ addLocalHostConnection env loop clientConn =
         (\(island, msg) -> addMsgIO (island, ExHomeHandler msg) loop)
         (env ^. router)
     )
-    Nothing
+    (pure ())
 
 mkRemoteProxyConn ::
   Env
@@ -57,8 +60,13 @@ mkRemoteProxyConn env loop =
         (\(island, msg) -> addMsgIO (island, ExHomeHandler msg) loop)
         (env ^. router)
     )
+    sendSystemData
     (pure ())
-    (pure ())
+    where
+      sendSystemData = do
+        systemMsg <- toMessage @Proto.SystemData @SystemData <$> mkSystemData Home
+        val <- trySendMessage (env ^. router) RemoteProxy $ toProxyEnvelope systemMsg
+        print val
 
 startCheckMemoryPoll ::
   EventLoopT Env (Island, ExHomeHandler) IO ()
@@ -94,7 +102,7 @@ mkChannelsConnection serverConn rtr loop =
         (\(island, msg) -> addMsgIO (island, ExProxyHandler msg) loop)
         rtr
     )
-    Nothing
+    (pure ())
 
 main :: IO ()
 main = do

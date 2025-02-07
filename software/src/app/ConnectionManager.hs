@@ -61,10 +61,11 @@ addRxTxConnection ::
   -> IO conn
   -- ^ Create RxTx channel
   -> IO ()
+  -> IO ()
   -> Island
   -- ^ The corresponding Island
   -> IO ()
-addRxTxConnection (ConnectionManager mvar) onRecvMsg onError makeConn onDisconect island =
+addRxTxConnection (ConnectionManager mvar) onRecvMsg onError makeConn onConnect onDisconect island =
   let
     mainThread = do
       conn <- makeConn
@@ -73,9 +74,11 @@ addRxTxConnection (ConnectionManager mvar) onRecvMsg onError makeConn onDisconec
           ( \case
               Nothing -> pure Nothing
               Just (Connection threadId _) ->
+
                 pure . Just $ Connection threadId (Just $ send conn)
           )
           island
+      onConnect
       go conn
 
     go conn = do
@@ -144,6 +147,7 @@ initTCPClientConnection island connMngr host port withBytes onConnect onDisconne
     withBytes
     onErr
     (aquireConnectedClientSocket host port onConnect onDisconnect)
+    onConnect
     onDisconnect
     island
  where
@@ -172,6 +176,7 @@ initTCPServerConnection island connMngr port withMsg onConnect onDisconnect = do
       withMsg
       (onErr serverSock)
       (open serverSock)
+      onConnect
       onDisconnect
       island
 
@@ -192,7 +197,7 @@ addChannelsConnection ::
   -> ConnectionManager 
   -> (Chan B.ByteString, Chan B.ByteString)
   -> (B.ByteString -> IO ())
-  -> Maybe (Island -> IO ())
+  -> IO ()
   -> IO ()
 addChannelsConnection island connMngr chans withBytes onConnect = do
   addRxTxConnection @(Chan B.ByteString, Chan B.ByteString)  @ChannelRxError
@@ -200,9 +205,9 @@ addChannelsConnection island connMngr chans withBytes onConnect = do
     withBytes
     onErr
     (pure chans)
+    onConnect
     (pure ())
     island
-  forM_ onConnect (\f -> f island)
 
  where
   onErr _ _ = pure ()

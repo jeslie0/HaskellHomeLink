@@ -6,9 +6,10 @@ import Data.Array ((:))
 import Data.Array as Array
 import Data.Bifunctor (lmap)
 import Data.Either (Either(..))
-import Data.Maybe (fromMaybe)
+import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Traversable (traverse)
-import Data.UInt (UInt, fromInt)
+import Data.UInt (UInt)
+import Debug (trace)
 import Proto.Messages as Proto
 import ProtoHelper (class FromMessage, class SayError, fromMessage, sayError, toEither)
 
@@ -25,7 +26,15 @@ instance FromMessage Proto.CPUData CPUData CPUDataError where
 instance SayError CPUDataError where
   sayError MissingModelName = pure "Model name is missing from CPUData"
 
-type SystemDataR = (cpuData :: CPUData, inDockerContainer :: Boolean, operatingSystemName :: String, architecture :: String, memTotalKb :: UInt)
+type SystemDataR =
+  ( cpuData :: Maybe CPUData
+  , inDockerContainer :: Boolean
+  , operatingSystemName :: String
+  , architecture :: String
+  , memTotalKb :: Maybe UInt
+  , island :: Island
+  )
+
 newtype SystemData = SystemData (Record SystemDataR)
 
 data SystemDataError
@@ -34,16 +43,20 @@ data SystemDataError
   | MissingInDockerContainer
   | MissingOperatingSystemName
   | MissingArchitecture
+  | SystemDataMissingIsland
+  | SystemDataIslandError IslandError
 
 instance FromMessage Proto.SystemData SystemData SystemDataError where
   fromMessage (Proto.SystemData msg) = do
     let inDockerContainer = fromMaybe false msg.inDockerContainer
-    cpuDataProt <- toEither MissingCPUData msg.cpuData
-    cpuData <- lmap MissingPartOfCPUData $ fromMessage cpuDataProt
+        mCPUDataProt = msg.cpuData
+    cpuData <- lmap MissingPartOfCPUData $ traverse fromMessage mCPUDataProt
     operatingSystemName <- toEither MissingOperatingSystemName msg.operatingSystemName
     architecture <- toEither MissingArchitecture msg.architecture
-    memTotalKb <- Right $ fromMaybe (fromInt 10000) msg.memTotalkB
-    pure $ SystemData { cpuData, inDockerContainer, operatingSystemName, architecture, memTotalKb }
+    memTotalKb <- Right $ msg.memTotalkB
+    islandProt <- toEither SystemDataMissingIsland msg.island
+    island <- lmap SystemDataIslandError $ fromMessage islandProt
+    pure $ SystemData { cpuData, inDockerContainer, operatingSystemName, architecture, memTotalKb, island }
 
 instance SayError SystemDataError where
   sayError MissingCPUData = pure "SystemData is missing cpuData"
@@ -51,6 +64,8 @@ instance SayError SystemDataError where
   sayError MissingInDockerContainer = pure "SystemData is missing inDockerContainer"
   sayError MissingOperatingSystemName = pure "SystemData is missing operatingSystemName"
   sayError MissingArchitecture = pure "SystemData is missing architecture"
+  sayError SystemDataMissingIsland = pure "SystemData is missing island"
+  sayError (SystemDataIslandError _) = pure "SystemData is missing island"
 
 data Island
   = Home
@@ -81,34 +96,12 @@ instance FromMessage Proto.ISLAND Island IslandError where
 instance SayError IslandError where
   sayError InvalidIsland = pure "Island error: Invalid island"
 
-type IslandSystemDataR = (island :: Island, systemData :: SystemData)
-newtype IslandSystemData = IslandSystemData (Record IslandSystemDataR)
-data IslandSystemDataError
-  = MissingIsland
-  | SystemDataInvalidIsland IslandError
-  | MissingSystemData
-  | MissingPartOfSystemData SystemDataError
-
-instance FromMessage Proto.IslandSystemData IslandSystemData IslandSystemDataError where
-  fromMessage (Proto.IslandSystemData msg) = do
-    let island' = fromMaybe Proto.ISLAND_HOME msg.island
-    island <- lmap SystemDataInvalidIsland $ fromMessage island'
-    systemDataProt <- toEither MissingSystemData msg.systemData
-    systemData <- lmap MissingPartOfSystemData $ fromMessage systemDataProt
-    pure $ IslandSystemData { systemData, island }
-
-instance SayError IslandSystemDataError where
-  sayError MissingIsland = pure "IslandSystemData is missing island"
-  sayError (SystemDataInvalidIsland err) = "IslandSystemData has invalid island" : sayError err
-  sayError MissingSystemData = pure "IslandSystemData is missing systemData"
-  sayError (MissingPartOfSystemData err) = "IslandSystemData has invalid systemData" : sayError err
-
-type IslandsSystemDataR = (allSystemData :: Array IslandSystemData)
+type IslandsSystemDataR = (allSystemData :: Array SystemData)
 newtype IslandsSystemData = IslandsSystemData (Record IslandsSystemDataR)
 
 data IslandsSystemDataError
   = MissingIslandsSystemData
-  | MissingPartOfAllSystemData (Array IslandSystemDataError)
+  | MissingPartOfAllSystemData (Array SystemDataError)
 
 instance FromMessage Proto.IslandsSystemData IslandsSystemData IslandsSystemDataError where
   fromMessage (Proto.IslandsSystemData msg) =

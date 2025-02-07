@@ -7,7 +7,7 @@ module Proxy.Env (
   router,
   streamStatusState,
   EnvT,
-  addLocalHTTPServerConnection,
+  addServerConnection,
   systemMap,
   memoryMap,
   logs,
@@ -66,17 +66,17 @@ cleanupEnv :: Env -> IO ()
 cleanupEnv env = do
   killConnections (env ^. (router . connectionsManager))
 
-addLocalHTTPServerConnection ::
+addServerConnection ::
   forall msg.
   Msg msg =>
   ((Island, msg) -> IO ())
   -> Router
+  -> IO ()
+  -> IO ()
   -> IO Socket
-addLocalHTTPServerConnection actOnMsg rtr = do
+addServerConnection actOnMsg rtr = do
   initTCPServerConnection
     Home
     (rtr ^. connectionsManager)
     "3001"
     (handleBytes actOnMsg rtr)
-    (pure ())
-    (pure ())

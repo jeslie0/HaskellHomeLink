@@ -24,7 +24,7 @@ import Network.Socket (Socket, close)
 import Proto.Messages qualified as Proto
 import Proxy.Env (
   Env,
-  addLocalHTTPServerConnection,
+  addServerConnection,
   cleanupEnv,
   logs,
   memoryMap,
@@ -35,10 +35,12 @@ import Proxy.Env (
  )
 import Proxy.Handler (ExProxyHandler (..), proxyHandler)
 import REST.HomeServer qualified as HTTP
-import Router (Router)
+import Router (Router, trySendMessage)
 import State (State)
-import System (SystemData)
+import System (SystemData, mkSystemData)
 import System.Memory (MemoryInformation)
+import ProtoHelper (toMessage)
+import Envelope (toProxyEnvelope)
 
 httpServer ::
   State (StreamStatus, StationId)
@@ -56,9 +58,16 @@ mkServerSocket ::
   -> EventLoop (Island, ExProxyHandler)
   -> IO Socket
 mkServerSocket rtr loop =
-  addLocalHTTPServerConnection @Proto.ProxyEnvelope
+  addServerConnection @Proto.ProxyEnvelope
     (\(island, msg') -> addMsgIO (island, ExProxyHandler msg') loop)
     rtr
+    sendSystemData
+    (pure ())
+    where
+      sendSystemData = do
+        systemMsg <- toMessage @Proto.SystemData @SystemData <$> mkSystemData RemoteProxy
+        val <- trySendMessage rtr LocalHTTP $ toProxyEnvelope systemMsg
+        print val
 
 createHttpServerThread :: Env -> IO ()
 createHttpServerThread env =

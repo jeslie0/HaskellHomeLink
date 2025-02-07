@@ -8,7 +8,7 @@ module System (
   operatingSystemName,
   architecture,
   memTotalKb,
-  island
+  island,
 ) where
 
 import Control.Monad.IO.Class (MonadIO (liftIO))
@@ -40,27 +40,28 @@ data SystemData = SystemData
 $(makeLenses ''SystemData)
 
 instance ToMessage Proto.SystemData SystemData where
-  toMessage ( SystemData
-                cpuData'
-                inDockerContainer'
-                operatingSystemName'
-                architecture'
-                memTotalkB'
-                island'
-              ) =
-    defMessage
-      & Proto.maybe'cpuData
-      .~ (toMessage <$> cpuData')
-      & Proto.inDockerContainer
-      .~ inDockerContainer'
-      & Proto.operatingSystemName
-      .~ operatingSystemName'
-      & Proto.architecture
-      .~ architecture'
-      & Proto.maybe'memTotalkB
-      .~ memTotalkB'
-      & Proto.island
-      .~ toMessage island'
+  toMessage
+    ( SystemData
+        cpuData'
+        inDockerContainer'
+        operatingSystemName'
+        architecture'
+        memTotalkB'
+        island'
+      ) =
+      defMessage
+        & Proto.maybe'cpuData
+        .~ (toMessage <$> cpuData')
+        & Proto.inDockerContainer
+        .~ inDockerContainer'
+        & Proto.operatingSystemName
+        .~ operatingSystemName'
+        & Proto.architecture
+        .~ architecture'
+        & Proto.maybe'memTotalkB
+        .~ memTotalkB'
+        & Proto.island
+        .~ toMessage island'
 
 instance FromMessage Proto.SystemData SystemData where
   fromMessage systemDataMessage =
@@ -79,12 +80,7 @@ instance ToMessage Proto.IslandsSystemData (Map.Map Island SystemData) where
       & Proto.allSystemData
       .~ ( Map.toList mp
             & fmap
-              ( \(island', sysData) ->
-                  defMessage
-                    & Proto.island
-                    .~ toMessage island'
-                    & Proto.systemData
-                    .~ toMessage sysData
+              ( \(_island, sysData) -> toMessage sysData
               )
          )
 
