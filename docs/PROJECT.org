@@ -5,7 +5,7 @@
 #+author: James Leslie
 #+TODO: TODO IN-PROGRESS WAITING ONGOING POSTPONED | DONE CANCELLED
 
-* [0/4] Tasks
+* [0/5] Tasks
 ** TODO Implement client TLS connection controller
 :PROPERTIES:
 :type:     task
@@ -26,24 +26,44 @@ A basic TCP client has been implemented. It needs to be refined. It should try t
 :END:
 I need to create a document explaining how the pieces of this project work. Realistically, this will be a constantly updated document and will never be "finished".
 
-** ONGOING Rework Nix structure
-:PROPERTIES:
-:type:     packaging
-:END:
-Currently, the nix structure of this project is a real mess. This should be tidied up and organised.
-
-
-
-** IN-PROGRESS Add Logs page 
+** TODO Add command line options to executables
 :PROPERTIES:
 :type:     task
 :END:
-The Haskell code needs a method to report info logs and errors. A log controller should me made that stores logs and propogates them to the frontend by a logs endpoint
-* [0/0] Bugs
+When we start using certificates, it will be useful to point the applications at a file, at runtime. This can be done using command line options. We need to find a suitable library and integrate it.
 
+** TODO Remove redundant packages and source files
+:PROPERTIES:
+:type:     task
+:END:
+There are several packages which were included originally in the cabal file, but they aren't used anymore. I cam having a hard time keeping track of what we actually use, so we need to either use a tool to determine what packages are necessary, or prune them by hand. We should also make sure unused source code files are deleted, such as the old Async wrapper around threads.
+
+** TODO Remove cross domain language from project
+:PROPERTIES:
+:type:     task
+:END:
+This project was originally based on some loose principles from the cross domain wiki page. After reading more about the subject, it doesn't seem appropriate or relevant. The references should be removed for clarity.
+
+* [0/1] Bugs
+** TODO Investigate Audio dropout
+:PROPERTIES:
+:type:     bug
+:END:
+After several days, the streaming GET request drops and the audio stream stops. This is due to the GET request no longer providing data, which is down to either:
+1. The request has a time limit that it will stream data;
+2. The request drops out after a certain time, which is caused by the accumulation of small latencies in fetching the data.
+
+It should be easy to investigate if (2) is the problem by making a request, getting some data, waiting a while, then trying to get data again. If this works, then most likely (1) is the issue.
+
+We can fix (1) by just creating a new GET request when it expires. This will fix (2) but this case means there is an underlying issue with the timings of getting the radio stream. We could fix 2 by moving to an asynchronous fetching again, however; this could bring back the space leak issue we were seeing before when using this approach.
 
 * Milestones
-** v0.0.1.0 - MVP
+** TODO v0.1.0.1 - Security Update
+:PROPERTIES:
+:type:     milestone
+:END:
+We need to enable mTLS on both the HTTP server, as well as the connections between the islands. At this point, we are ready to bring the systems online!
+** DONE v0.1.0.0 - MVP
 :PROPERTIES:
 :type:     milestone
 :END:
@@ -51,9 +71,3 @@ We will have a minimal viable product when we have the following built:
 1. Home application that can play a radio stream and be remotely controlled.
 2. Proxy application that hosts the frontend and establishes a connection with the Home application.
 3. A simple frontend that allows can be used to toggle the radio on the Home application.
-
-
-
-# Local Variables:
-# visual-fill-column-width: 80
-# End:

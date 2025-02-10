@@ -85,3 +85,25 @@ This should make replying to an event a bit easier to manage.
 Some kind of data type needs to manage the connections and routing of messages. It should be abstract enough to be able to deal with different types communication (channels/sockets). Each event handler should have access to this.
 
 I think that the Home island will be the core island that everything talks to directly, bar the proxy. The Home island will serve up some data to the frontend, but also send that data to the proxy.
+
+* DONE Rework Nix structure
+:PROPERTIES:
+:type:     packaging
+:ARCHIVE_TIME: 2025-02-10 Mon 06:51
+:ARCHIVE_FILE: ~/workspaces/Haskell/AssistantPi/docs/PROJECT.org
+:ARCHIVE_OLPATH: Tasks
+:ARCHIVE_CATEGORY: Project Management
+:ARCHIVE_TODO: DONE
+:END:
+Currently, the nix structure of this project is a real mess. This should be tidied up and organised.
+
+* DONE Add Logs page
+:PROPERTIES:
+:type:     task
+:ARCHIVE_TIME: 2025-02-10 Mon 06:51
+:ARCHIVE_FILE: ~/workspaces/Haskell/AssistantPi/docs/PROJECT.org
+:ARCHIVE_OLPATH: Tasks
+:ARCHIVE_CATEGORY: Project Management
+:ARCHIVE_TODO: DONE
+:END:
+The Haskell code needs a method to report info logs and errors. A log controller should me made that stores logs and propogates them to the frontend by a logs EndpointSequ
