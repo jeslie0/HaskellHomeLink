@@ -61,8 +61,7 @@ executable Home
 
 
     -- Modules included in this executable, other than Main.
-    other-modules:    Connection,
-                      Connection.Socket,
+    other-modules:    Connection.Socket,
                       Connection.TCP,
                       Connection.TLS,
                       Connection.Rx,
@@ -104,9 +103,8 @@ executable Home
                       base ^>=4.18.2.1,
                       bytestring,
                       cereal,
-                      connection,
                       containers,
-                      data-default,
+                      crypton-x509,
                       directory,
                       lifted-base,
                       http-client,
@@ -117,25 +115,23 @@ executable Home
                       minimp3-hs,
                       monad-control,
                       mtl,
-                      mutable-containers,
                       network,
-                      pqueue,
                       proto-lens,
                       proto-lens-runtime,
                       random,
-                      resourcet,
-                      servant,
+                      -- resourcet,
+                      -- servant,
                       servant-server,
                       servant-proto-lens,
                       template-haskell,
                       text,
                       time,
                       tls,
-                      transformers,
+                      -- transformers,
                       transformers-base,
-                      unordered-containers,
+                      -- unordered-containers,
                       vector,
-                      wai,
+                      -- wai,
                       wai-app-static,
                       warp
 
@@ -149,6 +145,7 @@ executable Home
     default-language: GHC2021
 
     ghc-options: -main-is Home.Main -O2 -threaded -split-objs
+                 -- -Wunused-packages
 
 executable Proxy
     -- Import common warning flags.
@@ -159,8 +156,7 @@ executable Proxy
 
 
     -- Modules included in this executable, other than Main.
-    other-modules:    Connection,
-                      Connection.Socket,
+    other-modules:    Connection.Socket,
                       Connection.TCP,
                       Connection.TLS,
                       Connection.Rx,
@@ -197,37 +193,26 @@ executable Proxy
                       base ^>=4.18.2.1,
                       bytestring,
                       cereal,
-                      connection,
                       containers,
-                      data-default,
+                      crypton-x509,
                       directory,
                       lifted-base,
-                      http-client,
-                      http-client-tls,
-                      http-types,
                       microlens,
                       microlens-th,
                       monad-control,
                       mtl,
-                      mutable-containers,
                       network,
-                      pqueue,
                       proto-lens,
                       proto-lens-runtime,
                       random,
-                      resourcet,
-                      servant,
                       servant-server,
                       servant-proto-lens,
                       template-haskell,
                       text,
                       time,
                       tls,
-                      transformers,
                       transformers-base,
-                      unordered-containers,
                       vector,
-                      wai,
                       wai-app-static,
                       warp
 
@@ -241,3 +226,4 @@ executable Proxy
     default-language: GHC2021
 
     ghc-options: -main-is Proxy.Main -O2 -threaded -split-objs
+                 -- -Wunused-packages
