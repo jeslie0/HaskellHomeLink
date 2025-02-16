@@ -24,7 +24,7 @@ import Network.Wai.Application.Static (
   ssIndices,
   ssRedirectToIndex,
  )
-import Network.Wai.Handler.Warp (defaultSettings, setPort)
+import Network.Wai.Handler.Warp (defaultSettings, setPort, Port)
 import Network.Wai.Handler.WarpTLS (
   TLSSettings (..),
   runTLS,
@@ -151,8 +151,8 @@ serveDir path = do
 app :: Env -> Application
 app env = serve (Proxy @Api) $ server env
 
-runApp :: FilePath -> FilePath -> FilePath -> Env -> IO ()
-runApp certPath keyPath caCertPAth env = do
+runApp :: FilePath -> FilePath -> FilePath -> Port -> Env -> IO ()
+runApp certPath keyPath caCertPAth port env = do
   putStrLn $ "Starting HTTP server on port " <> show port
   caStore <- loadCAStore caCertPAth
   runAppImpl caStore `catch` handleAsyncException
@@ -171,8 +171,6 @@ runApp certPath keyPath caCertPAth env = do
   settings =
     defaultSettings
       & setPort port
-
-  port = 8080
 
   handleAsyncException (ex :: SomeAsyncException) = do
     putStrLn "Async exception caught. Killing HTTP server"

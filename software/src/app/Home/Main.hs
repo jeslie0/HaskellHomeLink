@@ -30,12 +30,15 @@ import Home.Options (
   httpsCACertificatePath,
   httpsCertificatePath,
   httpsKeyPath,
+  proxyPort,
+  proxyURL,
   tlsCACertificatePath,
   tlsCertificatePath,
-  tlsKeyPath,
+  tlsKeyPath, httpPort,
  )
 import Islands (Island (..))
 import Lens.Micro
+import Network.Socket (HostName, ServiceName)
 import Options (runCommand)
 import Proto.Messages qualified as Proto
 import ProtoHelper (toMessage)
@@ -44,6 +47,7 @@ import Proxy.Handler (ExProxyHandler (..))
 import Proxy.Main (proxyMain)
 import Router (Router, connectionsManager, handleBytes, trySendMessage)
 import System (SystemData, mkSystemData)
+import Network.Wai.Handler.Warp (Port)
 
 addLocalHostConnection ::
   Env
@@ -88,10 +92,12 @@ mkRemoteProxyConnTLS ::
   FilePath
   -> FilePath
   -> FilePath
+  -> HostName
+  -> ServiceName
   -> Env
   -> EventLoop (Island, ExHomeHandler)
   -> IO ()
-mkRemoteProxyConnTLS certPath keyPath caCertPath env loop = do
+mkRemoteProxyConnTLS certPath keyPath caCertPath host port env loop = do
   let rtr = env ^. router
   mParams <- setupTLSClientParams certPath keyPath caCertPath
   case mParams of
@@ -101,8 +107,8 @@ mkRemoteProxyConnTLS certPath keyPath caCertPath env loop = do
         params
         RemoteProxy
         (rtr ^. connectionsManager)
-        "127.0.0.1"
-        "3001"
+        host
+        port
         ( handleBytes @Proto.HomeEnvelope
             (\(island, msg) -> addMsgIO (island, ExHomeHandler msg) loop)
             rtr
@@ -128,14 +134,16 @@ mkLocalProxyThread ::
   FilePath
   -> FilePath
   -> FilePath
+  -> Port
   -> (Chan B.ByteString, Chan B.ByteString)
   -> IO ThreadId
-mkLocalProxyThread certPath keyPath caCertPath serverConn =
+mkLocalProxyThread certPath keyPath caCertPath port serverConn =
   forkIO $ bracket (Proxy.mkEnv LocalHTTP) Proxy.cleanupEnv $ \env -> do
     proxyMain
       certPath
       keyPath
       caCertPath
+      port
       env
       (mkChannelsConnection serverConn)
       (const $ pure ())
@@ -179,6 +187,7 @@ main = runCommand $ \(opts :: Home.Options.HomeOptions) _args -> do
             (opts ^. httpsCertificatePath)
             (opts ^. httpsKeyPath)
             (opts ^. httpsCACertificatePath)
+            (opts ^. httpPort)
             serverConn
       )
       (liftIO . killThread)
@@ -189,6 +198,8 @@ main = runCommand $ \(opts :: Home.Options.HomeOptions) _args -> do
             (opts ^. tlsCertificatePath)
             (opts ^. tlsKeyPath)
             (opts ^. tlsCACertificatePath)
+            (opts ^. proxyURL)
+            (opts ^. proxyPort)
             env
             loop
         startCheckMemoryPoll

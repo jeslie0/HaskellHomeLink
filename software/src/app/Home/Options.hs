@@ -10,6 +10,7 @@ module Home.Options (
   tlsCACertificatePath,
   proxyURL,
   proxyPort,
+  httpPort
 ) where
 
 import Lens.Micro.TH (makeLenses)
@@ -24,6 +25,7 @@ data HomeOptions = HomeOptions
   , _tlsCACertificatePath :: String
   , _proxyURL :: String
   , _proxyPort :: String
+  , _httpPort :: Int
   }
 
 $(makeLenses ''HomeOptions)
@@ -42,3 +44,4 @@ instance Options HomeOptions where
       <*> simpleOption "tls-ca-cert-path" "" "Path to the CA file for TLS connections."
       <*> simpleOption "proxy-url" "" "URL of the proxy to try and connect to."
       <*> simpleOption "proxy-url" "" "URL of the proxy to try and connect to."
+      <*> simpleOption "http-port" 3000 "URL of the proxy to try and connect to."
