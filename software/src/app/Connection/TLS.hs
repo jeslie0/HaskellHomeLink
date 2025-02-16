@@ -7,11 +7,22 @@ import Control.Exception (bracket)
 import Data.ByteString qualified as B
 import Data.Default.Class (def)
 import Data.X509 (Certificate, CertificateChain (..), SignedExact)
-import Data.X509.CertificateStore (CertificateStore, makeCertificateStore)
+import Data.X509 as X509
+import Data.X509.CertificateStore (
+  CertificateStore,
+  listCertificates,
+  makeCertificateStore,
+ )
 import Data.X509.File (readKeyFile, readSignedObject)
+import Data.X509.Validation (
+  defaultChecks,
+  defaultHooks,
+  validate,
+  validateDefault,
+ )
 import Network.Socket (ServiceName, accept, close)
 import Network.TLS as TLS
-import Network.TLS.Extra (ciphersuite_all, ciphersuite_default)
+import Network.TLS.Extra (ciphersuite_all)
 
 aquireActiveServerSocketTLS ::
   TLS.TLSParams params =>
@@ -97,29 +108,91 @@ loadCAStore caCertPath = do
   certs <- readSignedObject caCertPath
   pure $ makeCertificateStore certs
 
-setupTLSServerParams :: FilePath -> FilePath -> IO (Maybe ServerParams)
-setupTLSServerParams certPath keyPath = do
+setupTLSServerParams ::
+  FilePath
+  -- ^ Certificate path
+  -> FilePath
+  -- ^ Key path
+  -> FilePath
+  -- ^ CA Certificate path
+  -> IO (Maybe ServerParams)
+setupTLSServerParams certPath keyPath caCrtPath = do
   mCreds <- loadCredentials certPath keyPath
+  caStore <- makeCertificateStore <$> readSignedObject caCrtPath
+
   case mCreds of
     Nothing -> pure Nothing
     Just creds ->
       pure . Just $
         def
-          { TLS.serverShared = def {TLS.sharedCredentials = Credentials [creds]}
+          { TLS.serverWantClientCert = True
+          , TLS.serverCACertificates = listCertificates caStore
+          , TLS.serverShared = def {TLS.sharedCredentials = Credentials [creds]}
           , TLS.serverSupported =
               def
                 { supportedCiphers = ciphersuite_all
                 , supportedVersions = [TLS13, TLS12]
                 }
+          , TLS.serverHooks = mTLSHooks caStore
           }
 
-setupTLSClientParams :: FilePath -> IO ClientParams
-setupTLSClientParams caCertPath = do
-  caStore <- loadCAStore caCertPath
-  let defaultParams = defaultParamsClient "localhost" ""
-  pure $
-    defaultParams
-      { clientSupported = def {supportedCiphers = ciphersuite_all}
-      , clientShared = def {sharedCAStore = caStore}
-      , clientUseServerNameIndication = False
-      }
+mTLSHooks :: CertificateStore -> ServerHooks
+mTLSHooks caStore =
+  def
+    { TLS.onClientCertificate = validateClientCert
+    }
+ where
+  validateClientCert (CertificateChain []) = do
+    pure . CertificateUsageReject . CertificateRejectOther $
+      "No valid client certificates provided."
+  validateClientCert chain@(CertificateChain (x : xs)) = do
+    validationResult <-
+      validate
+        X509.HashSHA256
+        defaultHooks
+        defaultChecks
+        caStore
+        def
+        ("localhost", "")
+        chain
+    case validationResult of
+      [] -> pure CertificateUsageAccept
+      errors -> do
+        print errors
+        validateClientCert (CertificateChain xs)
+
+setupTLSClientParams ::
+  FilePath
+  -- ^ Certificate path
+  -> FilePath
+  -- ^ Key path
+  -> FilePath
+  -- ^ CA Certificate path
+  -> IO (Maybe ClientParams)
+setupTLSClientParams certPath keyPath caCertPath = do
+  mCredentials <- loadCredentials certPath keyPath
+  case mCredentials of
+    Nothing -> pure Nothing
+    Just creds -> do
+      caStore <- loadCAStore caCertPath
+      let defaultParams = defaultParamsClient "localhost" ""
+      pure . Just $
+        defaultParams
+          { clientSupported =
+              def
+                { supportedCiphers = ciphersuite_all
+                , supportedVersions = [TLS13, TLS12]
+                }
+          , clientShared =
+              def
+                { sharedCredentials = Credentials [creds]
+                , sharedCAStore = caStore
+                }
+          , clientUseServerNameIndication = False
+          , clientHooks =
+              def
+                { onServerCertificate = \_ ->
+                    validateDefault caStore
+                , onCertificateRequest = \_ -> pure $ Just creds
+                }
+          }

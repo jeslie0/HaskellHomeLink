@@ -1,6 +1,11 @@
 module Home.Main (main) where
 
-import ConnectionManager (addChannelsConnection, initTCPClientConnection, initTLSClientConnection)
+import Connection.TLS (setupTLSClientParams)
+import ConnectionManager (
+  addChannelsConnection,
+  initTCPClientConnection,
+  initTLSClientConnection,
+ )
 import Control.Concurrent (Chan, ThreadId, forkIO, killThread, newChan)
 import Control.Exception.Lifted (bracket)
 import Control.Monad (void)
@@ -20,7 +25,15 @@ import EventLoop (
  )
 import Home.Env (Env, cleanupEnv, mkEnv, router)
 import Home.Handler (ExHomeHandler (..), homeHandler)
-import Home.Options (HomeOptions, httpsCertificatePath, httpsKeyPath, caCertificatePath)
+import Home.Options (
+  HomeOptions,
+  httpsCACertificatePath,
+  httpsCertificatePath,
+  httpsKeyPath,
+  tlsCACertificatePath,
+  tlsCertificatePath,
+  tlsKeyPath,
+ )
 import Islands (Island (..))
 import Lens.Micro
 import Options (runCommand)
@@ -31,7 +44,6 @@ import Proxy.Handler (ExProxyHandler (..))
 import Proxy.Main (proxyMain)
 import Router (Router, connectionsManager, handleBytes, trySendMessage)
 import System (SystemData, mkSystemData)
-import Connection.TLS (setupTLSClientParams)
 
 addLocalHostConnection ::
   Env
@@ -74,24 +86,29 @@ mkRemoteProxyConn env loop = do
 
 mkRemoteProxyConnTLS ::
   FilePath
+  -> FilePath
+  -> FilePath
   -> Env
   -> EventLoop (Island, ExHomeHandler)
   -> IO ()
-mkRemoteProxyConnTLS caCertPath env loop = do
+mkRemoteProxyConnTLS certPath keyPath caCertPath env loop = do
   let rtr = env ^. router
-  params <- setupTLSClientParams caCertPath
-  initTLSClientConnection
-    params
-    RemoteProxy
-    (rtr ^. connectionsManager)
-    "127.0.0.1"
-    "3001"
-    ( handleBytes @Proto.HomeEnvelope
-        (\(island, msg) -> addMsgIO (island, ExHomeHandler msg) loop)
-        rtr
-    )
-    sendSystemData
-    (pure ())
+  mParams <- setupTLSClientParams certPath keyPath caCertPath
+  case mParams of
+    Nothing -> putStrLn "Could not create client TLS parameters"
+    Just params ->
+      initTLSClientConnection
+        params
+        RemoteProxy
+        (rtr ^. connectionsManager)
+        "127.0.0.1"
+        "3001"
+        ( handleBytes @Proto.HomeEnvelope
+            (\(island, msg) -> addMsgIO (island, ExHomeHandler msg) loop)
+            rtr
+        )
+        sendSystemData
+        (pure ())
  where
   sendSystemData = do
     systemMsg <- toMessage @Proto.SystemData @SystemData <$> mkSystemData Home
@@ -110,13 +127,15 @@ startCheckMemoryPoll = do
 mkLocalProxyThread ::
   FilePath
   -> FilePath
+  -> FilePath
   -> (Chan B.ByteString, Chan B.ByteString)
   -> IO ThreadId
-mkLocalProxyThread certPath keyPath serverConn =
+mkLocalProxyThread certPath keyPath caCertPath serverConn =
   forkIO $ bracket (Proxy.mkEnv LocalHTTP) Proxy.cleanupEnv $ \env -> do
     proxyMain
       certPath
       keyPath
+      caCertPath
       env
       (mkChannelsConnection serverConn)
       (const $ pure ())
@@ -143,7 +162,8 @@ main = runCommand $ \(opts :: Home.Options.HomeOptions) _args -> do
   bracket mkEnv cleanupEnv $ \env ->
     runEventLoopT (action opts) env
  where
-  action :: Home.Options.HomeOptions -> EventLoopT Env (Island, ExHomeHandler) IO ()
+  action ::
+    Home.Options.HomeOptions -> EventLoopT Env (Island, ExHomeHandler) IO ()
   action opts = do
     ch1 <- liftIO newChan
     ch2 <- liftIO newChan
@@ -156,12 +176,20 @@ main = runCommand $ \(opts :: Home.Options.HomeOptions) _args -> do
     bracket
       ( liftIO $
           mkLocalProxyThread
-            (opts ^. Home.Options.httpsCertificatePath)
-            (opts ^. Home.Options.httpsKeyPath)
+            (opts ^. httpsCertificatePath)
+            (opts ^. httpsKeyPath)
+            (opts ^. httpsCACertificatePath)
             serverConn
       )
-      (liftIO . killThread) $ \_threadId -> do
-      liftIO $ addLocalHostConnection env loop clientConn
-      liftIO $ mkRemoteProxyConnTLS (opts ^. Home.Options.caCertificatePath) env loop
-      startCheckMemoryPoll
-      start $ uncurry homeHandler
+      (liftIO . killThread)
+      $ \_threadId -> do
+        liftIO $ addLocalHostConnection env loop clientConn
+        liftIO $
+          mkRemoteProxyConnTLS
+            (opts ^. tlsCertificatePath)
+            (opts ^. tlsKeyPath)
+            (opts ^. tlsCACertificatePath)
+            env
+            loop
+        startCheckMemoryPoll
+        start $ uncurry homeHandler

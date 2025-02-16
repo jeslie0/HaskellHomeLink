@@ -5,38 +5,13 @@
 #+author: James Leslie
 #+TODO: TODO IN-PROGRESS WAITING ONGOING POSTPONED | DONE CANCELLED
 
-* [0/5] Tasks
-** TODO Implement client TLS connection controller
-:PROPERTIES:
-:type:     task
-:priority: high
-:ID:       74bae23a-bd5d-46f0-91f1-a13027ee84df
-:component: backend
-:END:
-The Home application will act as a TLS client and try to connect to the Remote application. We will have a "TlsClient" type that will hook into an event loop.
-
-This will depend on completing a basic TCP connection first, since that is simpler.
-
-A basic TCP client has been implemented. It needs to be refined. It should try to connect to the given destination every 2 seconds, and then keep trying to reconnect when there is a connection break.
-
+* [0/2] Tasks
 ** ONGOING Create detailed design documentation
 :PROPERTIES:
 :component: documentation
 :type:     task
 :END:
 I need to create a document explaining how the pieces of this project work. Realistically, this will be a constantly updated document and will never be "finished".
-
-** TODO Add command line options to executables
-:PROPERTIES:
-:type:     task
-:END:
-When we start using certificates, it will be useful to point the applications at a file, at runtime. This can be done using command line options. We need to find a suitable library and integrate it.
-
-** TODO Remove redundant packages and source files
-:PROPERTIES:
-:type:     task
-:END:
-There are several packages which were included originally in the cabal file, but they aren't used anymore. I cam having a hard time keeping track of what we actually use, so we need to either use a tool to determine what packages are necessary, or prune them by hand. We should also make sure unused source code files are deleted, such as the old Async wrapper around threads.
 
 ** TODO Remove cross domain language from project
 :PROPERTIES:
@@ -56,7 +31,11 @@ After several days, the streaming GET request drops and the audio stream stops. 
 It should be easy to investigate if (2) is the problem by making a request, getting some data, waiting a while, then trying to get data again. If this works, then most likely (1) is the issue.
 
 We can fix (1) by just creating a new GET request when it expires. This will fix (2) but this case means there is an underlying issue with the timings of getting the radio stream. We could fix 2 by moving to an asynchronous fetching again, however; this could bring back the space leak issue we were seeing before when using this approach.
-
+** TODO Investigate TLS connection dropout causing program to stop
+:PROPERTIES:
+:type:     bug
+:END:
+It seems like when a the Proxy application closes, the Home application crashes out. Something is not being handled properly in the TLS connection functions.
 * Milestones
 ** TODO v0.1.0.1 - Security Update
 :PROPERTIES:

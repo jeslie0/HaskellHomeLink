@@ -18,7 +18,7 @@ import Lens.Micro ((&), (.~), (^.))
 import Lens.Micro.TH (makeLenses)
 import Logger (Logs, getLogs)
 import Network.TLS (Version (..))
-import Network.TLS.Extra (ciphersuite_default, ciphersuite_all)
+import Network.TLS.Extra (ciphersuite_default)
 import Network.Wai.Application.Static (
   defaultWebAppSettings,
   ssIndices,
@@ -50,6 +50,7 @@ import State (State, StateId, waitForStateUpdate, withState)
 import System (SystemData)
 import System.Memory (MemoryInformation)
 import WaiAppStatic.Types (unsafeToPiece)
+import Connection.TLS (mTLSHooks, loadCAStore)
 
 data Env = Env
   { _streamStatusState :: State (StreamStatus, StationId)
@@ -150,18 +151,21 @@ serveDir path = do
 app :: Env -> Application
 app env = serve (Proxy @Api) $ server env
 
-runApp :: FilePath -> FilePath -> Env -> IO ()
-runApp certPath keyPath env = do
+runApp :: FilePath -> FilePath -> FilePath -> Env -> IO ()
+runApp certPath keyPath caCertPAth env = do
   putStrLn $ "Starting HTTP server on port " <> show port
-  runAppImpl `catch` handleAsyncException
+  caStore <- loadCAStore caCertPAth
+  runAppImpl caStore `catch` handleAsyncException
  where
-  runAppImpl =
-    runTLS appTLSSettings settings $ app env
+  runAppImpl caStore =
+    runTLS (appTLSSettings caStore) settings $ app env
 
-  appTLSSettings =
+  appTLSSettings caStore =
     (tlsSettings certPath keyPath)
       { tlsAllowedVersions = [TLS13, TLS12]
       , tlsCiphers = ciphersuite_default
+      , tlsWantClientCert = True
+      , tlsServerHooks = mTLSHooks caStore
       }
 
   settings =
