@@ -31,11 +31,6 @@ After several days, the streaming GET request drops and the audio stream stops. 
 It should be easy to investigate if (2) is the problem by making a request, getting some data, waiting a while, then trying to get data again. If this works, then most likely (1) is the issue.
 
 We can fix (1) by just creating a new GET request when it expires. This will fix (2) but this case means there is an underlying issue with the timings of getting the radio stream. We could fix 2 by moving to an asynchronous fetching again, however; this could bring back the space leak issue we were seeing before when using this approach.
-** TODO Investigate TLS connection dropout causing program to stop
-:PROPERTIES:
-:type:     bug
-:END:
-It seems like when a the Proxy application closes, the Home application crashes out. Something is not being handled properly in the TLS connection functions.
 * Milestones
 ** TODO v0.1.0.1 - Security Update
 :PROPERTIES:

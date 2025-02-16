@@ -34,13 +34,21 @@ import Control.Concurrent (
   threadDelay,
   withMVar,
  )
+import Control.Exception (IOException, catch, displayException)
 import Control.Monad (forM_)
 import Data.ByteString qualified as B
 import Data.Map.Strict qualified as Map
 import Islands (Island)
 import Msg (Msg (..))
 import Network.Socket
-import Network.TLS (Context, TLSParams, bye, contextNew, handshake)
+import Network.TLS (
+  Context,
+  TLSException,
+  TLSParams,
+  bye,
+  contextNew,
+  handshake,
+ )
 
 data Connection
   = Connection
@@ -214,32 +222,27 @@ initTLSClientConnection ::
   -> IO ()
   -> IO ()
 initTLSClientConnection params island connMngr host port withBytes onConnect onDisconnect =
-  addRxTxConnection @Context @TLSRxError
-    connMngr
-    withBytes
-    onErr
-    ( aquireConnectedClientSocket host port onConnect onDisconnect >>= \sock -> do
-        ctx <- contextNew sock params
-        handshake ctx
-        pure ctx
-    )
-    onConnect
-    onDisconnect
-    island
+  addConn
  where
+  addConn =
+    addRxTxConnection @Context @TLSRxError
+      connMngr
+      withBytes
+      onErr
+      ( aquireConnectedClientSocket host port onConnect onDisconnect >>= \sock -> do
+          ctx <- contextNew sock params
+          handshake ctx
+          pure ctx
+      )
+      onConnect
+      onDisconnect
+      island
+
   onErr conn _err = do
     bye conn
     putStrLn "TLS Client connection ended. Trying again in 2 seconds..."
     threadDelay 2000000
-    initTLSClientConnection
-      params
-      island
-      connMngr
-      host
-      port
-      withBytes
-      onConnect
-      onDisconnect
+    addConn
 
 initTLSServerConnection ::
   TLSParams params =>
@@ -271,13 +274,12 @@ initTLSServerConnection params island connMngr port withMsg onConnect onDisconne
     ctx <- contextNew conn params
     handshake ctx
     onConnect
-    putStrLn $ "Accepted connection from " <> show peer
+    putStrLn $ "Accepted TLS connection from " <> show peer
     pure ctx
 
   onErr serverSock sock _err = do
     bye sock
-    putStrLn "TLS Server connection ended. Trying again in 2 seconds..."
-    threadDelay 2000000
+    putStrLn "TLS Server connection ended"
     go serverSock
 
 addChannelsConnection ::

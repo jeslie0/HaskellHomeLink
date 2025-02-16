@@ -21,9 +21,6 @@ data SocketRxError
   | FailedToParseBody T.Text
   | ConnectionClosed
 
-newtype TLSRxError
-  = FailedToParseTLSBody T.Text
-
 instance Rx Socket B.ByteString SocketRxError where
   recv sock =
     runExceptT $ do
@@ -31,10 +28,15 @@ instance Rx Socket B.ByteString SocketRxError where
       ExceptT . liftIO $
         toEither FailedToGetBody <$> recvNBytes sock (fromIntegral header)
 
+data TLSRxError
+  = TLSEndOfFile
+
 instance Rx Context B.ByteString TLSRxError where
   recv ctx = do
     bytes <- liftIO . recvData $ ctx
-    pure $ Right bytes
+    if B.null bytes
+      then pure $ Left TLSEndOfFile
+      else pure $ Right bytes
 
 data ChannelRxError
 

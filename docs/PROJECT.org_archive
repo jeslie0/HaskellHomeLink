@@ -147,3 +147,14 @@ The Home application will act as a TLS client and try to connect to the Remote a
 This will depend on completing a basic TCP connection first, since that is simpler.
 
 A basic TCP client has been implemented. It needs to be refined. It should try to connect to the given destination every 2 seconds, and then keep trying to reconnect when there is a connection break.
+
+* DONE Investigate TLS connection dropout causing program to stop
+:PROPERTIES:
+:type:     bug
+:ARCHIVE_TIME: 2025-02-16 Sun 23:09
+:ARCHIVE_FILE: ~/workspaces/Haskell/AssistantPi/docs/PROJECT.org
+:ARCHIVE_OLPATH: Bugs
+:ARCHIVE_CATEGORY: Project Management
+:ARCHIVE_TODO: DONE
+:END:
+It seems like when a the Proxy application closes, the Home application crashes out. Something is not being handled properly in the TLS connection functions.
