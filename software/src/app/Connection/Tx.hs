@@ -6,7 +6,6 @@ import Control.Concurrent (Chan, writeChan)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.ByteString qualified as B
 import Data.Serialize (putWord32le, runPut)
-import Msg (Msg (..))
 import Network.Socket (Socket)
 import Network.Socket.ByteString qualified as Socket (sendAll)
 import Network.TLS (Context, sendData)
@@ -21,8 +20,8 @@ instance Tx Socket B.ByteString where
         B.length bytes
       liftIO . Socket.sendAll sock $ bytes
 
-instance Msg m => Tx Context m where
-  send ctx = liftIO . sendData ctx . B.fromStrict . toBytes
+instance Tx Context B.ByteString where
+  send ctx = liftIO . sendData ctx . B.fromStrict 
 
 instance Tx (Chan a) a where
   send chan = liftIO . writeChan chan

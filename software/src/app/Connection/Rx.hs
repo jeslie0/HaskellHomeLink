@@ -1,15 +1,13 @@
 {-# LANGUAGE MonoLocalBinds #-}
 
-module Connection.Rx (Rx (..), SocketRxError (..), ChannelRxError) where
+module Connection.Rx (Rx (..), SocketRxError (..), ChannelRxError, TLSRxError (..)) where
 
 import Connection.Socket (readHeader, recvNBytes)
 import Control.Concurrent (Chan, readChan)
 import Control.Monad.Except (ExceptT (ExceptT), runExceptT)
 import Control.Monad.IO.Class (MonadIO (..))
-import Data.Bifunctor (first)
 import Data.ByteString qualified as B
 import Data.Text qualified as T
-import Msg (Msg (..))
 import Network.Socket (Socket)
 import Network.TLS (Context, recvData)
 import Utilities.Either (toEither)
@@ -23,15 +21,6 @@ data SocketRxError
   | FailedToParseBody T.Text
   | ConnectionClosed
 
--- instance Msg m => Rx Socket m SocketRxError where
---   recv sock =
---     runExceptT $ do
---       header <- ExceptT . liftIO $ toEither InsufficientHeader <$> readHeader sock
---       body <-
---         ExceptT . liftIO $
---           toEither FailedToGetBody <$> recvNBytes sock (fromIntegral header)
---       ExceptT . pure $ first (FailedToParseBody . T.pack) (fromBytes body)
-
 newtype TLSRxError
   = FailedToParseTLSBody T.Text
 
@@ -42,10 +31,10 @@ instance Rx Socket B.ByteString SocketRxError where
       ExceptT . liftIO $
         toEither FailedToGetBody <$> recvNBytes sock (fromIntegral header)
 
-instance Msg m => Rx Context m TLSRxError where
+instance Rx Context B.ByteString TLSRxError where
   recv ctx = do
     bytes <- liftIO . recvData $ ctx
-    pure $ first (FailedToParseTLSBody . T.pack) (fromBytes bytes)
+    pure $ Right bytes
 
 data ChannelRxError
 

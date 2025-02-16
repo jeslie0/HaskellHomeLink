@@ -12,9 +12,11 @@ module ConnectionManager (
   initTCPServerConnection,
   trySendMsg,
   addChannelsConnection,
+  initTLSServerConnection,
+  initTLSClientConnection,
 ) where
 
-import Connection.Rx (SocketRxError, recv, ChannelRxError)
+import Connection.Rx (ChannelRxError, SocketRxError, TLSRxError, recv)
 import Connection.RxTx (RxTx)
 import Connection.TCP (
   aquireBoundListeningServerSocket,
@@ -22,6 +24,7 @@ import Connection.TCP (
  )
 import Connection.Tx (Tx (..))
 import Control.Concurrent (
+  Chan,
   MVar,
   ThreadId,
   forkIO,
@@ -29,7 +32,7 @@ import Control.Concurrent (
   modifyMVar_,
   newMVar,
   threadDelay,
-  withMVar, Chan,
+  withMVar,
  )
 import Control.Monad (forM_)
 import Data.ByteString qualified as B
@@ -37,6 +40,7 @@ import Data.Map.Strict qualified as Map
 import Islands (Island)
 import Msg (Msg (..))
 import Network.Socket
+import Network.TLS (Context, TLSParams, bye, contextNew, handshake)
 
 data Connection
   = Connection
@@ -74,7 +78,6 @@ addRxTxConnection (ConnectionManager mvar) onRecvMsg onError makeConn onConnect 
           ( \case
               Nothing -> pure Nothing
               Just (Connection threadId _) ->
-
                 pure . Just $ Connection threadId (Just $ send conn)
           )
           island
@@ -155,7 +158,14 @@ initTCPClientConnection island connMngr host port withBytes onConnect onDisconne
     close sock
     putStrLn "TCP Client connection ended. Trying again in 2 seconds..."
     threadDelay 2000000
-    initTCPClientConnection island connMngr host port withBytes onConnect onDisconnect
+    initTCPClientConnection
+      island
+      connMngr
+      host
+      port
+      withBytes
+      onConnect
+      onDisconnect
 
 initTCPServerConnection ::
   Island
@@ -192,15 +202,94 @@ initTCPServerConnection island connMngr port withMsg onConnect onDisconnect = do
     threadDelay 2000000
     go serverSock
 
+initTLSClientConnection ::
+  TLSParams params =>
+  params
+  -> Island
+  -> ConnectionManager
+  -> HostName
+  -> ServiceName
+  -> (B.ByteString -> IO ())
+  -> IO ()
+  -> IO ()
+  -> IO ()
+initTLSClientConnection params island connMngr host port withBytes onConnect onDisconnect =
+  addRxTxConnection @Context @TLSRxError
+    connMngr
+    withBytes
+    onErr
+    ( aquireConnectedClientSocket host port onConnect onDisconnect >>= \sock -> do
+        ctx <- contextNew sock params
+        handshake ctx
+        pure ctx
+    )
+    onConnect
+    onDisconnect
+    island
+ where
+  onErr conn _err = do
+    bye conn
+    putStrLn "TLS Client connection ended. Trying again in 2 seconds..."
+    threadDelay 2000000
+    initTLSClientConnection
+      params
+      island
+      connMngr
+      host
+      port
+      withBytes
+      onConnect
+      onDisconnect
+
+initTLSServerConnection ::
+  TLSParams params =>
+  params
+  -> Island
+  -> ConnectionManager
+  -> ServiceName
+  -> (B.ByteString -> IO ())
+  -> IO ()
+  -> IO ()
+  -> IO Socket
+initTLSServerConnection params island connMngr port withMsg onConnect onDisconnect = do
+  serverSock <- aquireBoundListeningServerSocket port
+  go serverSock
+  pure serverSock
+ where
+  go serverSock =
+    addRxTxConnection @Context @TLSRxError
+      connMngr
+      withMsg
+      (onErr serverSock)
+      (open serverSock)
+      onConnect
+      onDisconnect
+      island
+
+  open sock = do
+    (conn, peer) <- accept sock
+    ctx <- contextNew conn params
+    handshake ctx
+    onConnect
+    putStrLn $ "Accepted connection from " <> show peer
+    pure ctx
+
+  onErr serverSock sock _err = do
+    bye sock
+    putStrLn "TLS Server connection ended. Trying again in 2 seconds..."
+    threadDelay 2000000
+    go serverSock
+
 addChannelsConnection ::
-  Island -- ^ Island that this connection is to
-  -> ConnectionManager 
+  Island
+  -- ^ Island that this connection is to
+  -> ConnectionManager
   -> (Chan B.ByteString, Chan B.ByteString)
   -> (B.ByteString -> IO ())
   -> IO ()
   -> IO ()
 addChannelsConnection island connMngr chans withBytes onConnect = do
-  addRxTxConnection @(Chan B.ByteString, Chan B.ByteString)  @ChannelRxError
+  addRxTxConnection @(Chan B.ByteString, Chan B.ByteString) @ChannelRxError
     connMngr
     withBytes
     onErr
@@ -208,7 +297,6 @@ addChannelsConnection island connMngr chans withBytes onConnect = do
     onConnect
     (pure ())
     island
-
  where
   onErr _ _ = pure ()
 

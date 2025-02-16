@@ -168,7 +168,7 @@ runApp certPath keyPath env = do
     defaultSettings
       & setPort port
 
-  port = 8081
+  port = 8080
 
   handleAsyncException (ex :: SomeAsyncException) = do
     putStrLn "Async exception caught. Killing HTTP server"

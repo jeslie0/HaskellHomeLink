@@ -1,6 +1,8 @@
 import { defineConfig } from 'vite'
 import { exec } from "child_process"
 import pluginPurgeCss from "vite-plugin-purgecss-updated-v5";
+import fs from "fs";
+import https from "https";
 
 function purescriptPlugin() {
     return {
@@ -27,12 +29,15 @@ function purescriptPlugin() {
                         type: "full-reload",
                         path: "*"
                     })
-
-
                 })
             }
         }
     }
+}
+
+const httpsOptions = {
+    key: fs.readFileSync('/home/james/Documents/crypto/Dev_Server_Certificate_Key.pem'),
+    cert: fs.readFileSync('/home/james/Documents/crypto/Dev_Server_Certificate.crt')
 }
 
 export default defineConfig({
@@ -63,10 +68,16 @@ export default defineConfig({
 
     server: {
         open: true,
+        https: httpsOptions,
+        host: true,
         proxy: {
             '/api': {
-                target: 'http://localhost:8080/',
+                target: 'https://localhost:8080/',
                 changeOrigin: true,
+                secure: false,
+                agent: new https.Agent({
+                  rejectUnauthorized: false
+                }),
                 configure: (proxy, _options) => {
                     proxy.on('error', (err, _req, _res) => {
                     });

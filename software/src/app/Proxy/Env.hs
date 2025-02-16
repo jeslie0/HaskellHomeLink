@@ -12,9 +12,14 @@ module Proxy.Env (
   memoryMap,
   logs,
   cleanupEnv,
+  addTLSServerConnection,
 ) where
 
-import ConnectionManager (initTCPServerConnection, killConnections)
+import ConnectionManager (
+  initTCPServerConnection,
+  initTLSServerConnection,
+  killConnections,
+ )
 import Control.Concurrent (MVar, newEmptyMVar, newMVar)
 import Control.Monad.Reader (ReaderT)
 import Data.Map.Strict qualified as Map
@@ -26,6 +31,7 @@ import Lens.Micro.TH (makeLenses)
 import Logger (Logs, mkLogs)
 import Msg (Msg)
 import Network.Socket (Socket)
+import Network.TLS (ServerParams)
 import Router (Router, connectionsManager, handleBytes, mkRouter)
 import State (State, mkState)
 import System (SystemData, mkSystemData)
@@ -76,6 +82,23 @@ addServerConnection ::
   -> IO Socket
 addServerConnection actOnMsg rtr = do
   initTCPServerConnection
+    Home
+    (rtr ^. connectionsManager)
+    "3001"
+    (handleBytes actOnMsg rtr)
+
+addTLSServerConnection ::
+  forall msg.
+  Msg msg =>
+  ServerParams
+  -> ((Island, msg) -> IO ())
+  -> Router
+  -> IO ()
+  -> IO ()
+  -> IO Socket
+addTLSServerConnection params actOnMsg rtr = do
+  initTLSServerConnection
+    params
     Home
     (rtr ^. connectionsManager)
     "3001"
