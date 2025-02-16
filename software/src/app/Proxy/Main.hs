@@ -7,14 +7,16 @@ import Control.Monad.Trans (liftIO)
 import Data.Map.Strict qualified as Map
 import Data.ProtoLens (defMessage)
 import Data.Vector qualified as V
+import Envelope (toProxyEnvelope)
 import EventLoop (
   EventLoop,
   EventLoopT,
+  MonadEventLoop (..),
   addMsg,
   addMsgIO,
   getLoop,
   runEventLoopT,
-  setInterval, MonadEventLoop (..),
+  setInterval,
  )
 import Home.AudioStreamTypes (StationId, StreamStatus)
 import Islands (Island (..))
@@ -22,6 +24,7 @@ import Lens.Micro
 import Logger (Logs)
 import Network.Socket (Socket, close)
 import Proto.Messages qualified as Proto
+import ProtoHelper (toMessage)
 import Proxy.Env (
   Env,
   addServerConnection,
@@ -39,19 +42,21 @@ import Router (Router, trySendMessage)
 import State (State)
 import System (SystemData, mkSystemData)
 import System.Memory (MemoryInformation)
-import ProtoHelper (toMessage)
-import Envelope (toProxyEnvelope)
+import Proxy.Options (ProxyOptions, httpsCertificatePath, httpsKeyPath)
+import Options (runCommand)
 
 httpServer ::
-  State (StreamStatus, StationId)
+  FilePath
+  -> FilePath
+  -> State (StreamStatus, StationId)
   -> MVar (Map.Map Island SystemData)
   -> MVar (Map.Map Island (V.Vector MemoryInformation))
   -> Logs
   -> Router
   -> IO ()
-httpServer state systemData memoryData logs' rtr = do
+httpServer certPath keyPath state systemData memoryData logs' rtr = do
   env <- HTTP.mkEnv state systemData memoryData logs' rtr
-  HTTP.runApp env
+  HTTP.runApp certPath keyPath env
 
 mkServerSocket ::
   Router
@@ -63,15 +68,18 @@ mkServerSocket rtr loop =
     rtr
     sendSystemData
     (pure ())
-    where
-      sendSystemData = do
-        systemMsg <- toMessage @Proto.SystemData @SystemData <$> mkSystemData RemoteProxy
-        val <- trySendMessage rtr LocalHTTP $ toProxyEnvelope systemMsg
-        print val
+ where
+  sendSystemData = do
+    systemMsg <-
+      toMessage @Proto.SystemData @SystemData <$> mkSystemData RemoteProxy
+    val <- trySendMessage rtr LocalHTTP $ toProxyEnvelope systemMsg
+    print val
 
-createHttpServerThread :: Env -> IO ()
-createHttpServerThread env =
+createHttpServerThread :: FilePath -> FilePath -> Env -> IO ()
+createHttpServerThread certPath keyPath env =
   httpServer
+    certPath
+    keyPath
     (env ^. streamStatusState)
     (env ^. systemMap)
     (env ^. memoryMap)
@@ -81,30 +89,34 @@ createHttpServerThread env =
 startCheckMemoryPoll :: EventLoopT Env (Island, ExProxyHandler) IO ()
 startCheckMemoryPoll = do
   addMsg (RemoteProxy, ExProxyHandler (defMessage @Proto.CheckMemoryUsage))
-  void . setInterval (RemoteProxy, ExProxyHandler (defMessage @Proto.CheckMemoryUsage)) $ 30 * 1000
+  void
+    . setInterval (RemoteProxy, ExProxyHandler (defMessage @Proto.CheckMemoryUsage))
+    $ 30 * 1000
 
 proxyMain ::
+  FilePath -> FilePath ->
   Env
   -> (Router -> EventLoop (Island, ExProxyHandler) -> IO a)
   -> (a -> IO ())
   -> Island
   -> IO ()
-proxyMain env mkConnection cleanupConn island = do
-  bracket (forkIO $ createHttpServerThread env) killThread $
+proxyMain certPath keyPath env mkConnection cleanupConn island = do
+  bracket (forkIO $ createHttpServerThread certPath keyPath env) killThread $
     \_threadId ->
       runEventLoopT action env
  where
   action :: EventLoopT Env (Island, ExProxyHandler) IO ()
   action = do
     loop <- getLoop
-    bracket (liftIO $ mkConnection (env ^. router) loop) (liftIO . cleanupConn)$ \_ -> do
+    bracket (liftIO $ mkConnection (env ^. router) loop) (liftIO . cleanupConn) $ \_ -> do
       when (island == RemoteProxy) startCheckMemoryPoll
       start $ uncurry proxyHandler
 
 main :: IO ()
-main =
+main = runCommand $ \(opts :: ProxyOptions) _args -> do
   bracket (mkEnv RemoteProxy) cleanupEnv $ \env ->
     proxyMain
+      (opts ^. httpsCertificatePath) (opts ^. httpsKeyPath)
       env
       mkServerSocket
       close

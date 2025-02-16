@@ -7,6 +7,7 @@ import Control.Monad (void)
 import Control.Monad.Trans (liftIO)
 import Data.ByteString qualified as B
 import Data.ProtoLens (defMessage)
+import Envelope (toProxyEnvelope)
 import EventLoop (
   EventLoop,
   EventLoopT,
@@ -19,16 +20,17 @@ import EventLoop (
  )
 import Home.Env (Env, cleanupEnv, mkEnv, router)
 import Home.Handler (ExHomeHandler (..), homeHandler)
+import Home.Options (HomeOptions (..), httpsCertificatePath, httpsKeyPath)
 import Islands (Island (..))
 import Lens.Micro
+import Options (runCommand)
 import Proto.Messages qualified as Proto
+import ProtoHelper (toMessage)
 import Proxy.Env qualified as Proxy
 import Proxy.Handler (ExProxyHandler (..))
 import Proxy.Main (proxyMain)
 import Router (Router, connectionsManager, handleBytes, trySendMessage)
-import System (mkSystemData, SystemData)
-import ProtoHelper (toMessage)
-import Envelope (toProxyEnvelope)
+import System (SystemData, mkSystemData)
 
 addLocalHostConnection ::
   Env
@@ -62,11 +64,11 @@ mkRemoteProxyConn env loop =
     )
     sendSystemData
     (pure ())
-    where
-      sendSystemData = do
-        systemMsg <- toMessage @Proto.SystemData @SystemData <$> mkSystemData Home
-        val <- trySendMessage (env ^. router) RemoteProxy $ toProxyEnvelope systemMsg
-        print val
+ where
+  sendSystemData = do
+    systemMsg <- toMessage @Proto.SystemData @SystemData <$> mkSystemData Home
+    val <- trySendMessage (env ^. router) RemoteProxy $ toProxyEnvelope systemMsg
+    print val
 
 startCheckMemoryPoll ::
   EventLoopT Env (Island, ExHomeHandler) IO ()
@@ -78,11 +80,15 @@ startCheckMemoryPoll = do
 
 -- Use channels to communicate with local proxy
 mkLocalProxyThread ::
-  (Chan B.ByteString, Chan B.ByteString)
+  FilePath
+  -> FilePath
+  -> (Chan B.ByteString, Chan B.ByteString)
   -> IO ThreadId
-mkLocalProxyThread serverConn =
+mkLocalProxyThread certPath keyPath serverConn =
   forkIO $ bracket (Proxy.mkEnv LocalHTTP) Proxy.cleanupEnv $ \env -> do
     proxyMain
+      certPath
+      keyPath
       env
       (mkChannelsConnection serverConn)
       (const $ pure ())
@@ -105,12 +111,12 @@ mkChannelsConnection serverConn rtr loop =
     (pure ())
 
 main :: IO ()
-main = do
+main = runCommand $ \(opts :: HomeOptions) _args -> do
   bracket mkEnv cleanupEnv $ \env ->
-    runEventLoopT action env
+    runEventLoopT (action opts) env
  where
-  action :: EventLoopT Env (Island, ExHomeHandler) IO ()
-  action = do
+  action :: HomeOptions -> EventLoopT Env (Island, ExHomeHandler) IO ()
+  action opts = do
     ch1 <- liftIO newChan
     ch2 <- liftIO newChan
     let
@@ -119,7 +125,14 @@ main = do
 
     loop <- getLoop
     env <- getEnv
-    bracket (liftIO $ mkLocalProxyThread serverConn) (liftIO . killThread) $ \_threadId -> do
+    bracket
+      ( liftIO $
+          mkLocalProxyThread
+            (opts ^. httpsCertificatePath)
+            (opts ^. httpsKeyPath)
+            serverConn
+      )
+      (liftIO . killThread) $ \_threadId -> do
       liftIO $ addLocalHostConnection env loop clientConn
       liftIO $ mkRemoteProxyConn env loop
       startCheckMemoryPoll

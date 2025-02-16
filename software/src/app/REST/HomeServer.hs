@@ -17,12 +17,20 @@ import Islands (Island (..))
 import Lens.Micro ((&), (.~), (^.))
 import Lens.Micro.TH (makeLenses)
 import Logger (Logs, getLogs)
+import Network.TLS (Version (..))
+import Network.TLS.Extra (ciphersuite_default, ciphersuite_all)
 import Network.Wai.Application.Static (
   defaultWebAppSettings,
   ssIndices,
   ssRedirectToIndex,
  )
-import Network.Wai.Handler.Warp (defaultSettings, runSettings, setPort)
+import Network.Wai.Handler.Warp (defaultSettings, setPort)
+import Network.Wai.Handler.WarpTLS (
+  TLSSettings (..),
+  runTLS,
+  tlsAllowedVersions,
+  tlsSettings,
+ )
 import Proto.Messages qualified as Proto
 import Proto.Messages_Fields qualified as Proto
 import ProtoHelper (toMessage)
@@ -142,19 +150,25 @@ serveDir path = do
 app :: Env -> Application
 app env = serve (Proxy @Api) $ server env
 
-runApp :: Env -> IO ()
-runApp env = do
+runApp :: FilePath -> FilePath -> Env -> IO ()
+runApp certPath keyPath env = do
   putStrLn $ "Starting HTTP server on port " <> show port
   runAppImpl `catch` handleAsyncException
  where
   runAppImpl =
-    runSettings settings $ app env
+    runTLS appTLSSettings settings $ app env
+
+  appTLSSettings =
+    (tlsSettings certPath keyPath)
+      { tlsAllowedVersions = [TLS13, TLS12]
+      , tlsCiphers = ciphersuite_default
+      }
 
   settings =
     defaultSettings
       & setPort port
 
-  port = 8080
+  port = 8081
 
   handleAsyncException (ex :: SomeAsyncException) = do
     putStrLn "Async exception caught. Killing HTTP server"

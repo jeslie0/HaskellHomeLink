@@ -74,12 +74,10 @@ executable Home
                       Home.AudioStreamTypes,
                       Home.Handler,
                       Home.Env,
+                      Home.Options,
                       Islands,
                       Logger,
                       Msg,
-                      Proto.Messages,
-                      Proto.Messages_Fields,
-                      ProtoHelper,
                       REST.Api,
                       REST.HomeServer,
                       Router,
@@ -88,9 +86,13 @@ executable Home
                       System.Memory,
                       State,
                       Parsing,
+                      Proto.Messages,
+                      Proto.Messages_Fields,
+                      ProtoHelper,
                       Proxy.Env,
                       Proxy.Handler,
                       Proxy.Main,
+                      Proxy.Options,
                       TH,
                       Threads,
                       Utilities.Either
@@ -116,6 +118,7 @@ executable Home
                       monad-control,
                       mtl,
                       network,
+                      options,
                       proto-lens,
                       proto-lens-runtime,
                       random,
@@ -133,7 +136,8 @@ executable Home
                       vector,
                       -- wai,
                       wai-app-static,
-                      warp
+                      warp,
+                      warp-tls
 
 
     build-tool-depends: proto-lens-protoc:proto-lens-protoc ^>= 0.8.0.1
@@ -169,9 +173,6 @@ executable Proxy
                       Islands,
                       Logger,
                       Msg,
-                      Proto.Messages,
-                      Proto.Messages_Fields,
-                      ProtoHelper,
                       REST.Api,
                       REST.HomeServer,
                       Router,
@@ -180,8 +181,12 @@ executable Proxy
                       System.Memory,
                       State,
                       Parsing,
+                      Proto.Messages,
+                      Proto.Messages_Fields,
+                      ProtoHelper,
                       Proxy.Env,
                       Proxy.Handler,
+                      Proxy.Options,
                       TH,
                       Threads,
                       Utilities.Either
@@ -202,6 +207,7 @@ executable Proxy
                       monad-control,
                       mtl,
                       network,
+                      options,
                       proto-lens,
                       proto-lens-runtime,
                       random,
@@ -214,7 +220,8 @@ executable Proxy
                       transformers-base,
                       vector,
                       wai-app-static,
-                      warp
+                      warp,
+                      warp-tls
 
 
     build-tool-depends: proto-lens-protoc:proto-lens-protoc ^>= 0.8.0.1
