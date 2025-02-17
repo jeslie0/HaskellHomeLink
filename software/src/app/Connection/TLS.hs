@@ -147,10 +147,10 @@ mTLSHooks caStore =
       "No valid client certificates provided."
   validateClientCert chain@(CertificateChain (x : xs)) = do
     validationResult <-
-      validate
-        X509.HashSHA256
-        defaultHooks
-        defaultChecks
+      validateDefault
+        -- X509.HashSHA256
+        -- defaultHooks
+        -- defaultChecks
         caStore
         def
         ("localhost", "")

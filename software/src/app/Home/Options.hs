@@ -15,6 +15,7 @@ module Home.Options (
 
 import Lens.Micro.TH (makeLenses)
 import Options (Options (..), simpleOption)
+import Network.Socket (PortNumber)
 
 data HomeOptions = HomeOptions
   { _httpsCertificatePath :: String
@@ -24,8 +25,8 @@ data HomeOptions = HomeOptions
   , _tlsKeyPath :: String
   , _tlsCACertificatePath :: String
   , _proxyURL :: String
-  , _proxyPort :: String
-  , _httpPort :: Int
+  , _proxyPort :: PortNumber
+  , _httpPort :: PortNumber
   }
 
 $(makeLenses ''HomeOptions)
@@ -43,5 +44,5 @@ instance Options HomeOptions where
       <*> simpleOption "tls-key-path" "" "Path to the key for TLS connections."
       <*> simpleOption "tls-ca-cert-path" "" "Path to the CA file for TLS connections."
       <*> simpleOption "proxy-url" "" "URL of the proxy to try and connect to."
-      <*> simpleOption "proxy-url" "" "URL of the proxy to try and connect to."
-      <*> simpleOption "http-port" 3000 "URL of the proxy to try and connect to."
+      <*> (toEnum <$> simpleOption "proxy-port" 8080 "URL of the proxy to try and connect to.")
+      <*> (toEnum <$> simpleOption "http-port" 3000 "port to host http server on.")

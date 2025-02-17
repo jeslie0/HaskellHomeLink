@@ -30,7 +30,7 @@ import Lens.Micro ((^.))
 import Lens.Micro.TH (makeLenses)
 import Logger (Logs, mkLogs)
 import Msg (Msg)
-import Network.Socket (Socket)
+import Network.Socket (Socket, PortNumber)
 import Network.TLS (ServerParams)
 import Router (Router, connectionsManager, handleBytes, mkRouter)
 import State (State, mkState)
@@ -93,13 +93,14 @@ addTLSServerConnection ::
   ServerParams
   -> ((Island, msg) -> IO ())
   -> Router
+  -> PortNumber
   -> IO ()
   -> IO ()
   -> IO Socket
-addTLSServerConnection params actOnMsg rtr = do
+addTLSServerConnection params actOnMsg rtr port = do
   initTLSServerConnection
     params
     Home
     (rtr ^. connectionsManager)
-    "3001"
+    (show port)
     (handleBytes actOnMsg rtr)

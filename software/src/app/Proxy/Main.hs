@@ -23,7 +23,7 @@ import Home.AudioStreamTypes (StationId, StreamStatus)
 import Islands (Island (..))
 import Lens.Micro
 import Logger (Logs)
-import Network.Socket (Socket, close)
+import Network.Socket (Socket, close, PortNumber)
 import Network.TLS (ServerParams)
 import Options (runCommand)
 import Proto.Messages qualified as Proto
@@ -47,7 +47,7 @@ import Proxy.Options (
   httpsKeyPath,
   tlsCACertificatePath,
   tlsCertificatePath,
-  tlsKeyPath, httpsCACertificatePath, httpPort,
+  tlsKeyPath, httpsCACertificatePath, httpPort, tlsPort,
  )
 import REST.HomeServer qualified as HTTP
 import Router (Router, trySendMessage)
@@ -60,7 +60,7 @@ httpServer ::
   FilePath
   -> FilePath
   -> FilePath
-  -> Port
+  -> PortNumber
   -> State (StreamStatus, StationId)
   -> MVar (Map.Map Island SystemData)
   -> MVar (Map.Map Island (V.Vector MemoryInformation))
@@ -90,14 +90,16 @@ mkServerSocket rtr loop =
 
 mkTLSServerSocket ::
   ServerParams
+  -> PortNumber
   -> Router
   -> EventLoop (Island, ExProxyHandler)
   -> IO Socket
-mkTLSServerSocket params rtr loop = do
+mkTLSServerSocket params port rtr loop = do
   addTLSServerConnection @Proto.ProxyEnvelope
     params
     (\(island, msg') -> addMsgIO (island, ExProxyHandler msg') loop)
     rtr
+    port
     sendSystemData
     (pure ())
  where
@@ -107,7 +109,7 @@ mkTLSServerSocket params rtr loop = do
     val <- trySendMessage rtr LocalHTTP $ toProxyEnvelope systemMsg
     print val
 
-createHttpServerThread :: FilePath -> FilePath -> FilePath -> Port -> Env -> IO ()
+createHttpServerThread :: FilePath -> FilePath -> FilePath -> PortNumber -> Env -> IO ()
 createHttpServerThread certPath keyPath caCertPath port env =
   httpServer
     certPath
@@ -131,7 +133,7 @@ proxyMain ::
   FilePath
   -> FilePath
   -> FilePath
-  -> Port
+  -> PortNumber
   -> Env
   -> (Router -> EventLoop (Island, ExProxyHandler) -> IO a)
   -> (a -> IO ())
@@ -166,6 +168,6 @@ main = runCommand $ \(opts :: ProxyOptions) _args -> do
           (opts ^. httpsCACertificatePath)
           (opts ^. httpPort)
           env
-          (mkTLSServerSocket params)
+          (mkTLSServerSocket params (opts ^. tlsPort))
           close
           RemoteProxy

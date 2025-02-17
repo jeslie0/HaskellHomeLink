@@ -24,7 +24,7 @@ import Network.Wai.Application.Static (
   ssIndices,
   ssRedirectToIndex,
  )
-import Network.Wai.Handler.Warp (defaultSettings, setPort, Port)
+import Network.Wai.Handler.Warp (defaultSettings, setPort)
 import Network.Wai.Handler.WarpTLS (
   TLSSettings (..),
   runTLS,
@@ -51,6 +51,7 @@ import System (SystemData)
 import System.Memory (MemoryInformation)
 import WaiAppStatic.Types (unsafeToPiece)
 import Connection.TLS (mTLSHooks, loadCAStore)
+import Network.Socket (PortNumber)
 
 data Env = Env
   { _streamStatusState :: State (StreamStatus, StationId)
@@ -151,7 +152,7 @@ serveDir path = do
 app :: Env -> Application
 app env = serve (Proxy @Api) $ server env
 
-runApp :: FilePath -> FilePath -> FilePath -> Port -> Env -> IO ()
+runApp :: FilePath -> FilePath -> FilePath -> PortNumber -> Env -> IO ()
 runApp certPath keyPath caCertPAth port env = do
   putStrLn $ "Starting HTTP server on port " <> show port
   caStore <- loadCAStore caCertPAth
@@ -170,7 +171,7 @@ runApp certPath keyPath caCertPAth port env = do
 
   settings =
     defaultSettings
-      & setPort port
+      & (setPort . fromEnum $ port)
 
   handleAsyncException (ex :: SomeAsyncException) = do
     putStrLn "Async exception caught. Killing HTTP server"

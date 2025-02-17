@@ -38,7 +38,7 @@ import Home.Options (
  )
 import Islands (Island (..))
 import Lens.Micro
-import Network.Socket (HostName, ServiceName)
+import Network.Socket (HostName, ServiceName, PortNumber)
 import Options (runCommand)
 import Proto.Messages qualified as Proto
 import ProtoHelper (toMessage)
@@ -93,7 +93,7 @@ mkRemoteProxyConnTLS ::
   -> FilePath
   -> FilePath
   -> HostName
-  -> ServiceName
+  -> PortNumber
   -> Env
   -> EventLoop (Island, ExHomeHandler)
   -> IO ()
@@ -134,7 +134,7 @@ mkLocalProxyThread ::
   FilePath
   -> FilePath
   -> FilePath
-  -> Port
+  -> PortNumber
   -> (Chan B.ByteString, Chan B.ByteString)
   -> IO ThreadId
 mkLocalProxyThread certPath keyPath caCertPath port serverConn =

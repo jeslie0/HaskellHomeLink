@@ -216,7 +216,7 @@ initTLSClientConnection ::
   -> Island
   -> ConnectionManager
   -> HostName
-  -> ServiceName
+  -> PortNumber
   -> (B.ByteString -> IO ())
   -> IO ()
   -> IO ()
@@ -229,7 +229,7 @@ initTLSClientConnection params island connMngr host port withBytes onConnect onD
       connMngr
       withBytes
       onErr
-      ( aquireConnectedClientSocket host port onConnect onDisconnect >>= \sock -> do
+      ( aquireConnectedClientSocket host (show port) onConnect onDisconnect >>= \sock -> do
           ctx <- contextNew sock params
           handshake ctx
           pure ctx
