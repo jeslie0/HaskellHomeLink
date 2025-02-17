@@ -52,6 +52,7 @@ import System.Memory (MemoryInformation)
 import WaiAppStatic.Types (unsafeToPiece)
 import Connection.TLS (mTLSHooks, loadCAStore)
 import Network.Socket (PortNumber)
+import Network.Socket (HostName)
 
 data Env = Env
   { _streamStatusState :: State (StreamStatus, StationId)
@@ -152,8 +153,8 @@ serveDir path = do
 app :: Env -> Application
 app env = serve (Proxy @Api) $ server env
 
-runApp :: FilePath -> FilePath -> FilePath -> PortNumber -> Env -> IO ()
-runApp certPath keyPath caCertPAth port env = do
+runApp :: FilePath -> FilePath -> FilePath -> HostName -> PortNumber -> Env -> IO ()
+runApp certPath keyPath caCertPAth hostname port env = do
   putStrLn $ "Starting HTTP server on port " <> show port
   caStore <- loadCAStore caCertPAth
   runAppImpl caStore `catch` handleAsyncException
@@ -166,7 +167,7 @@ runApp certPath keyPath caCertPAth port env = do
       { tlsAllowedVersions = [TLS13, TLS12]
       , tlsCiphers = ciphersuite_default
       , tlsWantClientCert = True
-      , tlsServerHooks = mTLSHooks caStore
+      , tlsServerHooks = mTLSHooks hostname caStore
       }
 
   settings =

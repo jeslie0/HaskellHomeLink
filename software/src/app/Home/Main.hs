@@ -134,15 +134,17 @@ mkLocalProxyThread ::
   FilePath
   -> FilePath
   -> FilePath
+  -> HostName
   -> PortNumber
   -> (Chan B.ByteString, Chan B.ByteString)
   -> IO ThreadId
-mkLocalProxyThread certPath keyPath caCertPath port serverConn =
+mkLocalProxyThread certPath keyPath caCertPath host port serverConn =
   forkIO $ bracket (Proxy.mkEnv LocalHTTP) Proxy.cleanupEnv $ \env -> do
     proxyMain
       certPath
       keyPath
       caCertPath
+      host
       port
       env
       (mkChannelsConnection serverConn)
@@ -187,6 +189,7 @@ main = runCommand $ \(opts :: Home.Options.HomeOptions) _args -> do
             (opts ^. httpsCertificatePath)
             (opts ^. httpsKeyPath)
             (opts ^. httpsCACertificatePath)
+            (opts ^. proxyURL)
             (opts ^. httpPort)
             serverConn
       )

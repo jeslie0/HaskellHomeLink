@@ -8,12 +8,15 @@ module Proxy.Options (
   tlsCertificatePath,
   tlsKeyPath,
   tlsCACertificatePath,
-  httpPort, tlsPort
+  httpPort,
+  tlsPort,
+  hostname,
 ) where
 
 import Lens.Micro.TH (makeLenses)
-import Options (Options (..), simpleOption)
 import Network.Socket (PortNumber)
+import Network.TLS (HostName)
+import Options (Options (..), simpleOption)
 
 data ProxyOptions = ProxyOptions
   { _httpsCertificatePath :: String
@@ -24,6 +27,7 @@ data ProxyOptions = ProxyOptions
   , _tlsCACertificatePath :: String
   , _httpPort :: PortNumber
   , _tlsPort :: PortNumber
+  , _hostname :: HostName
   }
 
 $(makeLenses ''ProxyOptions)
@@ -42,3 +46,4 @@ instance Options ProxyOptions where
       <*> simpleOption "tls-ca-cert-path" "" "Path to the CA file for TLS connections."
       <*> (toEnum <$> simpleOption "http-port" 3000 "Port to host http server on")
       <*> (toEnum <$> simpleOption "tls-port" 8080 "Port to host tls server on")
+      <*> simpleOption "hostname" "" "Hostname used by clients to connect to the servers"

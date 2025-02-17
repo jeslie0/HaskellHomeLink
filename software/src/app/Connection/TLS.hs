@@ -6,7 +6,6 @@ import Connection.TCP as TCP
 import Control.Exception (bracket)
 import Data.ByteString qualified as B
 import Data.Default.Class (def)
-import Data.X509 (Certificate, CertificateChain (..), SignedExact)
 import Data.X509 as X509
 import Data.X509.CertificateStore (
   CertificateStore,
@@ -15,9 +14,6 @@ import Data.X509.CertificateStore (
  )
 import Data.X509.File (readKeyFile, readSignedObject)
 import Data.X509.Validation (
-  defaultChecks,
-  defaultHooks,
-  validate,
   validateDefault,
  )
 import Network.Socket (ServiceName, accept, close)
@@ -109,6 +105,7 @@ loadCAStore caCertPath = do
   pure $ makeCertificateStore certs
 
 setupTLSServerParams ::
+  HostName ->
   FilePath
   -- ^ Certificate path
   -> FilePath
@@ -116,7 +113,7 @@ setupTLSServerParams ::
   -> FilePath
   -- ^ CA Certificate path
   -> IO (Maybe ServerParams)
-setupTLSServerParams certPath keyPath caCrtPath = do
+setupTLSServerParams hostname certPath keyPath caCrtPath = do
   mCreds <- loadCredentials certPath keyPath
   caStore <- makeCertificateStore <$> readSignedObject caCrtPath
 
@@ -133,33 +130,31 @@ setupTLSServerParams certPath keyPath caCrtPath = do
                 { supportedCiphers = ciphersuite_all
                 , supportedVersions = [TLS13, TLS12]
                 }
-          , TLS.serverHooks = mTLSHooks caStore
+          , TLS.serverHooks = mTLSHooks hostname caStore
           }
 
-mTLSHooks :: CertificateStore -> ServerHooks
-mTLSHooks caStore =
+mTLSHooks :: HostName -> CertificateStore -> ServerHooks
+mTLSHooks hostname caStore =
   def
-    { TLS.onClientCertificate = validateClientCert
+    { TLS.onClientCertificate = validateClientCert 
     }
  where
   validateClientCert (CertificateChain []) = do
     pure . CertificateUsageReject . CertificateRejectOther $
-      "No valid client certificates provided."
-  validateClientCert chain@(CertificateChain (x : xs)) = do
+      "No client certificates provided."
+  validateClientCert chain = do
     validationResult <-
       validateDefault
-        -- X509.HashSHA256
-        -- defaultHooks
-        -- defaultChecks
         caStore
         def
-        ("localhost", "")
+        (hostname, "")
         chain
     case validationResult of
       [] -> pure CertificateUsageAccept
       errors -> do
         print errors
-        validateClientCert (CertificateChain xs)
+        pure . CertificateUsageReject . CertificateRejectOther $
+          "No valid client certificates provided."
 
 setupTLSClientParams ::
   FilePath

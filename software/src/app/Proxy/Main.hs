@@ -47,7 +47,7 @@ import Proxy.Options (
   httpsKeyPath,
   tlsCACertificatePath,
   tlsCertificatePath,
-  tlsKeyPath, httpsCACertificatePath, httpPort, tlsPort,
+  tlsKeyPath, httpsCACertificatePath, httpPort, tlsPort, hostname,
  )
 import REST.HomeServer qualified as HTTP
 import Router (Router, trySendMessage)
@@ -55,11 +55,13 @@ import State (State)
 import System (SystemData, mkSystemData)
 import System.Memory (MemoryInformation)
 import Network.Wai.Handler.Warp (Port)
+import Network.Socket (HostName)
 
 httpServer ::
   FilePath
   -> FilePath
   -> FilePath
+  -> HostName
   -> PortNumber
   -> State (StreamStatus, StationId)
   -> MVar (Map.Map Island SystemData)
@@ -67,9 +69,9 @@ httpServer ::
   -> Logs
   -> Router
   -> IO ()
-httpServer certPath keyPath caCertPath port state systemData memoryData logs' rtr = do
+httpServer certPath keyPath caCertPath host port state systemData memoryData logs' rtr = do
   env <- HTTP.mkEnv state systemData memoryData logs' rtr
-  HTTP.runApp certPath keyPath caCertPath port env
+  HTTP.runApp certPath keyPath caCertPath host port env
 
 mkServerSocket ::
   Router
@@ -109,12 +111,13 @@ mkTLSServerSocket params port rtr loop = do
     val <- trySendMessage rtr LocalHTTP $ toProxyEnvelope systemMsg
     print val
 
-createHttpServerThread :: FilePath -> FilePath -> FilePath -> PortNumber -> Env -> IO ()
-createHttpServerThread certPath keyPath caCertPath port env =
+createHttpServerThread :: FilePath -> FilePath -> FilePath -> HostName -> PortNumber -> Env -> IO ()
+createHttpServerThread certPath keyPath caCertPath host port env =
   httpServer
     certPath
     keyPath
     caCertPath
+    host
     port
     (env ^. streamStatusState)
     (env ^. systemMap)
@@ -133,14 +136,15 @@ proxyMain ::
   FilePath
   -> FilePath
   -> FilePath
+  -> HostName
   -> PortNumber
   -> Env
   -> (Router -> EventLoop (Island, ExProxyHandler) -> IO a)
   -> (a -> IO ())
   -> Island
   -> IO ()
-proxyMain certPath keyPath caCertPath port env mkConnection cleanupConn island = do
-  bracket (forkIO $ createHttpServerThread certPath keyPath caCertPath port env) killThread $
+proxyMain certPath keyPath caCertPath host port env mkConnection cleanupConn island = do
+  bracket (forkIO $ createHttpServerThread certPath keyPath caCertPath host port env) killThread $
     \_threadId ->
       runEventLoopT action env
  where
@@ -155,6 +159,7 @@ main :: IO ()
 main = runCommand $ \(opts :: ProxyOptions) _args -> do
   mParams <-
     setupTLSServerParams
+      (opts ^. hostname)
       (opts ^. tlsCertificatePath)
       (opts ^. tlsKeyPath)
       (opts ^. tlsCACertificatePath)
@@ -166,6 +171,7 @@ main = runCommand $ \(opts :: ProxyOptions) _args -> do
           (opts ^. httpsCertificatePath)
           (opts ^. httpsKeyPath)
           (opts ^. httpsCACertificatePath)
+          (opts ^. hostname)
           (opts ^. httpPort)
           env
           (mkTLSServerSocket params (opts ^. tlsPort))
