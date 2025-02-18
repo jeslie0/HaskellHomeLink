@@ -1,0 +1,19 @@
+{
+    "http": {
+        "cert": "/home/james/crypto/rpi/http_server/Raspberry_Pi.crt",
+        "key": "/home/james/crypto/rpi/http_server/Raspberry_Pi.pem",
+        "ca": "/home/james/crypto/rpi/http_client/HTTP_Client_CA.crt",
+        "hostname": "raspberrypi",
+        "port": 8080
+    },
+    "tls": {
+        "cert": "/home/james/crypto/rpi/tls_server/Raspberry_Pi.crt",
+        "key": "/home/james/crypto/rpi/tls_server/TLS_Server_Raspberry_Pi_.pem",
+        "ca": "/home/james/crypto/rpi/tls_server/TLS_Client_CA.crt",
+        "hostname": "majaha.com"
+    },
+    "proxy": {
+        "url": "majaha.com",
+        "port": 3000
+    }
+}

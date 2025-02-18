@@ -158,3 +158,14 @@ A basic TCP client has been implemented. It needs to be refined. It should try t
 :ARCHIVE_TODO: DONE
 :END:
 It seems like when a the Proxy application closes, the Home application crashes out. Something is not being handled properly in the TLS connection functions.
+
+* DONE Add hostname cmdline option
+:PROPERTIES:
+:type:     bug
+:ARCHIVE_TIME: 2025-02-18 Tue 23:21
+:ARCHIVE_FILE: ~/workspaces/Haskell/AssistantPi/docs/PROJECT.org
+:ARCHIVE_OLPATH: Bugs
+:ARCHIVE_CATEGORY: Project Management
+:ARCHIVE_TODO: DONE
+:END:
+This should be used to make it easier for the server to know what certificates to accept.

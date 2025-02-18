@@ -1,0 +1,16 @@
+{
+    "http": {
+        "cert": "/home/james/crypto/majaha/http_server/majaha.com.crt",
+        "key": "/home/james/crypto/majaha/http_server/majaha.com.pem",
+        "ca": "/home/james/crypto/majaha/http_client/HTTP_Client_CA.crt",
+        "hostname": "majaha.com",
+        "port": 8081
+    },
+    "tls": {
+        "cert": "/home/james/crypto/majaha/tls_client/TLS_Client_Raspberry_Pi.crt",
+        "key": "/home/james/crypto/majaha/tls_client/TLS_Client_Raspberry_Pi.pem",
+        "ca": "/home/james/crypto/majaha/tls_client/TLS_Server_CA.crt",
+        "hostname": "raspberrypi",
+        "port": 3000
+    }
+}

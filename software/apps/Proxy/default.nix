@@ -73,7 +73,7 @@ let
 
         config = {
           Cmd =
-            [ "${ProxyAArch64}/bin/Proxy" ];
+            [ "${ProxyAArch64}/bin/Proxy" "--config=/mnt/proxy_config.json" "+RTS" "-N2" "-RTS" ];
         };
       };
   };
