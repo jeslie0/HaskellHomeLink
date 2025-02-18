@@ -122,13 +122,13 @@ setupTLSServerParams hostname certPath keyPath caCrtPath = do
     Just creds ->
       pure . Just $
         def
-          { TLS.serverWantClientCert = False--True
+          { TLS.serverWantClientCert = True
           , TLS.serverCACertificates = listCertificates caStore
           , TLS.serverShared = def {TLS.sharedCredentials = Credentials [creds]}
           , TLS.serverSupported =
               def
                 { supportedCiphers = ciphersuite_strong
-                , supportedVersions = [TLS13, TLS12]
+                , supportedVersions = [TLS13]
                 }
           , TLS.serverHooks = mTLSHooks hostname caStore
           }
@@ -163,20 +163,21 @@ setupTLSClientParams ::
   -- ^ Key path
   -> FilePath
   -- ^ CA Certificate path
+  -> HostName
   -> IO (Maybe ClientParams)
-setupTLSClientParams certPath keyPath caCertPath = do
+setupTLSClientParams certPath keyPath caCertPath hostname = do
   mCredentials <- loadCredentials certPath keyPath
   case mCredentials of
     Nothing -> pure Nothing
     Just creds -> do
       caStore <- loadCAStore caCertPath
-      let defaultParams = defaultParamsClient "localhost" ""
+      let defaultParams = defaultParamsClient hostname ""
       pure . Just $
         defaultParams
           { clientSupported =
               def
                 { supportedCiphers = ciphersuite_strong
-                , supportedVersions = [TLS13, TLS12]
+                , supportedVersions = [TLS13]
                 }
           , clientShared =
               def

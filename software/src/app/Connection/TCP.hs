@@ -5,9 +5,10 @@ module Connection.TCP (
   aquireActiveServerSocket,
   aquireBoundListeningServerSocket,
   aquireConnectedClientSocket,
-  recvMsg
+  recvMsg,
 ) where
 
+import Connection.Socket (readHeader, recvNBytes)
 import Control.Concurrent (
   Chan,
   readChan,
@@ -26,7 +27,6 @@ import Data.ByteString qualified as B
 import Data.Serialize (putWord32le, runPut)
 import Network.Socket
 import Network.Socket.ByteString (sendAll)
-import Connection.Socket (readHeader, recvNBytes)
 import Threads (
   killAsyncComputation,
   spawnAsyncComputation,
@@ -211,7 +211,7 @@ runServerSocket addrInfo socketHandler = do
     setSocketOption sock ReuseAddr 1
     bind sock (addrAddress addrInfo)
     listen sock 1
-    putStrLn "Server listening..."
+    putStrLn $ "Listening on " <> show addrInfo <> "..."
     pure sock
 
 -- | Receive a message from the socket.
@@ -235,7 +235,7 @@ aquireBoundListeningServerSocket port = do
   setSocketOption sock ReuseAddr 1
   bind sock (addrAddress addrInfo)
   listen sock 1
-  putStrLn "Server listening..."
+  putStrLn $ "Listening on port " <> port <> " for TLS connections..."
   pure sock
 
 aquireActiveServerSocket ::
@@ -281,7 +281,7 @@ aquireConnectedClientSocket ::
   -> IO ()
   -> IO ()
   -> IO Socket
-aquireConnectedClientSocket host port onConnect onDisconnect = do
+aquireConnectedClientSocket host port _onConnect _onDisconnect = do
   addrInfo <- mkAddrInfo host port
   safeNewSocket addrInfo
  where
@@ -301,7 +301,7 @@ aquireConnectedClientSocket host port onConnect onDisconnect = do
 
   -- If unable to connect to server, try again in 2 seconds.
   handleConnectionFail sock sockAddr (_ :: IOException) = do
-    putStrLn "Could not connect to server. Trying again in 2s..."
+    putStrLn $ "Could not connect to " <> show sockAddr <> ". Trying again in 2s..."
     threadDelay 2000000
     safeConnect sock sockAddr
 

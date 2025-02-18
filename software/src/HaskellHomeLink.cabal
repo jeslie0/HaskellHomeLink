@@ -100,7 +100,8 @@ executable Home
     -- other-extensions:
 
     -- Other library packages from which modules are imported.
-    build-depends:    alsa-hs,
+    build-depends:    aeson,
+                      alsa-hs,
                       attoparsec,
                       base ^>=4.18.2.1,
                       bytestring,
@@ -197,7 +198,8 @@ executable Proxy
     -- other-extensions:
 
     -- Other library packages from which modules are imported.
-    build-depends:    attoparsec,
+    build-depends:    aeson,
+                      attoparsec,
                       base ^>=4.18.2.1,
                       bytestring,
                       cereal,

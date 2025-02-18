@@ -1,7 +1,10 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Proxy.Options (
   ProxyOptions,
+  configPath,
+  ProxyConfiguration,
   httpsCertificatePath,
   httpsKeyPath,
   httpsCACertificatePath,
@@ -10,40 +13,51 @@ module Proxy.Options (
   tlsCACertificatePath,
   httpPort,
   tlsPort,
-  hostname,
+  httpHostname,
+  tlsHostname,
 ) where
 
+import Data.Aeson (FromJSON (..), withObject, (.:))
 import Lens.Micro.TH (makeLenses)
 import Network.Socket (PortNumber)
 import Network.TLS (HostName)
 import Options (Options (..), simpleOption)
 
-data ProxyOptions = ProxyOptions
+data ProxyConfiguration = ProxyConfiguration
   { _httpsCertificatePath :: String
   , _httpsKeyPath :: String
   , _httpsCACertificatePath :: String
+  , _httpHostname :: HostName
+  , _httpPort :: PortNumber
   , _tlsCertificatePath :: String
   , _tlsKeyPath :: String
   , _tlsCACertificatePath :: String
-  , _httpPort :: PortNumber
+  , _tlsHostname :: HostName
   , _tlsPort :: PortNumber
-  , _hostname :: HostName
   }
+
+$(makeLenses ''ProxyConfiguration)
+
+instance FromJSON ProxyConfiguration where
+  parseJSON = withObject "ProxyConfiguration" $ \v -> do
+    http <- v .: "http"
+    tls <- v .: "tls"
+    ProxyConfiguration
+      <$> http .: "cert"
+      <*> http .: "key"
+      <*> http .: "ca"
+      <*> http .: "hostname"
+      <*> (toEnum <$> http .: "port")
+      <*> tls .: "cert"
+      <*> tls .: "key"
+      <*> tls .: "ca"
+      <*> tls .: "hostname"
+      <*> (toEnum <$> tls .: "port")
+
+newtype ProxyOptions = ProxyOptions {_configPath :: FilePath}
 
 $(makeLenses ''ProxyOptions)
 
 instance Options ProxyOptions where
   defineOptions =
-    ProxyOptions
-      <$> simpleOption
-        "https-cert-path"
-        ""
-        "Path to the certificate for the HTTPS server."
-      <*> simpleOption "https-key-path" "" "Path to the key for the HTTPS server."
-      <*> simpleOption "https-ca-cert-path" "" "Path to the CA file for TLS connections."
-      <*> simpleOption "tls-cert-path" "" "Path to the certificate for TLS connections."
-      <*> simpleOption "tls-key-path" "" "Path to the key for TLS connections."
-      <*> simpleOption "tls-ca-cert-path" "" "Path to the CA file for TLS connections."
-      <*> (toEnum <$> simpleOption "http-port" 3000 "Port to host http server on")
-      <*> (toEnum <$> simpleOption "tls-port" 8080 "Port to host tls server on")
-      <*> simpleOption "hostname" "" "Hostname used by clients to connect to the servers"
+    ProxyOptions <$> simpleOption "config" "./config.json" "Path to the config file"

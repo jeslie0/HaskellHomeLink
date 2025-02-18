@@ -3,13 +3,13 @@ module Home.Main (main) where
 import Connection.TLS (setupTLSClientParams)
 import ConnectionManager (
   addChannelsConnection,
-  initTCPClientConnection,
   initTLSClientConnection,
  )
 import Control.Concurrent (Chan, ThreadId, forkIO, killThread, newChan)
 import Control.Exception.Lifted (bracket)
 import Control.Monad (void)
 import Control.Monad.Trans (liftIO)
+import Data.Aeson (eitherDecodeFileStrict)
 import Data.ByteString qualified as B
 import Data.ProtoLens (defMessage)
 import Envelope (toProxyEnvelope)
@@ -26,7 +26,10 @@ import EventLoop (
 import Home.Env (Env, cleanupEnv, mkEnv, router)
 import Home.Handler (ExHomeHandler (..), homeHandler)
 import Home.Options (
+  HomeConfiguration,
   HomeOptions,
+  configPath,
+  httpPort,
   httpsCACertificatePath,
   httpsCertificatePath,
   httpsKeyPath,
@@ -34,11 +37,11 @@ import Home.Options (
   proxyURL,
   tlsCACertificatePath,
   tlsCertificatePath,
-  tlsKeyPath, httpPort,
+  tlsKeyPath, httpHostname,
  )
 import Islands (Island (..))
 import Lens.Micro
-import Network.Socket (HostName, ServiceName, PortNumber)
+import Network.Socket (HostName, PortNumber)
 import Options (runCommand)
 import Proto.Messages qualified as Proto
 import ProtoHelper (toMessage)
@@ -47,7 +50,6 @@ import Proxy.Handler (ExProxyHandler (..))
 import Proxy.Main (proxyMain)
 import Router (Router, connectionsManager, handleBytes, trySendMessage)
 import System (SystemData, mkSystemData)
-import Network.Wai.Handler.Warp (Port)
 
 addLocalHostConnection ::
   Env
@@ -65,27 +67,27 @@ addLocalHostConnection env loop clientConn =
     )
     (pure ())
 
-mkRemoteProxyConn ::
-  Env
-  -> EventLoop (Island, ExHomeHandler)
-  -> IO ()
-mkRemoteProxyConn env loop = do
-  let rtr = env ^. router
-  initTCPClientConnection
-    RemoteProxy
-    (rtr ^. connectionsManager)
-    "127.0.0.1"
-    "3001"
-    ( handleBytes @Proto.HomeEnvelope
-        (\(island, msg) -> addMsgIO (island, ExHomeHandler msg) loop)
-        rtr
-    )
-    sendSystemData
-    (pure ())
- where
-  sendSystemData = do
-    systemMsg <- toMessage @Proto.SystemData @SystemData <$> mkSystemData Home
-    void . trySendMessage (env ^. router) RemoteProxy $ toProxyEnvelope systemMsg
+-- mkRemoteProxyConn ::
+--   Env
+--   -> EventLoop (Island, ExHomeHandler)
+--   -> IO ()
+-- mkRemoteProxyConn env loop = do
+--   let rtr = env ^. router
+--   initTCPClientConnection
+--     RemoteProxy
+--     (rtr ^. connectionsManager)
+--     "127.0.0.1"
+--     "3001"
+--     ( handleBytes @Proto.HomeEnvelope
+--         (\(island, msg) -> addMsgIO (island, ExHomeHandler msg) loop)
+--         rtr
+--     )
+--     sendSystemData
+--     (pure ())
+--  where
+--   sendSystemData = do
+--     systemMsg <- toMessage @Proto.SystemData @SystemData <$> mkSystemData Home
+--     void . trySendMessage (env ^. router) RemoteProxy $ toProxyEnvelope systemMsg
 
 mkRemoteProxyConnTLS ::
   FilePath
@@ -93,12 +95,13 @@ mkRemoteProxyConnTLS ::
   -> FilePath
   -> HostName
   -> PortNumber
+  -> HostName
   -> Env
   -> EventLoop (Island, ExHomeHandler)
   -> IO ()
-mkRemoteProxyConnTLS certPath keyPath caCertPath host port env loop = do
+mkRemoteProxyConnTLS certPath keyPath caCertPath host port certHostname env loop = do
   let rtr = env ^. router
-  mParams <- setupTLSClientParams certPath keyPath caCertPath
+  mParams <- setupTLSClientParams certPath keyPath caCertPath certHostname
   case mParams of
     Nothing -> putStrLn "Could not create client TLS parameters"
     Just params ->
@@ -166,13 +169,17 @@ mkChannelsConnection serverConn rtr loop =
     (pure ())
 
 main :: IO ()
-main = runCommand $ \(opts :: Home.Options.HomeOptions) _args -> do
-  bracket mkEnv cleanupEnv $ \env ->
-    runEventLoopT (action opts) env
+main = runCommand $ \(opts :: HomeOptions) _args -> do
+  mConfig <- eitherDecodeFileStrict (opts ^. configPath)
+  case mConfig of
+    Left errs -> putStrLn $ "Could not parse configuration file: " <> errs
+    Right config -> do
+      bracket mkEnv cleanupEnv $ \env ->
+        runEventLoopT (action config) env
  where
   action ::
-    Home.Options.HomeOptions -> EventLoopT Env (Island, ExHomeHandler) IO ()
-  action opts = do
+    HomeConfiguration -> EventLoopT Env (Island, ExHomeHandler) IO ()
+  action config = do
     ch1 <- liftIO newChan
     ch2 <- liftIO newChan
     let
@@ -184,11 +191,11 @@ main = runCommand $ \(opts :: Home.Options.HomeOptions) _args -> do
     bracket
       ( liftIO $
           mkLocalProxyThread
-            (opts ^. httpsCertificatePath)
-            (opts ^. httpsKeyPath)
-            (opts ^. httpsCACertificatePath)
-            (opts ^. proxyURL)
-            (opts ^. httpPort)
+            (config ^. httpsCertificatePath)
+            (config ^. httpsKeyPath)
+            (config ^. httpsCACertificatePath)
+            (config ^. httpHostname)
+            (config ^. httpPort)
             serverConn
       )
       (liftIO . killThread)
@@ -196,11 +203,12 @@ main = runCommand $ \(opts :: Home.Options.HomeOptions) _args -> do
         liftIO $ addLocalHostConnection env loop clientConn
         liftIO $
           mkRemoteProxyConnTLS
-            (opts ^. tlsCertificatePath)
-            (opts ^. tlsKeyPath)
-            (opts ^. tlsCACertificatePath)
-            (opts ^. proxyURL)
-            (opts ^. proxyPort)
+            (config ^. tlsCertificatePath)
+            (config ^. tlsKeyPath)
+            (config ^. tlsCACertificatePath)
+            (config ^. proxyURL)
+            (config ^. proxyPort)
+            (config ^. httpHostname)
             env
             loop
         startCheckMemoryPoll

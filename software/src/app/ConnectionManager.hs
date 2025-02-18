@@ -34,7 +34,6 @@ import Control.Concurrent (
   threadDelay,
   withMVar,
  )
-import Control.Exception (IOException, catch, displayException)
 import Control.Monad (forM_)
 import Data.ByteString qualified as B
 import Data.Map.Strict qualified as Map
@@ -43,7 +42,6 @@ import Msg (Msg (..))
 import Network.Socket
 import Network.TLS (
   Context,
-  TLSException,
   TLSParams,
   bye,
   contextNew,

@@ -5,6 +5,7 @@ import Control.Concurrent (MVar, forkIO, killThread)
 import Control.Exception.Lifted (bracket)
 import Control.Monad (void, when)
 import Control.Monad.Trans (liftIO)
+import Data.Aeson (eitherDecodeFileStrict)
 import Data.Map.Strict qualified as Map
 import Data.ProtoLens (defMessage)
 import Data.Vector qualified as V
@@ -25,13 +26,11 @@ import Lens.Micro
 import Logger (Logs)
 import Network.Socket (HostName, PortNumber, Socket, close)
 import Network.TLS (ServerParams)
-import Network.Wai.Handler.Warp (Port)
 import Options (runCommand)
 import Proto.Messages qualified as Proto
 import ProtoHelper (toMessage)
 import Proxy.Env (
   Env,
-  addServerConnection,
   addTLSServerConnection,
   cleanupEnv,
   logs,
@@ -44,7 +43,8 @@ import Proxy.Env (
 import Proxy.Handler (ExProxyHandler (..), proxyHandler)
 import Proxy.Options (
   ProxyOptions,
-  hostname,
+  configPath,
+  httpHostname,
   httpPort,
   httpsCACertificatePath,
   httpsCertificatePath,
@@ -52,7 +52,7 @@ import Proxy.Options (
   tlsCACertificatePath,
   tlsCertificatePath,
   tlsKeyPath,
-  tlsPort,
+  tlsPort, tlsHostname,
  )
 import REST.HomeServer qualified as HTTP
 import Router (Router, trySendMessage)
@@ -76,21 +76,21 @@ httpServer certPath keyPath caCertPath host port state systemData memoryData log
   env <- HTTP.mkEnv state systemData memoryData logs' rtr
   HTTP.runApp certPath keyPath caCertPath host port env
 
-mkServerSocket ::
-  Router
-  -> EventLoop (Island, ExProxyHandler)
-  -> IO Socket
-mkServerSocket rtr loop =
-  addServerConnection @Proto.ProxyEnvelope
-    (\(island, msg') -> addMsgIO (island, ExProxyHandler msg') loop)
-    rtr
-    sendSystemData
-    (pure ())
- where
-  sendSystemData = do
-    systemMsg <-
-      toMessage @Proto.SystemData @SystemData <$> mkSystemData RemoteProxy
-    void . trySendMessage rtr LocalHTTP $ toProxyEnvelope systemMsg
+-- mkServerSocket ::
+--   Router
+--   -> EventLoop (Island, ExProxyHandler)
+--   -> IO Socket
+-- mkServerSocket rtr loop =
+--   addServerConnection @Proto.ProxyEnvelope
+--     (\(island, msg') -> addMsgIO (island, ExProxyHandler msg') loop)
+--     rtr
+--     sendSystemData
+--     (pure ())
+--  where
+--   sendSystemData = do
+--     systemMsg <-
+--       toMessage @Proto.SystemData @SystemData <$> mkSystemData RemoteProxy
+--     void . trySendMessage rtr LocalHTTP $ toProxyEnvelope systemMsg
 
 mkTLSServerSocket ::
   ServerParams
@@ -148,8 +148,8 @@ proxyMain ::
 proxyMain certPath keyPath caCertPath host port env mkConnection cleanupConn island = do
   bracket
     (forkIO $ createHttpServerThread certPath keyPath caCertPath host port env)
-    killThread $
-    \_threadId ->
+    killThread
+    $ \_threadId ->
       runEventLoopT action env
  where
   action :: EventLoopT Env (Island, ExProxyHandler) IO ()
@@ -161,23 +161,27 @@ proxyMain certPath keyPath caCertPath host port env mkConnection cleanupConn isl
 
 main :: IO ()
 main = runCommand $ \(opts :: ProxyOptions) _args -> do
-  mParams <-
-    setupTLSServerParams
-      (opts ^. hostname)
-      (opts ^. tlsCertificatePath)
-      (opts ^. tlsKeyPath)
-      (opts ^. tlsCACertificatePath)
-  case mParams of
-    Nothing -> putStrLn "Couldn't make TLS parameters..."
-    Just params -> do
-      bracket (mkEnv RemoteProxy) cleanupEnv $ \env ->
-        proxyMain
-          (opts ^. httpsCertificatePath)
-          (opts ^. httpsKeyPath)
-          (opts ^. httpsCACertificatePath)
-          (opts ^. hostname)
-          (opts ^. httpPort)
-          env
-          (mkTLSServerSocket params (opts ^. tlsPort))
-          close
-          RemoteProxy
+  mConfig <- eitherDecodeFileStrict (opts ^. configPath)
+  case mConfig of
+    Left errs -> putStrLn $ "Could not parse configuration file: " <> errs
+    Right config -> do
+      mParams <-
+        setupTLSServerParams
+          (config ^. tlsHostname)
+          (config ^. tlsCertificatePath)
+          (config ^. tlsKeyPath)
+          (config ^. tlsCACertificatePath)
+      case mParams of
+        Nothing -> putStrLn "Couldn't make TLS parameters..."
+        Just params -> do
+          bracket (mkEnv RemoteProxy) cleanupEnv $ \env ->
+            proxyMain
+              (config ^. httpsCertificatePath)
+              (config ^. httpsKeyPath)
+              (config ^. httpsCACertificatePath)
+              (config ^. httpHostname)
+              (config ^. httpPort)
+              env
+              (mkTLSServerSocket params (config ^. tlsPort))
+              close
+              RemoteProxy
