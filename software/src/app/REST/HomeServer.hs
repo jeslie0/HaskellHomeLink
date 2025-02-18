@@ -18,7 +18,7 @@ import Lens.Micro ((&), (.~), (^.))
 import Lens.Micro.TH (makeLenses)
 import Logger (Logs, getLogs)
 import Network.TLS (Version (..))
-import Network.TLS.Extra (ciphersuite_default)
+import Network.TLS.Extra (ciphersuite_strong)
 import Network.Wai.Application.Static (
   defaultWebAppSettings,
   ssIndices,
@@ -165,7 +165,7 @@ runApp certPath keyPath caCertPAth hostname port env = do
   appTLSSettings caStore =
     (tlsSettings certPath keyPath)
       { tlsAllowedVersions = [TLS13, TLS12]
-      , tlsCiphers = ciphersuite_default
+      , tlsCiphers = ciphersuite_strong
       , tlsWantClientCert = True
       , tlsServerHooks = mTLSHooks hostname caStore
       }

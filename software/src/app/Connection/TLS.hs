@@ -18,7 +18,7 @@ import Data.X509.Validation (
  )
 import Network.Socket (ServiceName, accept, close)
 import Network.TLS as TLS
-import Network.TLS.Extra (ciphersuite_all)
+import Network.TLS.Extra (ciphersuite_strong)
 
 aquireActiveServerSocketTLS ::
   TLS.TLSParams params =>
@@ -122,12 +122,12 @@ setupTLSServerParams hostname certPath keyPath caCrtPath = do
     Just creds ->
       pure . Just $
         def
-          { TLS.serverWantClientCert = True
+          { TLS.serverWantClientCert = False--True
           , TLS.serverCACertificates = listCertificates caStore
           , TLS.serverShared = def {TLS.sharedCredentials = Credentials [creds]}
           , TLS.serverSupported =
               def
-                { supportedCiphers = ciphersuite_all
+                { supportedCiphers = ciphersuite_strong
                 , supportedVersions = [TLS13, TLS12]
                 }
           , TLS.serverHooks = mTLSHooks hostname caStore
@@ -175,7 +175,7 @@ setupTLSClientParams certPath keyPath caCertPath = do
         defaultParams
           { clientSupported =
               def
-                { supportedCiphers = ciphersuite_all
+                { supportedCiphers = ciphersuite_strong
                 , supportedVersions = [TLS13, TLS12]
                 }
           , clientShared =
