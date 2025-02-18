@@ -85,8 +85,7 @@ mkRemoteProxyConn env loop = do
  where
   sendSystemData = do
     systemMsg <- toMessage @Proto.SystemData @SystemData <$> mkSystemData Home
-    val <- trySendMessage (env ^. router) RemoteProxy $ toProxyEnvelope systemMsg
-    print val
+    void . trySendMessage (env ^. router) RemoteProxy $ toProxyEnvelope systemMsg
 
 mkRemoteProxyConnTLS ::
   FilePath
@@ -118,8 +117,7 @@ mkRemoteProxyConnTLS certPath keyPath caCertPath host port env loop = do
  where
   sendSystemData = do
     systemMsg <- toMessage @Proto.SystemData @SystemData <$> mkSystemData Home
-    val <- trySendMessage (env ^. router) RemoteProxy $ toProxyEnvelope systemMsg
-    print val
+    void . trySendMessage (env ^. router) RemoteProxy $ toProxyEnvelope systemMsg
 
 startCheckMemoryPoll ::
   EventLoopT Env (Island, ExHomeHandler) IO ()

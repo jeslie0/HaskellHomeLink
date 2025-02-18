@@ -87,8 +87,6 @@ instance ProxyHandler Proto.MemoryInformation where
         alterFunc (Just vec) =
           if V.length vec < secondsPerDay * 2
             then do
-              reportLog (env ^. router) Debug $
-                "Adding memory info for src: " <> T.pack (show src)
               pure . Just $ V.snoc vec (fromMessage resp)
             else fmap
               Just
@@ -108,7 +106,6 @@ instance ProxyHandler Proto.CheckMemoryUsage where
     case mMemInfo of
       Nothing -> liftIO $ reportLog (env ^. router) Error "Failed to get memory info"
       Just memInfo -> do
-        liftIO $ reportLog (env ^. router) Debug "Got Memory usage"
         void . liftIO . trySendMessage (env ^. router) Home $
           toEnvelope $
             toMessage @Proto.MemoryInformation memInfo

@@ -136,11 +136,9 @@ instance HomeHandler Proto.SystemData where
 instance HomeHandler Proto.MemoryInformation where
   homeHandler src msg = do
     env <- getEnv
-    liftIO $ reportLog (env ^. router) Error $ "Got mem info from " <> T.pack (show src)
     forM_ proxies $ \proxy -> do
       liftIO $ do
-        bool <- tryForwardMessage (env ^. router) src proxy $ toProxyEnvelope msg
-        putStrLn $ show proxy <> "bool: " <> show bool
+        void . tryForwardMessage (env ^. router) src proxy $ toProxyEnvelope msg
 
 instance HomeHandler Proto.CheckMemoryUsage where
   homeHandler _ _ = do
@@ -149,5 +147,4 @@ instance HomeHandler Proto.CheckMemoryUsage where
     case mMemInfo of
       Nothing -> liftIO $ reportLog (env ^. router) Error "Failed to get memory info"
       Just memInfo -> do
-        liftIO $ reportLog (env ^. router) Debug "Got log!"
         addMsg (Home, ExHomeHandler $ toMessage @Proto.MemoryInformation memInfo)

@@ -23,8 +23,9 @@ import Home.AudioStreamTypes (StationId, StreamStatus)
 import Islands (Island (..))
 import Lens.Micro
 import Logger (Logs)
-import Network.Socket (Socket, close, PortNumber)
+import Network.Socket (HostName, PortNumber, Socket, close)
 import Network.TLS (ServerParams)
+import Network.Wai.Handler.Warp (Port)
 import Options (runCommand)
 import Proto.Messages qualified as Proto
 import ProtoHelper (toMessage)
@@ -43,19 +44,21 @@ import Proxy.Env (
 import Proxy.Handler (ExProxyHandler (..), proxyHandler)
 import Proxy.Options (
   ProxyOptions,
+  hostname,
+  httpPort,
+  httpsCACertificatePath,
   httpsCertificatePath,
   httpsKeyPath,
   tlsCACertificatePath,
   tlsCertificatePath,
-  tlsKeyPath, httpsCACertificatePath, httpPort, tlsPort, hostname,
+  tlsKeyPath,
+  tlsPort,
  )
 import REST.HomeServer qualified as HTTP
 import Router (Router, trySendMessage)
 import State (State)
 import System (SystemData, mkSystemData)
 import System.Memory (MemoryInformation)
-import Network.Wai.Handler.Warp (Port)
-import Network.Socket (HostName)
 
 httpServer ::
   FilePath
@@ -87,8 +90,7 @@ mkServerSocket rtr loop =
   sendSystemData = do
     systemMsg <-
       toMessage @Proto.SystemData @SystemData <$> mkSystemData RemoteProxy
-    val <- trySendMessage rtr LocalHTTP $ toProxyEnvelope systemMsg
-    print val
+    void . trySendMessage rtr LocalHTTP $ toProxyEnvelope systemMsg
 
 mkTLSServerSocket ::
   ServerParams
@@ -108,10 +110,10 @@ mkTLSServerSocket params port rtr loop = do
   sendSystemData = do
     systemMsg <-
       toMessage @Proto.SystemData @SystemData <$> mkSystemData RemoteProxy
-    val <- trySendMessage rtr LocalHTTP $ toProxyEnvelope systemMsg
-    print val
+    void . trySendMessage rtr LocalHTTP $ toProxyEnvelope systemMsg
 
-createHttpServerThread :: FilePath -> FilePath -> FilePath -> HostName -> PortNumber -> Env -> IO ()
+createHttpServerThread ::
+  FilePath -> FilePath -> FilePath -> HostName -> PortNumber -> Env -> IO ()
 createHttpServerThread certPath keyPath caCertPath host port env =
   httpServer
     certPath
@@ -144,7 +146,9 @@ proxyMain ::
   -> Island
   -> IO ()
 proxyMain certPath keyPath caCertPath host port env mkConnection cleanupConn island = do
-  bracket (forkIO $ createHttpServerThread certPath keyPath caCertPath host port env) killThread $
+  bracket
+    (forkIO $ createHttpServerThread certPath keyPath caCertPath host port env)
+    killThread $
     \_threadId ->
       runEventLoopT action env
  where

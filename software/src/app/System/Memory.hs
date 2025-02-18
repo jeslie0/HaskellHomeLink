@@ -83,7 +83,6 @@ instance
 getTotalMemory :: IO (Maybe Word32)
 getTotalMemory = do
   mMemMap <- parseKeyValuePairFile "/proc/meminfo" ["MemTotal"]
-  print mMemMap
   pure $ do
     memMap <- mMemMap
     tValue <- memMap Map.!? "MemTotal"
