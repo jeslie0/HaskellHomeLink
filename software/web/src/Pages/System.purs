@@ -9,9 +9,7 @@ import Data.Array as Array
 import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Time.Duration (Milliseconds(..))
-import Data.UInt (fromInt)
 import Data.UInt as UInt
-import Debug (trace)
 import Deku.Control as DC
 import Deku.Core (Nut)
 import Deku.DOM as DD
@@ -22,9 +20,7 @@ import Effect.Aff (delay, launchAff_)
 import Effect.Class (liftEffect)
 import Effect.Ref as Ref
 import Patternfly (dlistGroup)
-import Protobuf.Internal.Prelude (toInt)
 import System (CPUData(..), IslandsSystemData(..), SystemData(..))
-import Unsafe.Coerce (unsafeCoerce)
 
 type SystemPageState = { api :: Api }
 
@@ -82,7 +78,7 @@ mkIslandMemoryChartCard api (SystemData systemData) =
         render c
         chartMap <- Ref.read api.memoryCharts.apexchartsRef
         Ref.write (Map.insert systemData.island c chartMap) api.memoryCharts.apexchartsRef
-        api.requests.getMemoryData
+        api.pollers.memoryDataPoller.force
 
 mkIslandGrid :: Api -> SystemData -> Nut
 mkIslandGrid api systemData =

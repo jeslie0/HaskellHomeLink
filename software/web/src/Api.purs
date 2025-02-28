@@ -9,11 +9,11 @@ import Data.Tuple.Nested ((/\))
 import Deku.Effect as DE
 import Effect (Effect)
 import Effect.Ref as Ref
-import Effect.Timer (setInterval)
 import FRP.Poll (Poll)
 import Logs (Log)
+import Poller (Poller)
 import Radio (Stream(..), StreamStatus(..))
-import Requests (fetchLogs, fetchMemoryData, fetchStreamStatus, fetchSystemsData, modifyStream)
+import Requests (mkLogsPoller, mkMemoryDataPoller, mkStreamStatusPoller, mkSystemsDataPoller, modifyStream)
 import System (Island, IslandsSystemData(..))
 
 type Api =
@@ -24,7 +24,6 @@ type Api =
       }
   , requests ::
       { modifyStream :: Maybe Stream -> Effect Unit
-      , getMemoryData :: Effect Unit
       }
   , setters ::
       { selectStream :: Stream -> Effect Unit
@@ -33,9 +32,15 @@ type Api =
       { apexchartsRef :: Ref.Ref (Map.Map Island Apexchart)
       }
   , logging ::
-       { logsPoll :: Poll (Array Log)
-       , setLogsPoll :: Array Log -> Effect Unit
-       }
+      { logsPoll :: Poll (Array Log)
+      , setLogsPoll :: Array Log -> Effect Unit
+      }
+  , pollers ::
+      { streamStatusPoller :: Poller
+      , memoryDataPoller :: Poller
+      , systemsDataPoller :: Poller
+      , logsPoller :: Poller
+      }
   }
 
 mkApi :: Effect Api
@@ -53,29 +58,26 @@ mkApi = do
 
   -- Log Polls
   _ /\ setLogsPoll /\ logsPoll <- DE.useHot []
-  
 
   -- StateId Refs
   streamStateIdRef <- Ref.new 0
 
   -- Pollers
-  fetchStreamStatus streamStateIdRef selectStream setStreamStatusPoll
-  _ <- setInterval 2000 $ fetchStreamStatus streamStateIdRef selectStream setStreamStatusPoll
+  streamStatusPoller <- mkStreamStatusPoller streamStateIdRef selectStream setStreamStatusPoll
+  memoryDataPoller <- mkMemoryDataPoller apexchartsRef
+  systemsDataPoller <- mkSystemsDataPoller setSystemsDataPoll
+  logsPoller <- mkLogsPoller setLogsPoll
 
-  let getMemoryData = fetchMemoryData apexchartsRef
-  getMemoryData
-  _ <- setInterval (30 * 1000) getMemoryData
-
-  fetchSystemsData setSystemsDataPoll
-
-  -- Log poll
-  fetchLogs setLogsPoll
-  _ <- setInterval (5 * 1000) $ fetchLogs setLogsPoll
-
+  streamStatusPoller.start
+  memoryDataPoller.start
+  systemsDataPoller.start   
+  logsPoller.start
+  
   pure
     { polls: { systemsDataPoll, streamStatusPoll, selectedStreamPoll }
-    , requests: { modifyStream: modifyStream streamStateIdRef selectStream setStreamStatusPoll, getMemoryData }
+    , requests: { modifyStream: modifyStream streamStateIdRef streamStatusPoller }
     , setters: { selectStream }
     , memoryCharts: { apexchartsRef }
     , logging: { logsPoll, setLogsPoll }
+    , pollers: { streamStatusPoller, memoryDataPoller, systemsDataPoller, logsPoller }
     }

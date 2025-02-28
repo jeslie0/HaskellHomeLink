@@ -1,9 +1,9 @@
 module Requests
-  ( fetchStreamStatus
+  ( mkStreamStatusPoller
   , modifyStream
-  , fetchSystemsData
-  , fetchMemoryData
-  , fetchLogs
+  , mkSystemsDataPoller
+  , mkMemoryDataPoller
+  , mkLogsPoller
   ) where
 
 import Prelude
@@ -13,14 +13,13 @@ import Chart (updateChartData)
 import Constants (getApiUrl)
 import Data.Array as Array
 import Data.ArrayBuffer.Builder (execPutM)
-import Data.ArrayBuffer.DataView (byteLength, whole)
+import Data.ArrayBuffer.DataView (byteLength)
 import Data.Either (Either(..))
 import Data.Foldable (for_)
 import Data.HTTP.Method (Method(..))
 import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Tuple.Nested ((/\))
-import Debug (trace)
 import Effect (Effect)
 import Effect.Aff (launchAff_)
 import Effect.Class (liftEffect)
@@ -29,6 +28,7 @@ import Effect.Ref as Ref
 import Fetch (fetch)
 import Logs (Log, Logs(..))
 import Parsing (fail, runParserT)
+import Poller (Poller, mkPoller)
 import Proto.Messages as Proto
 import ProtoHelper (fromMessage, sayError, toMessage)
 import Radio (Stream(..), StreamStatus(..), StreamStatusError, radioStreams)
@@ -37,32 +37,30 @@ import System (AllIslandsMemoryData(..), Island, IslandMemoryInformation(..), Is
 -- * Stream requests
 
 -- | Get the current stream state and update appropriately.
-fetchStreamStatus
+mkStreamStatusPoller
   :: Ref.Ref Int
   -> (Stream -> Effect Unit)
   -> (StreamStatus -> Effect Unit)
-  -> Effect Unit
-fetchStreamStatus streamStateIdRef updateStreamStation updateStreamStatus = do
-  apiUrl <- getApiUrl
-  let requestUrl = apiUrl <> "radio"
-  launchAff_ do
-    { arrayBuffer } <- fetch requestUrl { method: GET }
-    body <- whole <$> arrayBuffer
+  -> Effect Poller
+mkStreamStatusPoller streamStateIdRef updateStreamStation updateStreamStatus = do
+  mkPoller "radio" 2000 $ \body -> do
     result <- liftEffect $ runParserT body do
       resp <- Proto.parseGetRadioStatusResponse (byteLength body)
       parseResponse resp
     liftEffect $ actOnResult result
-    pure unit
 
   where
-  setStreamStateId n = Ref.write n streamStateIdRef
+  setStreamStateId n =
+    Ref.write n streamStateIdRef
 
   parseResponse (Proto.GetRadioStatusResponse { stateId: mStateId, status: mStatus, currentStationId: mStationId }) =
     pure $ fromMaybe 0 mStateId
       /\ maybe (Right Off) (fromMessage @_ @_ @StreamStatusError) mStatus
       /\ maybe (Right ClassicFM) (fromMessage) mStationId
 
-  actOnResult (Left _) = Console.log "FAIL"
+  actOnResult (Left _) =
+    Console.log "FAIL"
+
   actOnResult (Right (stateId /\ eStatus /\ eCurrentStationId)) = do
     currStateId <- Ref.read streamStateIdRef
     if currStateId == stateId then pure unit
@@ -80,11 +78,10 @@ fetchStreamStatus streamStateIdRef updateStreamStation updateStreamStatus = do
 -- | Start or stop the audio stream.
 modifyStream
   :: Ref.Ref Int
-  -> (Stream -> Effect Unit)
-  -> (StreamStatus -> Effect Unit)
-  -> (Maybe Stream)
+  -> Poller
+  -> Maybe Stream
   -> Effect Unit
-modifyStream stateIdRef updateStation updateStreamStatus payload = do
+modifyStream stateIdRef ({ force }) payload = do
   id <- Ref.read stateIdRef
   apiUrl <- getApiUrl
   let
@@ -104,38 +101,31 @@ modifyStream stateIdRef updateStation updateStreamStatus payload = do
       , headers: { "content-type": "application/protobuf" }
       }
     pure unit
-    liftEffect $ fetchStreamStatus stateIdRef updateStation updateStreamStatus
+    liftEffect force
 
 -- | Get the current system data
-fetchSystemsData :: (IslandsSystemData -> Effect Unit) -> Effect Unit
-fetchSystemsData update = do
-  apiUrl <- getApiUrl
-  let requestUrl = apiUrl <> "system"
-  launchAff_ do
-    { arrayBuffer } <- fetch requestUrl { method: GET }
-    body <- whole <$> arrayBuffer
+mkSystemsDataPoller
+  :: (IslandsSystemData -> Effect Unit)
+  -> Effect Poller
+mkSystemsDataPoller update = do
+  mkPoller "system" 5000 $ \body -> do
     result <- liftEffect $ runParserT body do
       resp <- Proto.parseIslandsSystemData (byteLength body)
-      trace resp $ \_ ->
-        case fromMessage resp of
-            Left errs -> fail <<< show $ sayError errs
-            Right islandsData -> do
-              pure islandsData
+      case fromMessage resp of
+        Left errs -> fail <<< show $ sayError errs
+        Right islandsData -> do
+          pure islandsData
     case result of
       Left err -> liftEffect $ Console.logShow err
       Right islandsData -> do
         liftEffect $ update islandsData
     pure unit
 
-fetchMemoryData
+mkMemoryDataPoller
   :: Ref.Ref (Map.Map Island Apexchart)
-  -> Effect Unit
-fetchMemoryData apexRef = do
-  apiUrl <- getApiUrl
-  let requestUrl = apiUrl <> "memory"
-  launchAff_ do
-    { arrayBuffer } <- fetch requestUrl { method: GET }
-    body <- whole <$> arrayBuffer
+  -> Effect Poller
+mkMemoryDataPoller apexRef = do
+  mkPoller "memory" (30 * 1000) $ \body -> do
     result <- liftEffect $ runParserT body do
       resp <- Proto.parseAllIslandMemoryData (byteLength body)
       case fromMessage resp of
@@ -160,13 +150,9 @@ fetchMemoryData apexRef = do
           updateChartData chart timeMem
           pure unit
 
-fetchLogs :: (Array Log -> Effect Unit) -> Effect Unit
-fetchLogs setLogsPoll = do
-  apiUrl <- getApiUrl
-  let requestUrl = apiUrl <> "logs"
-  launchAff_ do
-    { arrayBuffer } <- fetch requestUrl { method: GET }
-    body <- whole <$> arrayBuffer
+mkLogsPoller :: (Array Log -> Effect Unit) -> Effect Poller
+mkLogsPoller setLogsPoll = do
+  mkPoller "logs" (5 * 1000) $ \body -> do
     result <- liftEffect $ runParserT body do
       resp <- Proto.parseLogs (byteLength body)
       case fromMessage resp of
