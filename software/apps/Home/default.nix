@@ -73,7 +73,7 @@ let
 
         config = {
           Cmd =
-            [ "${StrippedHomeArmV7}/bin/Home"];
+            [ "${StrippedHomeArmV7}/bin/Home" "--config=/mnt/home_config.json" "+RTS" "-N4" "-RTS" ];
         };
       };
   };
