@@ -2,9 +2,7 @@ module Api (Api(..), mkApi) where
 
 import Prelude
 
-import Apexcharts (Apexchart)
-import Data.Map as Map
-import Data.Maybe (Maybe)
+import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested ((/\))
 import Deku.Effect as DE
 import Effect (Effect)
@@ -14,12 +12,21 @@ import Logs (Log)
 import Poller (Poller)
 import Radio (Stream(..), StreamStatus(..))
 import Requests (mkLogsPoller, mkMemoryDataPoller, mkStreamStatusPoller, mkSystemsDataPoller, modifyStream)
-import System (Island, IslandsSystemData(..))
+import System (SystemData)
 
 type Api =
-  { polls ::
-      { systemsDataPoll :: Poll IslandsSystemData
-      , streamStatusPoll :: Poll StreamStatus
+  { islandState ::
+      { home ::
+          { systemData :: Poll (Maybe SystemData)
+          , memoryData :: Poll (Array (Array Number))
+          }
+      , proxy ::
+          { systemData :: Poll (Maybe SystemData)
+          , memoryData :: Poll (Array (Array Number))
+          }
+      }
+  , polls ::
+      { streamStatusPoll :: Poll StreamStatus
       , selectedStreamPoll :: Poll Stream
       }
   , requests ::
@@ -27,9 +34,6 @@ type Api =
       }
   , setters ::
       { selectStream :: Stream -> Effect Unit
-      }
-  , memoryCharts ::
-      { apexchartsRef :: Ref.Ref (Map.Map Island Apexchart)
       }
   , logging ::
       { logsPoll :: Poll (Array Log)
@@ -45,39 +49,50 @@ type Api =
 
 mkApi :: Effect Api
 mkApi = do
-  -- Polls
-  _ /\ setSystemsDataPoll /\ systemsDataPoll <- DE.useHot $ IslandsSystemData { allSystemData: [] }
-  _ /\ setStreamStatusPoll /\ streamStatusPoll <- DE.useHot Off
+  -- Systems Polls
+  setHomeSystemDataPoll /\ homeSystemDataPoll <- DE.useState Nothing
+  setHomeMemoryDataPoll /\ homeMemoryDataPoll <- DE.useState []
 
+  setProxySystemDataPoll /\ proxySystemDataPoll <- DE.useState Nothing
+  setProxyMemoryDataPoll /\ proxyMemoryDataPoll <- DE.useState []
+
+  -- Stream Polls
+  _ /\ setStreamStatusPoll /\ streamStatusPoll <- DE.useHot Off
   _ /\ setSelectedStreamPoll /\ selectedStreamPoll <- DE.useHot ClassicFM
   selectedStreamRef <- Ref.new ClassicFM
   let selectStream stream = Ref.write stream selectedStreamRef >>= \_ -> setSelectedStreamPoll stream
 
-  -- Chart ref and poll
-  apexchartsRef <- Ref.new Map.empty
-
   -- Log Polls
-  _ /\ setLogsPoll /\ logsPoll <- DE.useHot []
+  setLogsPoll /\ logsPoll <- DE.useState []
 
   -- StateId Refs
   streamStateIdRef <- Ref.new 0
 
   -- Pollers
   streamStatusPoller <- mkStreamStatusPoller streamStateIdRef selectStream setStreamStatusPoll
-  memoryDataPoller <- mkMemoryDataPoller apexchartsRef
-  systemsDataPoller <- mkSystemsDataPoller setSystemsDataPoll
+  systemsDataPoller <- mkSystemsDataPoller { setHomeSystemDataPoll, setProxySystemDataPoll }
+  memoryDataPoller <- mkMemoryDataPoller { setHomeMemoryDataPoll, setProxyMemoryDataPoll }
   logsPoller <- mkLogsPoller setLogsPoll
 
   streamStatusPoller.start
   memoryDataPoller.start
-  systemsDataPoller.start   
+  systemsDataPoller.start
   logsPoller.start
-  
+
   pure
-    { polls: { systemsDataPoll, streamStatusPoll, selectedStreamPoll }
+    { islandState:
+        { home:
+            { systemData: homeSystemDataPoll
+            , memoryData: homeMemoryDataPoll
+            }
+        , proxy:
+            { systemData: proxySystemDataPoll
+            , memoryData: proxyMemoryDataPoll
+            }
+        }
+    , polls: { streamStatusPoll, selectedStreamPoll }
     , requests: { modifyStream: modifyStream streamStateIdRef streamStatusPoller }
     , setters: { selectStream }
-    , memoryCharts: { apexchartsRef }
     , logging: { logsPoll, setLogsPoll }
     , pollers: { streamStatusPoller, memoryDataPoller, systemsDataPoller, logsPoller }
     }

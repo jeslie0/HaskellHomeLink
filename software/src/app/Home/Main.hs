@@ -174,8 +174,9 @@ main = runCommand $ \(opts :: HomeOptions) _args -> do
   case mConfig of
     Left errs -> putStrLn $ "Could not parse configuration file: " <> errs
     Right config -> do
-      bracket mkEnv cleanupEnv $ \env ->
+      bracket mkEnv cleanupEnv $ \env -> do
         runEventLoopT (action config) env
+        writeFile "/mnt/normalexit" ""
  where
   action ::
     HomeConfiguration -> EventLoopT Env (Island, ExHomeHandler) IO ()

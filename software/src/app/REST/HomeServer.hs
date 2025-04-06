@@ -166,7 +166,9 @@ runApp certPath keyPath caCertPAth hostname port env = do
     (tlsSettings certPath keyPath)
       { tlsAllowedVersions = [TLS13, TLS12]
       , tlsCiphers = ciphersuite_strong
-      , tlsWantClientCert = True
+      -- TODO Change back to true
+      , tlsWantClientCert = False
+      -- , tlsWantClientCert = True
       , tlsServerHooks = mTLSHooks hostname caStore
       }
 

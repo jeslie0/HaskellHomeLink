@@ -185,3 +185,4 @@ main = runCommand $ \(opts :: ProxyOptions) _args -> do
               (mkTLSServerSocket params (config ^. tlsPort))
               close
               RemoteProxy
+          writeFile "/mnt/normalexit" ""

@@ -1,8 +1,8 @@
-module Chart (updateChartData, defaultChartOptions) where
+module Chart (updatedChartOptions, defaultChartOptions) where
 
 import Prelude
 
-import Apexcharts (Apexchart, Apexoptions, updateOptions)
+import Apexcharts (Apexoptions)
 import Apexcharts.Chart as C
 import Apexcharts.Chart.Animations as A
 import Apexcharts.Chart.Toolbar as TB
@@ -19,10 +19,13 @@ import Apexcharts.Xaxis.Title as XT
 import Apexcharts.Yaxis as Y
 import Apexcharts.Yaxis.Labels as YL
 import Apexcharts.Yaxis.Title as YT
+import Control.Monad.ST as ST
+import Control.Monad.ST.Ref as STRef
+import Data.Array as Array
 import Data.Maybe (Maybe(..))
 import Data.Number as Number
 import Data.Options (Options, (:=))
-import Effect (Effect)
+import Partial.Unsafe (unsafePartial)
 
 -- Apex charts work by finding DOM elements with a given label, then
 -- modifying them appropriately. For us, this means that our DOM will
@@ -35,17 +38,30 @@ import Effect (Effect)
 
 updatedChartOptions :: Array (Array Number) -> Options Apexoptions
 updatedChartOptions xyData = do
-  SE.series := [ SE.name := "Memory used (GB)" <> SE.data' := xyData ]
+  let
+    ymax = ST.run do
+      maxRef <- STRef.new 0.0
+      ST.foreach xyData $ \pair -> do
+        void $ STRef.modify (\n -> max (unsafePartial $ Array.unsafeIndex pair 1) n) maxRef
+      STRef.read maxRef
 
-updateChartData :: Apexchart -> Array (Array Number) -> Effect Unit
-updateChartData chart xyData = do
-  updateOptions (updatedChartOptions xyData) chart
+  SE.series := [ SE.name := "Memory used (GB)" <> SE.data' := xyData ]
+     <> Y.yaxis :=
+       ( Y.max := ymax
+           <> YT.title := (YT.text := "Memory used (GB)")
+           <> YL.labels :=
+             ( YL.formatter := \strF -> case Number.fromString strF of
+                 Just f -> show $ (Number.round $ f / 1000.0) / 1000.0
+                 Nothing -> strF
+             )
+       )
+    
 
 defaultChartOptions :: Number -> Options Apexoptions
 defaultChartOptions max =
   ( C.chart :=
       ( C.type' := CC.Area
-          <> C.height := 350.0
+          <> C.height := "100%"
           <> C.width := "100%"
           <> Z.zoom := (Z.enabled := false)
           <> TB.toolbar := TB.show := false

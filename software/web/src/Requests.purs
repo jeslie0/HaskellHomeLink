@@ -8,16 +8,12 @@ module Requests
 
 import Prelude
 
-import Apexcharts (Apexchart)
-import Chart (updateChartData)
 import Constants (getApiUrl)
 import Data.Array as Array
 import Data.ArrayBuffer.Builder (execPutM)
 import Data.ArrayBuffer.DataView (byteLength)
 import Data.Either (Either(..))
-import Data.Foldable (for_)
 import Data.HTTP.Method (Method(..))
-import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Tuple.Nested ((/\))
 import Effect (Effect)
@@ -32,7 +28,7 @@ import Poller (Poller, mkPoller)
 import Proto.Messages as Proto
 import ProtoHelper (fromMessage, sayError, toMessage)
 import Radio (Stream(..), StreamStatus(..), StreamStatusError, radioStreams)
-import System (AllIslandsMemoryData(..), Island, IslandMemoryInformation(..), IslandsSystemData)
+import System (AllIslandsMemoryData(..), Island(..), IslandMemoryInformation(..), IslandsSystemData(..), SystemData(..))
 
 -- * Stream requests
 
@@ -105,9 +101,11 @@ modifyStream stateIdRef ({ force }) payload = do
 
 -- | Get the current system data
 mkSystemsDataPoller
-  :: (IslandsSystemData -> Effect Unit)
+  :: { setHomeSystemDataPoll :: Maybe SystemData -> Effect Unit
+     , setProxySystemDataPoll :: Maybe SystemData -> Effect Unit
+     }
   -> Effect Poller
-mkSystemsDataPoller update = do
+mkSystemsDataPoller { setHomeSystemDataPoll, setProxySystemDataPoll } = do
   mkPoller "system" 5000 $ \body -> do
     result <- liftEffect $ runParserT body do
       resp <- Proto.parseIslandsSystemData (byteLength body)
@@ -117,38 +115,40 @@ mkSystemsDataPoller update = do
           pure islandsData
     case result of
       Left err -> liftEffect $ Console.logShow err
-      Right islandsData -> do
-        liftEffect $ update islandsData
-    pure unit
+      Right (IslandsSystemData { allSystemData }) -> do
+        let
+          updateIsland island callback =
+            callback $ Array.find (\(SystemData sysdata) -> sysdata.island == island) allSystemData
+        liftEffect $ updateIsland Home setHomeSystemDataPoll
+        liftEffect $ updateIsland RemoteProxy setProxySystemDataPoll
 
 mkMemoryDataPoller
-  :: Ref.Ref (Map.Map Island Apexchart)
+  :: { setHomeMemoryDataPoll :: Array (Array Number) -> Effect Unit
+     , setProxyMemoryDataPoll :: Array (Array Number) -> Effect Unit
+     }
   -> Effect Poller
-mkMemoryDataPoller apexRef = do
+mkMemoryDataPoller { setHomeMemoryDataPoll, setProxyMemoryDataPoll } = do
   mkPoller "memory" (30 * 1000) $ \body -> do
     result <- liftEffect $ runParserT body do
       resp <- Proto.parseAllIslandMemoryData (byteLength body)
       case fromMessage resp of
         Left _errs -> fail "Error parsing response"
-        Right allIslandsMemoryData -> pure allIslandsMemoryData
+        Right allIslandsMemoryData -> do
+          pure allIslandsMemoryData
     case result of
-      Left err -> liftEffect $ Console.log $ "Error getting memory data: " <> show err
-      Right allIslandsMemoryData -> do
-        liftEffect $ actOnData allIslandsMemoryData
-        pure unit
-    pure unit
-
-  where
-  actOnData :: AllIslandsMemoryData -> Effect Unit
-  actOnData (AllIslandsMemoryData { allIslandMemoryData }) =
-    for_ allIslandMemoryData $ \(IslandMemoryInformation { island, timeMem }) -> do
-      chartMap <- liftEffect $ Ref.read apexRef
-      case Map.lookup island chartMap of
-        Nothing ->
-          pure unit
-        Just chart -> do
-          updateChartData chart timeMem
-          pure unit
+      Left err ->
+        liftEffect $ Console.log $ "Error getting memory data: " <> show err
+      Right (AllIslandsMemoryData { allIslandMemoryData }) -> do
+        let
+          getMemData island =
+            fromMaybe [] $ do
+              IslandMemoryInformation info <-
+                Array.find
+                  (\(IslandMemoryInformation info) -> info.island == island)
+                  allIslandMemoryData
+              pure info.timeMem
+        liftEffect <<< setHomeMemoryDataPoll <<< getMemData $ Home
+        liftEffect <<< setProxyMemoryDataPoll <<< getMemData $ RemoteProxy
 
 mkLogsPoller :: (Array Log -> Effect Unit) -> Effect Poller
 mkLogsPoller setLogsPoll = do

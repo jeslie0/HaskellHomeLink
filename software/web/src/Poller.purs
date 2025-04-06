@@ -21,7 +21,7 @@ type Poller =
   , force :: Effect Unit
   }
 
-mkPoller :: String -> Int -> (DataView -> Aff Unit) -> Effect (Poller)
+mkPoller :: String -> Int -> (DataView -> Aff Unit) -> Effect Poller
 mkPoller endpoint timeoutMs handle = do
   apiUrl <- getApiUrl
   timeoutRef <- Ref.new Nothing
@@ -31,12 +31,13 @@ mkPoller endpoint timeoutMs handle = do
 
     request = launchAff_ do
       { arrayBuffer } <- fetch requestUrl { method: GET }
-
-      timeout <- liftEffect $ setTimeout timeoutMs request
-      liftEffect $ Ref.write (Just timeout) timeoutRef
-
       body <- whole <$> arrayBuffer
       handle body
+
+    repeatingRequest = do
+      request
+      timeout <- liftEffect $ setTimeout timeoutMs repeatingRequest
+      liftEffect $ Ref.write (Just timeout) timeoutRef
 
     stop = do
       mTimeout <- Ref.read timeoutRef
@@ -44,7 +45,7 @@ mkPoller endpoint timeoutMs handle = do
 
     start = do
       request
-      timeout <- setTimeout timeoutMs request
+      timeout <- setTimeout timeoutMs repeatingRequest
       Ref.write (Just timeout) timeoutRef
 
     force =

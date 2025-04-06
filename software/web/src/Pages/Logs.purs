@@ -2,7 +2,6 @@ module Pages.Logs (logsPage, LogsPageState) where
 
 import Prelude
 
-import Api (Api)
 import Data.Array as Array
 import Data.DateTime.Instant (toDateTime)
 import Data.Formatter.DateTime (Formatter, FormatterCommand(..), format)
@@ -12,21 +11,22 @@ import Deku.Core (Nut)
 import Deku.DOM as DD
 import Deku.DOM.Attributes as DA
 import Deku.Hooks ((<#~>))
+import FRP.Poll (Poll)
 import Logs (Log(..))
 
-type LogsPageState = { api :: Api }
+type LogsPageState = { logsPoll :: Poll (Array Log) }
 
 logsPage :: LogsPageState -> Nut
-logsPage { api } =
+logsPage { logsPoll } =
   DD.div [ DA.klass_ "pf-v5-c-card pf-m-display-lg pf-m-full-height" ]
     [ DD.div [ DA.klass_ "pf-v5-c-card__title" ]
         [ DD.h1 [ DA.klass_ "pf-v5-c-card__title-text" ]
             [ DC.text_ "Logs" ]
         ]
     , DD.div [ DA.klass_ "pf-v5-c-card__body" ]
-        [ api.logging.logsPoll <#~> \logs -> if Array.null logs then DD.text_ "No logs" else body ]
+        [ logsPoll <#~> \logs -> if Array.null logs then DD.text_ "No logs" else body ]
     , DD.footer [ DA.klass_ "pf-v5-c-card__footer" ]
-        [ api.logging.logsPoll <#~> \logs -> if Array.null logs then DD.div [] [] else pagination ]
+        [ logsPoll <#~> \logs -> if Array.null logs then DD.div [] [] else pagination ]
     ]
   where
   body =
@@ -46,7 +46,7 @@ logsPage { api } =
                   [ DD.text_ "Message" ]
               ]
           ]
-      , api.logging.logsPoll <#~> \logs ->
+      , logsPoll <#~> \logs ->
           DD.tbody [ DA.klass_ "pf-v5-c-table__tbody", DA.role_ "rowgroup" ]
             ( Array.reverse logs
                 <#> \(Log log) ->
@@ -109,4 +109,9 @@ logsPage { api } =
 formatter :: Formatter
 formatter =
   YearFull : Placeholder "-" : MonthTwoDigits : Placeholder "-" : DayOfMonthTwoDigits : Placeholder " "
-  : Hours24 : Placeholder ":" : MinutesTwoDigits : Placeholder ":" : SecondsTwoDigits : Nil
+    : Hours24
+    : Placeholder ":"
+    : MinutesTwoDigits
+    : Placeholder ":"
+    : SecondsTwoDigits
+    : Nil

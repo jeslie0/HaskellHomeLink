@@ -26,6 +26,7 @@
             "prelude",
             "protobuf",
             "random",
+            "st",
             "yoga-json"
           ],
           "build_plan": [

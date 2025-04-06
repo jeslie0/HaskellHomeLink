@@ -1,7 +1,6 @@
 module Main (main) where
 
 import Api (mkApi)
-import Data.Map as Map
 import Data.Tuple.Nested ((/\))
 import Deku.Control as DC
 import Deku.Core (Nut)
@@ -13,11 +12,10 @@ import Deku.Hooks ((<#~>))
 import Deku.Hooks as DH
 import Deku.Toplevel (runInBody)
 import Effect (Effect)
-import Effect.Ref as Ref
 import FRP.Poll (Poll)
 import Pages (OverviewPageState, Page(..), SystemPageState, overviewPage, pageList, systemPage)
 import Pages.Logs (LogsPageState, logsPage)
-import Prelude (Unit, bind, discard, pure, show, unit, ($), (<#>), (<>), (==))
+import Prelude (Unit, bind, pure, show, unit, ($), (<#>), (<>), (==))
 
 main :: Effect Unit
 main = do
@@ -54,8 +52,6 @@ pageBody pagePoll states =
             Logs -> logsPage states.logsPageState
 
             _ -> systemPage states.systemPageState
-
-        -- Applications -> applicationsPage states.applicationsPageState
         ]
     ]
 
@@ -70,17 +66,19 @@ dekuApp = do
   api <- mkApi
 
   pure Deku.do
-    setPage /\ page <- DH.useState Overview
+    setPage /\ page <- DH.useState System
     let
       changePage newPage = do
-        Ref.write (Map.empty) api.memoryCharts.apexchartsRef
         setPage newPage
 
     DD.div [ DA.klass_ "pf-v5-c-page" ]
       [ header page changePage
       , pageBody page
           { overviewPageState: { api }
-          , systemPageState: { api }
-          , logsPageState: { api }
+          , systemPageState:
+              { home: api.islandState.home
+              , proxy: api.islandState.proxy
+              }
+          , logsPageState: { logsPoll: api.logging.logsPoll }
           }
       ]
