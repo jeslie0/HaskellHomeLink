@@ -1,5 +1,6 @@
 module Requests
-  ( mkStreamStatusPoller
+  ( AppPollers
+  , mkStreamStatusPoller
   , modifyStream
   , mkSystemsDataPoller
   , mkMemoryChartOptionsPoller
@@ -32,6 +33,13 @@ import Proto.Messages as Proto
 import ProtoHelper (fromMessage, sayError, toMessage)
 import Radio (Stream(..), StreamStatus(..), StreamStatusError, radioStreams)
 import System (AllIslandsMemoryData(..), Island(..), IslandMemoryInformation(..), IslandsSystemData(..), SystemData(..))
+
+type AppPollers =
+  { streamStatusPoller :: Poller
+  , memoryDataPoller :: Poller
+  , systemsDataPoller :: Poller
+  , logsPoller :: Poller
+  }
 
 -- * Stream requests
 

@@ -18,7 +18,8 @@ import Logs (Log)
 import Poller (Poller)
 import Radio (Stream(..), StreamStatus(..))
 import Requests
-  ( mkLogsPoller
+  ( AppPollers
+  , mkLogsPoller
   , mkMemoryChartOptionsPoller
   , mkStreamStatusPoller
   , mkSystemsDataPoller
@@ -63,12 +64,7 @@ type Api =
       { logsPoll :: Poll (Array Log)
       , setLogsPoll :: Array Log -> Effect Unit
       }
-  , pollers ::
-      { streamStatusPoller :: Poller
-      , memoryDataPoller :: Poller
-      , systemsDataPoller :: Poller
-      , logsPoller :: Poller
-      }
+  , pollers :: AppPollers
   }
 
 mkApi :: Effect Api
@@ -140,3 +136,4 @@ mkApi = do
             }
         }
     }
+

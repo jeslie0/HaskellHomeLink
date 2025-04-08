@@ -1,5 +1,7 @@
 module Main (main) where
 
+import Prelude
+
 import Api (mkApi)
 import Data.Tuple.Nested ((/\))
 import Deku.Control as DC
@@ -13,9 +15,8 @@ import Deku.Hooks as DH
 import Deku.Toplevel (runInBody)
 import Effect (Effect)
 import FRP.Poll (Poll)
-import Pages (OverviewPageState, Page(..), SystemPageState, overviewPage, pageList, systemPage)
+import Pages (OverviewPageState, Page(..), SystemPageState, overviewPage, pageList, resetPollers, systemPage)
 import Pages.Logs (LogsPageState, logsPage)
-import Prelude (Unit, bind, pure, show, unit, ($), (<#>), (<>), (==))
 
 main :: Effect Unit
 main = do
@@ -68,23 +69,17 @@ dekuApp = do
   pure Deku.do
     setPage /\ page <- DH.useState Overview
     let
+      changePage :: Page -> Effect Unit
       changePage newPage = do
-        _ <- case newPage of
+        case newPage of
           System -> do
-            _ <- api.charters.home.subscribe api.islandState.home.memoryChartOptions
-            _ <- api.charters.proxy.subscribe api.islandState.proxy.memoryChartOptions
-
-            _ <- api.pollers.systemsDataPoller.force
-            _ <- api.pollers.memoryDataPoller.force
-            pure unit
-
+            api.charters.home.subscribe api.islandState.home.memoryChartOptions
+            api.charters.proxy.subscribe api.islandState.proxy.memoryChartOptions
           _ -> do
-            _ <- api.pollers.memoryDataPoller.stop
-            _ <- api.pollers.systemsDataPoller.stop
-            _ <- api.charters.home.unsubscribe
-            _ <- api.charters.proxy.unsubscribe
-            pure unit
+            api.charters.home.unsubscribe
+            api.charters.proxy.unsubscribe
 
+        resetPollers api.pollers newPage
         setPage newPage
 
     DD.div [ DA.klass_ "pf-v5-c-page" ]

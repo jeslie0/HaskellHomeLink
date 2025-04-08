@@ -39,7 +39,7 @@ import Partial.Unsafe (unsafePartial)
 updatedChartOptions :: Array (Array Number) -> Options Apexoptions
 updatedChartOptions xyData = do
   let
-    ymax = ST.run do
+    ymax = 1.1 * ST.run do
       maxRef <- STRef.new 0.0
       ST.foreach xyData $ \pair -> do
         void $ STRef.modify (\n -> max (unsafePartial $ Array.unsafeIndex pair 1) n) maxRef
