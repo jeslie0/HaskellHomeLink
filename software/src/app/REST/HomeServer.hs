@@ -4,6 +4,7 @@
 
 module REST.HomeServer (runApp, mkEnv, router) where
 
+import Connection.TLS (loadCAStore, mTLSHooks)
 import Control.Concurrent (MVar, readMVar)
 import Control.Exception (SomeAsyncException, catch, throwIO)
 import Control.Monad (void)
@@ -17,6 +18,7 @@ import Islands (Island (..))
 import Lens.Micro ((&), (.~), (^.))
 import Lens.Micro.TH (makeLenses)
 import Logger (Logs, getLogs)
+import Network.Socket (HostName, PortNumber)
 import Network.TLS (Version (..))
 import Network.TLS.Extra (ciphersuite_strong)
 import Network.Wai.Application.Static (
@@ -50,9 +52,6 @@ import State (State, StateId, waitForStateUpdate, withState)
 import System (SystemData)
 import System.Memory (MemoryInformation)
 import WaiAppStatic.Types (unsafeToPiece)
-import Connection.TLS (mTLSHooks, loadCAStore)
-import Network.Socket (PortNumber)
-import Network.Socket (HostName)
 
 data Env = Env
   { _streamStatusState :: State (StreamStatus, StationId)
@@ -153,7 +152,8 @@ serveDir path = do
 app :: Env -> Application
 app env = serve (Proxy @Api) $ server env
 
-runApp :: FilePath -> FilePath -> FilePath -> HostName -> PortNumber -> Env -> IO ()
+runApp ::
+  FilePath -> FilePath -> FilePath -> HostName -> PortNumber -> Env -> IO ()
 runApp certPath keyPath caCertPAth hostname port env = do
   putStrLn $ "Starting HTTP server on port " <> show port
   caStore <- loadCAStore caCertPAth
@@ -166,9 +166,7 @@ runApp certPath keyPath caCertPAth hostname port env = do
     (tlsSettings certPath keyPath)
       { tlsAllowedVersions = [TLS13, TLS12]
       , tlsCiphers = ciphersuite_strong
-      -- TODO Change back to true
-      , tlsWantClientCert = False
-      -- , tlsWantClientCert = True
+      , tlsWantClientCert = True
       , tlsServerHooks = mTLSHooks hostname caStore
       }
 
