@@ -2,10 +2,6 @@ module Pages.System where
 
 import Prelude
 
-import Apex (apexchart)
-import Api (Api)
-import Chart (updatedChartOptions)
-import Data.Array as Array
 import Data.Maybe (Maybe(..))
 import Data.UInt as UInt
 import Deku.Control as DC
@@ -15,16 +11,16 @@ import Deku.DOM.Attributes as DA
 import Deku.Hooks ((<#~>))
 import FRP.Poll (Poll)
 import Patternfly (dlistGroup)
-import System (CPUData(..), Island, IslandMemoryInformation(..), IslandsSystemData(..), SystemData(..))
+import System (CPUData(..), SystemData(..))
 
 type SystemPageState =
   { home ::
       { systemData :: Poll (Maybe SystemData)
-      , memoryData :: Poll (Array (Array Number))
+      , chart :: Nut
       }
   , proxy ::
       { systemData :: Poll (Maybe SystemData)
-      , memoryData :: Poll (Array (Array Number))
+      , chart :: Nut
       }
   }
 
@@ -49,25 +45,25 @@ makeIslandSystemDataCard systemDataMPoll =
             Just n -> (show $ (UInt.toNumber $ UInt.round $ (UInt.toNumber n / 1000.0) / 1000.0)) <> " GB"
         ]
 
-makeIslandMemoryChartCard :: Poll (Array (Array Number)) -> Nut
-makeIslandMemoryChartCard chartData =
-  DD.div [ DA.klass_ "pf-v5-l-grid__item", DA.style_ "height: 100%;"]
+makeIslandMemoryChartCard :: Nut -> Nut
+makeIslandMemoryChartCard chart =
+  DD.div [ DA.klass_ "pf-v5-l-grid__item", DA.style_ "height: 100%;" ]
     [ DD.div [ DA.klass_ "pf-v5-c-card__body pf-m-display-lg pf-m-full-height" ]
-      [ apexchart (chartData <#> updatedChartOptions) [ DA.style_ "height: 100%; display: block;" ] ]
+        [ chart ]
     ]
 
-makeIslandCardBody :: Poll (Maybe SystemData) -> Poll (Array (Array Number)) -> Nut
-makeIslandCardBody systemDataPoll chartDataPoll =
+makeIslandCardBody :: Poll (Maybe SystemData) -> Nut -> Nut
+makeIslandCardBody systemDataPoll chart =
   DD.div [ DA.klass_ "pf-v5-l-grid pf-m-all-6-col-on-lg pf-m-all--col-on-md" ]
     [ makeIslandSystemDataCard systemDataPoll
-    , makeIslandMemoryChartCard chartDataPoll
+    , makeIslandMemoryChartCard chart
     ]
 
 systemPage :: SystemPageState -> Nut
-systemPage { home, proxy } =
+systemPage { home, proxy } = Deku.do
   DD.div [ DA.klass_ "pf-v5-l-grid pf-m-gutter pf-m-all-6-col-on-lg pf-m-all-12-col-on-md" ]
-    [ dataCard "Home Island" home.systemData home.memoryData
-    , dataCard "Proxy Island" proxy.systemData proxy.memoryData
+    [ dataCard "Home Island" home.systemData home.chart
+    , dataCard "Proxy Island" proxy.systemData proxy.chart
     ]
   where
   dataCard islandName systemDataPoll chartDataPoll =

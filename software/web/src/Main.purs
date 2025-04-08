@@ -66,9 +66,25 @@ dekuApp = do
   api <- mkApi
 
   pure Deku.do
-    setPage /\ page <- DH.useState System
+    setPage /\ page <- DH.useState Overview
     let
       changePage newPage = do
+        _ <- case newPage of
+          System -> do
+            _ <- api.charters.home.subscribe api.islandState.home.memoryChartOptions
+            _ <- api.charters.proxy.subscribe api.islandState.proxy.memoryChartOptions
+
+            _ <- api.pollers.systemsDataPoller.force
+            _ <- api.pollers.memoryDataPoller.force
+            pure unit
+
+          _ -> do
+            _ <- api.pollers.memoryDataPoller.stop
+            _ <- api.pollers.systemsDataPoller.stop
+            _ <- api.charters.home.unsubscribe
+            _ <- api.charters.proxy.unsubscribe
+            pure unit
+
         setPage newPage
 
     DD.div [ DA.klass_ "pf-v5-c-page" ]
@@ -76,8 +92,14 @@ dekuApp = do
       , pageBody page
           { overviewPageState: { api }
           , systemPageState:
-              { home: api.islandState.home
-              , proxy: api.islandState.proxy
+              { home:
+                  { systemData: api.islandState.home.systemData
+                  , chart: api.islandState.home.chart
+                  }
+              , proxy:
+                  { systemData: api.islandState.proxy.systemData
+                  , chart: api.islandState.proxy.chart
+                  }
               }
           , logsPageState: { logsPoll: api.logging.logsPoll }
           }

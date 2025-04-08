@@ -22,7 +22,6 @@ package:
     - prelude
     - protobuf
     - random
-    - st
     - yoga-json
   test:
     main: Test.Main

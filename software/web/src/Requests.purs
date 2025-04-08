@@ -2,12 +2,14 @@ module Requests
   ( mkStreamStatusPoller
   , modifyStream
   , mkSystemsDataPoller
-  , mkMemoryDataPoller
+  , mkMemoryChartOptionsPoller
   , mkLogsPoller
   ) where
 
 import Prelude
 
+import Apexcharts (Apexoptions)
+import Chart (defaultChartOptions, updatedChartOptions)
 import Constants (getApiUrl)
 import Data.Array as Array
 import Data.ArrayBuffer.Builder (execPutM)
@@ -15,6 +17,7 @@ import Data.ArrayBuffer.DataView (byteLength)
 import Data.Either (Either(..))
 import Data.HTTP.Method (Method(..))
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
+import Data.Options (Options)
 import Data.Tuple.Nested ((/\))
 import Effect (Effect)
 import Effect.Aff (launchAff_)
@@ -122,12 +125,12 @@ mkSystemsDataPoller { setHomeSystemDataPoll, setProxySystemDataPoll } = do
         liftEffect $ updateIsland Home setHomeSystemDataPoll
         liftEffect $ updateIsland RemoteProxy setProxySystemDataPoll
 
-mkMemoryDataPoller
-  :: { setHomeMemoryDataPoll :: Array (Array Number) -> Effect Unit
-     , setProxyMemoryDataPoll :: Array (Array Number) -> Effect Unit
+mkMemoryChartOptionsPoller
+  :: { setHomeMemoryChartOptionsPoll :: Options Apexoptions -> Effect Unit
+     , setProxyMemoryChartOptionsPoll :: Options Apexoptions -> Effect Unit
      }
   -> Effect Poller
-mkMemoryDataPoller { setHomeMemoryDataPoll, setProxyMemoryDataPoll } = do
+mkMemoryChartOptionsPoller { setHomeMemoryChartOptionsPoll, setProxyMemoryChartOptionsPoll } = do
   mkPoller "memory" (30 * 1000) $ \body -> do
     result <- liftEffect $ runParserT body do
       resp <- Proto.parseAllIslandMemoryData (byteLength body)
@@ -140,15 +143,16 @@ mkMemoryDataPoller { setHomeMemoryDataPoll, setProxyMemoryDataPoll } = do
         liftEffect $ Console.log $ "Error getting memory data: " <> show err
       Right (AllIslandsMemoryData { allIslandMemoryData }) -> do
         let
-          getMemData island =
-            fromMaybe [] $ do
+          getOptions :: Island -> (Options Apexoptions)
+          getOptions island =
+            fromMaybe (defaultChartOptions 10.0) $ do
               IslandMemoryInformation info <-
                 Array.find
                   (\(IslandMemoryInformation info) -> info.island == island)
                   allIslandMemoryData
-              pure info.timeMem
-        liftEffect <<< setHomeMemoryDataPoll <<< getMemData $ Home
-        liftEffect <<< setProxyMemoryDataPoll <<< getMemData $ RemoteProxy
+              pure $ updatedChartOptions info.timeMem
+        liftEffect <<< setHomeMemoryChartOptionsPoll <<< getOptions $ Home
+        liftEffect <<< setProxyMemoryChartOptionsPoll <<< getOptions $ RemoteProxy
 
 mkLogsPoller :: (Array Log -> Effect Unit) -> Effect Poller
 mkLogsPoller setLogsPoll = do

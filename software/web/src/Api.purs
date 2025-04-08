@@ -2,8 +2,14 @@ module Api (Api(..), mkApi) where
 
 import Prelude
 
+import Apex (apexchart)
+import Apexcharts (Apexoptions)
+import Chart (defaultChartOptions)
 import Data.Maybe (Maybe(..))
+import Data.Options (Options)
 import Data.Tuple.Nested ((/\))
+import Deku.Core (Nut)
+import Deku.DOM.Attributes as DA
 import Deku.Effect as DE
 import Effect (Effect)
 import Effect.Ref as Ref
@@ -11,18 +17,36 @@ import FRP.Poll (Poll)
 import Logs (Log)
 import Poller (Poller)
 import Radio (Stream(..), StreamStatus(..))
-import Requests (mkLogsPoller, mkMemoryDataPoller, mkStreamStatusPoller, mkSystemsDataPoller, modifyStream)
+import Requests
+  ( mkLogsPoller
+  , mkMemoryChartOptionsPoller
+  , mkStreamStatusPoller
+  , mkSystemsDataPoller
+  , modifyStream
+  )
 import System (SystemData)
 
 type Api =
   { islandState ::
       { home ::
           { systemData :: Poll (Maybe SystemData)
-          , memoryData :: Poll (Array (Array Number))
+          , memoryChartOptions :: Poll (Options Apexoptions)
+          , chart :: Nut
           }
       , proxy ::
           { systemData :: Poll (Maybe SystemData)
-          , memoryData :: Poll (Array (Array Number))
+          , memoryChartOptions :: Poll (Options Apexoptions)
+          , chart :: Nut
+          }
+      }
+  , charters ::
+      { home ::
+          { subscribe :: Poll (Options Apexoptions) -> Effect Unit
+          , unsubscribe :: Effect Unit
+          }
+      , proxy ::
+          { subscribe :: Poll (Options Apexoptions) -> Effect Unit
+          , unsubscribe :: Effect Unit
           }
       }
   , polls ::
@@ -51,10 +75,13 @@ mkApi :: Effect Api
 mkApi = do
   -- Systems Polls
   setHomeSystemDataPoll /\ homeSystemDataPoll <- DE.useState Nothing
-  setHomeMemoryDataPoll /\ homeMemoryDataPoll <- DE.useState []
+  _ /\ setHomeMemoryChartOptionsPoll /\ homeMemoryChartOptionsPoll <- DE.useHot (defaultChartOptions 10.0)
 
   setProxySystemDataPoll /\ proxySystemDataPoll <- DE.useState Nothing
-  setProxyMemoryDataPoll /\ proxyMemoryDataPoll <- DE.useState []
+  _ /\ setProxyMemoryChartOptionsPoll /\ proxyMemoryChartOptionsPoll <- DE.useHot (defaultChartOptions 10.0)
+
+  homeChartStuff <- apexchart [ DA.style_ "display: block;" ]
+  proxyChartStuff <- apexchart [ DA.style_ "display: block;" ]
 
   -- Stream Polls
   _ /\ setStreamStatusPoll /\ streamStatusPoll <- DE.useHot Off
@@ -71,7 +98,7 @@ mkApi = do
   -- Pollers
   streamStatusPoller <- mkStreamStatusPoller streamStateIdRef selectStream setStreamStatusPoll
   systemsDataPoller <- mkSystemsDataPoller { setHomeSystemDataPoll, setProxySystemDataPoll }
-  memoryDataPoller <- mkMemoryDataPoller { setHomeMemoryDataPoll, setProxyMemoryDataPoll }
+  memoryDataPoller <- mkMemoryChartOptionsPoller { setHomeMemoryChartOptionsPoll, setProxyMemoryChartOptionsPoll }
   logsPoller <- mkLogsPoller setLogsPoll
 
   streamStatusPoller.start
@@ -83,16 +110,33 @@ mkApi = do
     { islandState:
         { home:
             { systemData: homeSystemDataPoll
-            , memoryData: homeMemoryDataPoll
+            , memoryChartOptions: homeMemoryChartOptionsPoll
+            , chart: homeChartStuff.chart
             }
         , proxy:
             { systemData: proxySystemDataPoll
-            , memoryData: proxyMemoryDataPoll
+            , memoryChartOptions: proxyMemoryChartOptionsPoll
+            , chart: proxyChartStuff.chart
             }
         }
     , polls: { streamStatusPoll, selectedStreamPoll }
     , requests: { modifyStream: modifyStream streamStateIdRef streamStatusPoller }
     , setters: { selectStream }
     , logging: { logsPoll, setLogsPoll }
-    , pollers: { streamStatusPoller, memoryDataPoller, systemsDataPoller, logsPoller }
+    , pollers:
+        { streamStatusPoller
+        , memoryDataPoller
+        , systemsDataPoller
+        , logsPoller
+        }
+    , charters:
+        { home:
+            { subscribe: homeChartStuff.subscribe
+            , unsubscribe: homeChartStuff.unsubscribe
+            }
+        , proxy:
+            { subscribe: proxyChartStuff.subscribe
+            , unsubscribe: proxyChartStuff.unsubscribe
+            }
+        }
     }
