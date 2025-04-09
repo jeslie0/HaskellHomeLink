@@ -1,83 +1,100 @@
 { self, pkgs, packageName, ghcVersion, nix-filter, web, ... }:
 let
-  armv7 = rec {
-    filteredSrc =
-      nix-filter {
-        root =
-          self;
+  filteredSrc =
+    nix-filter {
+      root =
+        self;
 
-        include =
-          [ "cabal.project" "software/libs" "software/proto" "software/src" ];
+      include =
+        [ "cabal.project" "software/libs" "software/proto" "software/src" ];
 
-        exclude = [ ];
+      exclude = [ ];
+    };
+
+  mkHome = haskell-nix:
+    ((haskell-nix.project' {
+      compiler-nix-name =
+        ghcVersion;
+
+      src =
+        filteredSrc;
+
+      modules = [{
+        packages = {
+          ${packageName}.components.exes.Home = {
+            build-tools = [ pkgs.protobuf ];
+            dontStrip = false;
+          };
+        };
+      }];
+    }).flake {}).packages."${packageName}:exe:Home";
+
+  mkStripped = { name, pkg, postInstall ? "" }:
+    pkgs.stdenv.mkDerivation {
+      inherit name postInstall;
+
+      src = nix-filter {
+        root = ./.;
+        include = [];
       };
 
-    HomeArmV7 =
-      ((pkgs.pkgsCross.armv7l-hf-multiplatform.haskell-nix.project' {
-        compiler-nix-name =
-          ghcVersion;
-
-        src =
-          filteredSrc;
-
-        modules = [{
-          packages = {
-            ${packageName}.components.exes.Home = {
-              build-tools = [ pkgs.protobuf ];
-              dontStrip = false;
-            };
-          };
-        }];
-      }).flake {}).packages."${packageName}:exe:Home";
-
-    StrippedHomeArmV7 =
-      pkgs.stdenv.mkDerivation {
-        name =
-          "home-armv7-stripped";
-
-        src = nix-filter {
-          root = ./.;
-          include = [];
-        };
-
-        installPhase = ''
+      installPhase = ''
           mkdir $out;
-          cp -r ${HomeArmV7}/* $out
+          cp -r ${pkg}/* $out
           chmod -R u+w $out
           runHook postInstall
         '';
 
-        postInstall = ''
-          remove-references-to -t /nix/store/*-warp-lib-warp-armv7l-* $out/bin/Home
-       '';
+      nativeBuildInputs =
+        [ pkgs.removeReferencesTo ];
+    };
 
-        nativeBuildInputs =
-          [ pkgs.removeReferencesTo ];
+  mkImage = { tag, architecture, pkg }:
+    pkgs.dockerTools.buildImage {
+      inherit tag architecture;
+      name =
+        packageName;
+
+      copyToRoot = with pkgs.dockerTools; [
+        web
+        caCertificates
+      ];
+
+      config = {
+        Cmd =
+          [ "${pkg}/bin/Home" "--config=/mnt/home_config.json" "+RTS" "-N4" "-RTS" ];
+      };
+    };
+
+  armv7 = rec {
+    home =
+      mkHome pkgs.pkgsCross.armv7l-hf-multiplatform.haskell-nix;
+
+    strippedHome =
+      mkStripped {
+        name = "home-armv7-stripped";
+        pkg = home;
+        postInstall = "remove-references-to -t /nix/store/*-warp-lib-warp-armv7l-* $out/bin/Home";
       };
 
-    HomeArmV7DockerImage =
-      pkgs.dockerTools.buildImage {
-        name =
-          packageName;
+    homeDockerImage =
+      mkImage { tag = home.version; architecture = "arm"; pkg = strippedHome; };
+  };
 
-        tag =
-          HomeArmV7.version;
+  x86_64-linux = rec {
+    home =
+      mkHome pkgs.haskell-nix;
 
-        architecture =
-          "arm";
-
-        copyToRoot = with pkgs.dockerTools; [
-          web
-          caCertificates
-        ];
-
-        config = {
-          Cmd =
-            [ "${StrippedHomeArmV7}/bin/Home" "--config=/mnt/home_config.json" "+RTS" "-N4" "-RTS" ];
-        };
+    strippedHome =
+      mkStripped {
+        name = "home-x86_64-stripped";
+        pkg = home;
       };
+
+    homeDockerImage =
+      mkImage { tag = home.version; architecture = "hostPlatform"; pkg = strippedHome; };
   };
 in
 {
-  inherit armv7;
+  inherit armv7 x86_64-linux;
 }
