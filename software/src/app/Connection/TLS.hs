@@ -3,7 +3,7 @@
 module Connection.TLS where
 
 import Connection.TCP as TCP
-import Control.Exception (bracket)
+import Control.Exception (bracket, catch, IOException)
 import Data.ByteString qualified as B
 import Data.Default.Class (def)
 import Data.X509 as X509
@@ -19,6 +19,7 @@ import Data.X509.Validation (
 import Network.Socket (ServiceName, accept, close)
 import Network.TLS as TLS
 import Network.TLS.Extra (ciphersuite_strong)
+
 
 aquireActiveServerSocketTLS ::
   TLS.TLSParams params =>
@@ -52,6 +53,8 @@ aquireActiveServerSocketTLS params port withBytes withConn cleanupCtx = do
 
   recvFunc serverSock ctx = do
     msg <- TLS.recvData ctx
+      `catch` handleException @TLS.TLSException
+      `catch` handleException @IOException
     if B.null msg
       then do
         cleanupCtx
@@ -60,6 +63,9 @@ aquireActiveServerSocketTLS params port withBytes withConn cleanupCtx = do
       else do
         withBytes msg
         recvFunc serverSock ctx
+
+  handleException :: a -> IO B.ByteString
+  handleException _ = pure ""
 
 aquireActiveClientSocketTLS ::
   TLS.TLSParams params =>
@@ -83,6 +89,8 @@ aquireActiveClientSocketTLS params host port withBytes withSock cleanupCtx = do
  where
   recvFunc ctx = do
     msg <- TLS.recvData ctx
+      `catch` handleException @TLS.TLSException
+      `catch` handleException @IOException
     if B.null msg
       then do
         -- Socket dead
@@ -90,6 +98,9 @@ aquireActiveClientSocketTLS params host port withBytes withSock cleanupCtx = do
       else do
         withBytes msg
         recvFunc ctx
+       
+  handleException :: a -> IO B.ByteString
+  handleException _ = pure ""
 
 loadCredentials :: FilePath -> FilePath -> IO (Maybe Credential)
 loadCredentials certPath keyPath = do
