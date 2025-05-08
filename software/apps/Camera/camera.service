@@ -1,0 +1,6 @@
+[Unit]
+Description=Take picture
+
+[Service]
+Type=oneshot
+ExecStart=raspistill -q 25 -o /home/james/img.jpeg -w 512 -h 512 -rot 180

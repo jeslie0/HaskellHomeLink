@@ -10,6 +10,7 @@ data Island
   = Home
   | RemoteProxy
   | LocalHTTP
+  | Camera
   | Unknown
   deriving (Generic, Eq, Ord, Enum, Show)
 
@@ -17,17 +18,19 @@ instance FromMessage Proto.ISLAND Island where
   fromMessage Proto.HOME = Home
   fromMessage Proto.LOCAL_HTTP = LocalHTTP
   fromMessage Proto.REMOTE_PROXY = RemoteProxy
+  fromMessage Proto.CAMERA = Camera
   fromMessage _ = Unknown
 
 instance ToMessage Proto.ISLAND Island where
   toMessage Home = Proto.HOME
   toMessage LocalHTTP = Proto.LOCAL_HTTP
   toMessage RemoteProxy = Proto.REMOTE_PROXY
+  toMessage Camera = Proto.CAMERA
   toMessage Unknown = Proto.UNKNOWN
 
 islands :: [Island]
 islands =
-  [Home, RemoteProxy, LocalHTTP]
+  [Home, RemoteProxy, LocalHTTP, Camera]
 
 proxies :: [Island]
 proxies = [RemoteProxy, LocalHTTP]

@@ -15,7 +15,6 @@ import Effect (Effect)
 import Effect.Ref as Ref
 import FRP.Poll (Poll)
 import Logs (Log)
-import Poller (Poller)
 import Radio (Stream(..), StreamStatus(..))
 import Requests
   ( AppPollers
@@ -98,9 +97,6 @@ mkApi = do
   logsPoller <- mkLogsPoller setLogsPoll
 
   streamStatusPoller.start
-  memoryDataPoller.start
-  systemsDataPoller.start
-  logsPoller.start
 
   pure
     { islandState:

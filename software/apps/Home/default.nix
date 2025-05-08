@@ -92,7 +92,7 @@ let
       };
 
     homeDockerImage =
-      mkImage { tag = home.version; architecture = "hostPlatform"; pkg = strippedHome; };
+      mkImage { tag = home.version; architecture = "x86_64-linux"; pkg = strippedHome; };
   };
 in
 {
