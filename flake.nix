@@ -30,14 +30,14 @@
       nixpkgsFor = forAllSystems (system:
         import nixpkgs {
           inherit system;
-          overlays = [ haskellNix.overlay
+          overlays = [ # haskellNix.overlay this causes GHC to be rebuilt
                        ps-overlay.overlays.default
                        mkSpagoDerivation.overlays.default
                      ];
         });
 
       ghcVersion =
-        "ghc966";
+        "ghc984";
 
       extendHaskellPackages = { haskellPackages, alsa-lib }:
         haskellPackages.extend ( hpFinal: hpPrev: {
@@ -97,7 +97,7 @@
 
               HomeArmv7 =
                 import ./software/apps/Home/default.nix {
-                  inherit self pkgs ghcVersion web;
+                  inherit self pkgs ghcVersion web haskellNix system;
 
                   packageName =
                     packageName system;
@@ -108,7 +108,7 @@
 
               ProxyAArch64 =
                 import ./software/apps/Proxy/default.nix {
-                  inherit self pkgs ghcVersion web;
+                  inherit self pkgs ghcVersion web haskellNix system;
 
                   packageName =
                     packageName system;
@@ -119,7 +119,7 @@
 
               linux =
                 import ./nix/linux.nix {
-                  inherit self pkgs ghcVersion;
+                  inherit self pkgs ghcVersion haskellNix system;
 
                   packageName =
                     packageName system;
@@ -134,7 +134,7 @@
                 nixpkgsFor.${system};
 
               default =
-                self.packages.${system}.linux;
+                linux.linux;
 
               project =
                 linux.project;
@@ -164,7 +164,7 @@
                     purs-tidy
                     protobuf
                     purescript-protobuf.packages.${system}.protoc-gen-purescript
-                    (import ./nix/hls-wrapper.nix { inherit pkgs ghcVersion; })
+                    (import ./nix/hls-wrapper.nix { inherit pkgs ghcVersion haskellNix system; })
                   ];
 
                   inputsFrom = [ self.packages.${system}.web ];
@@ -177,15 +177,17 @@
                 exactDeps =
                   false;
 
-                crossPlatforms =
-                  ps: [ ps.armv7l-hf-multiplatform ps.aarch64-multiplatform ];
+                # crossPlatforms =
+                #   ps: [ ps.armv7l-hf-multiplatform ps.aarch64-multiplatform ];
 
                 inputsFrom =
                   [ toolsShell ];
 
                 tools = {
                   haskell-language-server =
-                    "latest";
+                    {};
+                  cabal =
+                    "3.12.1.0";
                 };
               }
           );

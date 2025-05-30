@@ -30,7 +30,7 @@ import Alsa.PCM.Stream (
   writeParamsToDriver,
  )
 import Control.Exception (Exception (..), bracket, catch)
-import Control.Monad (void)
+import Control.Monad (void, forever)
 import Data.ByteString qualified as BS
 import Data.ByteString.Internal qualified as BS
 import Data.Text qualified as T
@@ -177,7 +177,13 @@ startAudioStream rtr url updateStreamStatus = do
   mp3Dec <- newMP3Dec
   info <- newMP3DecFrameInfo
 
-  allocaArray @Int16 maxSamplesPerFrame $ \pcmData ->
+  _ <- allocaArray @Int16 maxSamplesPerFrame $ \pcmData -> do
+    forever $ runStream pcmData mp3Dec info
+
+  updateStreamStatus Off
+  reportLog rtr Error "Radio stream stopped without request"
+ where
+  runStream pcmData mp3Dec info = do
     withAudioStream rtr url $ \rsp -> do
       if HTTP.responseStatus rsp /= ok200
         then
@@ -192,9 +198,6 @@ startAudioStream rtr url updateStreamStatus = do
               updateStreamStatus Playing
               go bodyReader handle mp3Dec info pcmData ""
 
-  updateStreamStatus Off
-  reportLog rtr Error "Radio stream stopped without request"
- where
   go ::
     BodyReader
     -> PCMHandle

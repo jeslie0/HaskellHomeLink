@@ -28,3 +28,20 @@ source-repository-package
     --sha256: sha256-p3gWSHnkaEHVPYE5J/OwwQ6wAcRwOmiC+yp6nkNW+NM=
     subdir:
         cborg
+
+-- Required to get proto-lens-protoc to work in development
+source-repository-package
+  type: git
+  location: https://github.com/google/ghc-source-gen
+  tag: d9707003aa9e922afc08c4f2b19d550c8dd344d3
+  --sha256: sha256-P8b4jLajINmclOC8w327dMwHVuyRAjAculSyBQY0dKI=
+
+-- Required to get Servant-server working
+source-repository-package
+  type: git
+  location: https://github.com/haskell-servant/servant
+  tag: e07e92abd62641fc0f199a33e5131de273140cb0
+  --sha256: sha256-zWlU6/7MU0J/amOSZHEgVltMN9K4luNK1JV6irM9ozM=
+  subdir:
+    servant-server
+    servant

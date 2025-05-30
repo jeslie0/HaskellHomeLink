@@ -13,6 +13,7 @@ module Proxy.Env (
   logs,
   cleanupEnv,
   addTLSServerConnection,
+  websocketsMap,
 ) where
 
 import ConnectionManager (
@@ -22,6 +23,7 @@ import ConnectionManager (
  )
 import Control.Concurrent (MVar, newEmptyMVar, newMVar)
 import Control.Monad.Reader (ReaderT)
+import Data.Int (Int32)
 import Data.Map.Strict qualified as Map
 import Data.Vector qualified as V
 import Home.AudioStreamTypes (StationId, StreamStatus (..))
@@ -30,8 +32,9 @@ import Lens.Micro ((^.))
 import Lens.Micro.TH (makeLenses)
 import Logger (Logs, mkLogs)
 import Msg (Msg)
-import Network.Socket (Socket, PortNumber)
+import Network.Socket (PortNumber, Socket)
 import Network.TLS (ServerParams)
+import Network.WebSockets qualified as WS
 import Router (Router, connectionsManager, handleBytes, mkRouter)
 import State (State, mkState)
 import System (SystemData, mkSystemData)
@@ -42,6 +45,7 @@ data Env = Env
   , _streamStatusState :: State (StreamStatus, StationId)
   , _systemMap :: MVar (Map.Map Island SystemData)
   , _memoryMap :: MVar (Map.Map Island (V.Vector MemoryInformation))
+  , _websocketsMap :: MVar (Map.Map Int32 WS.Connection)
   , _logs :: Logs
   }
 
@@ -58,6 +62,7 @@ mkEnv island = do
     systemData <- mkSystemData $ if island == LocalHTTP then Home else island
     newMVar $ Map.insert island systemData Map.empty
   _memoryMap <- newMVar Map.empty
+  _websocketsMap <- newMVar Map.empty
   _logs <- mkLogs
   pure $
     Env
@@ -65,6 +70,7 @@ mkEnv island = do
       , _streamStatusState
       , _systemMap
       , _memoryMap
+      , _websocketsMap
       , _logs
       }
 

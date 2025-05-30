@@ -1,4 +1,4 @@
-{ self, pkgs, packageName, ghcVersion, nix-filter, web, ... }:
+{ self, pkgs, packageName, ghcVersion, nix-filter, web, system, haskellNix,... }:
 let
   aarch64 = rec {
     filteredSrc =
@@ -13,7 +13,7 @@ let
       };
 
     ProxyAArch64 =
-      ((pkgs.pkgsCross.aarch64-multiplatform.haskell-nix.project' {
+      ((haskellNix.legacyPackages.${system}.pkgsCross.aarch64-multiplatform.haskell-nix.project' {
         compiler-nix-name =
           ghcVersion;
 

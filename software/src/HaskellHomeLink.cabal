@@ -78,8 +78,6 @@ executable Home
                       Islands,
                       Logger,
                       Msg,
-                      REST.Api,
-                      REST.HomeServer,
                       Router,
                       System,
                       System.CPU,
@@ -90,8 +88,6 @@ executable Home
                       Proto.Messages_Fields,
                       ProtoHelper,
                       Proxy.Env,
-                      Proxy.Handler,
-                      Proxy.Main,
                       Proxy.Options,
                       TH,
                       Threads,
@@ -103,7 +99,7 @@ executable Home
     build-depends:    aeson,
                       alsa-hs,
                       attoparsec,
-                      base ^>=4.18.2.1,
+                      base ^>=4.19.2.0,
                       bytestring,
                       cereal,
                       containers,
@@ -128,8 +124,8 @@ executable Home
                       random,
                       -- resourcet,
                       -- servant,
-                      servant-server,
-                      servant-proto-lens,
+                      -- servant-server,
+                      -- servant-proto-lens,
                       template-haskell,
                       text,
                       time,
@@ -137,11 +133,11 @@ executable Home
                       -- transformers,
                       transformers-base,
                       -- unordered-containers,
-                      vector,
+                      vector
                       -- wai,
-                      wai-app-static,
-                      warp,
-                      warp-tls
+                      -- wai-app-static,
+                      -- warp,
+                      -- warp-tls
 
 
     build-tool-depends: proto-lens-protoc:proto-lens-protoc ^>= 0.8.0.1
@@ -191,6 +187,7 @@ executable Proxy
                       Proxy.Env,
                       Proxy.Handler,
                       Proxy.Options,
+                      Proxy.WebsocketServer,
                       TH,
                       Threads,
                       Utilities.Either
@@ -200,7 +197,7 @@ executable Proxy
     -- Other library packages from which modules are imported.
     build-depends:    aeson,
                       attoparsec,
-                      base ^>=4.18.2.1,
+                      base ^>=4.19.2.0,
                       bytestring,
                       cereal,
                       containers,
@@ -229,7 +226,9 @@ executable Proxy
                       vector,
                       wai-app-static,
                       warp,
-                      warp-tls
+                      warp-tls,
+                      wai-websockets,
+                      websockets,
 
 
     build-tool-depends: proto-lens-protoc:proto-lens-protoc ^>= 0.8.0.1
@@ -287,7 +286,7 @@ executable Camera
     -- Other library packages from which modules are imported.
     build-depends:    aeson,
                       attoparsec,
-                      base ^>=4.18.2.1,
+                      base ^>=4.19.2.0,
                       bytestring,
                       cereal,
                       containers,

@@ -1,4 +1,11 @@
-{ self, pkgs, packageName, ghcVersion, nix-filter, web, ... }:
+{ self
+, pkgs
+, packageName
+, ghcVersion
+, nix-filter
+, system
+, haskellNix
+, ... }:
 let
   filteredSrc =
     nix-filter {
@@ -56,7 +63,6 @@ let
         packageName;
 
       copyToRoot = with pkgs.dockerTools; [
-        web
         caCertificates
       ];
 
@@ -68,13 +74,14 @@ let
 
   armv7 = rec {
     home =
-      mkHome pkgs.pkgsCross.armv7l-hf-multiplatform.haskell-nix;
+      mkHome haskellNix.legacyPackages.${system}.pkgsCross.armv7l-hf-multiplatform.haskell-nix;
 
     strippedHome =
       mkStripped {
         name = "home-armv7-stripped";
         pkg = home;
-        postInstall = "remove-references-to -t /nix/store/*-warp-lib-warp-armv7l-* $out/bin/Home";
+        # We aren't using warp on the home server anymore
+        # postInstall = "remove-references-to -t /nix/store/*-warp-lib-warp-armv7l-* $out/bin/Home";
       };
 
     homeDockerImage =
@@ -83,7 +90,7 @@ let
 
   x86_64-linux = rec {
     home =
-      mkHome pkgs.haskell-nix;
+      mkHome haskellNix.legacyPackages.${system}.haskell-nix;
 
     strippedHome =
       mkStripped {

@@ -3,6 +3,8 @@
 , packageName
 , extendHaskellPackages
 , self
+, haskellNix
+, system
 , ...
 }:
 let
@@ -20,7 +22,7 @@ let
 
   crossRaspberryPi =
     # (haskellPackages pkgs.pkgsCross.raspberryPi).callCabal2nix (packageName) ./.. {};
-    ((pkgs.pkgsCross.raspberryPi.haskell-nix.project' {
+    ((haskellNix.legacyPackages.${system}.pkgsCross.raspberryPi.haskell-nix.project' {
       compiler-nix-name = ghcVersion;
       src = dir;
       modules = [{

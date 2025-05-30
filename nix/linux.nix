@@ -3,6 +3,8 @@
 , ghcVersion
 , packageName
 , nix-filter
+, haskellNix
+, system
 , ...
 }:
 let
@@ -18,13 +20,14 @@ let
       };
 
   project =
-    pkgs.haskell-nix.project' {
+    haskellNix.legacyPackages.${system}.haskell-nix.cabalProject' {
       compiler-nix-name = ghcVersion;
       src = dir;
       modules = [{
         packages = {
           ${packageName}.components.exes.Home.build-tools =
             [ pkgs.protobuf
+              # haskellNix.legacyPackages.${system}.haskell-nix.haskellPackages.ghc966
               pkgs.haskellPackages.proto-lens-protoc
             ];
         };

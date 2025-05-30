@@ -9,6 +9,7 @@ import Control.Concurrent (MVar, readMVar)
 import Control.Exception (SomeAsyncException, catch, throwIO)
 import Control.Monad (void)
 import Control.Monad.IO.Class (liftIO)
+import Data.Int (Int32)
 import Data.Map.Strict qualified as Map
 import Data.ProtoLens (defMessage)
 import Data.Vector qualified as V
@@ -33,9 +34,11 @@ import Network.Wai.Handler.WarpTLS (
   tlsAllowedVersions,
   tlsSettings,
  )
+import Network.WebSockets qualified as WS
 import Proto.Messages qualified as Proto
 import Proto.Messages_Fields qualified as Proto
 import ProtoHelper (toMessage)
+import Proxy.WebsocketServer (websocketServer)
 import REST.Api (Api)
 import Router (Router, trySendMessage)
 import Servant (
@@ -57,6 +60,7 @@ data Env = Env
   { _streamStatusState :: State (StreamStatus, StationId)
   , _systemDataState :: MVar (Map.Map Island SystemData)
   , _memoryMap :: MVar (Map.Map Island (V.Vector MemoryInformation))
+  , _wsConns :: MVar (Map.Map Int32 WS.Connection)
   , _router :: Router
   , _logs :: Logs
   }
@@ -67,15 +71,17 @@ mkEnv ::
   State (StreamStatus, StationId)
   -> MVar (Map.Map Island SystemData)
   -> MVar (Map.Map Island (V.Vector MemoryInformation))
+  -> MVar (Map.Map Int32 WS.Connection)
   -> Logs
   -> Router
   -> IO Env
-mkEnv streamStatus systemState memMap logs' rtr = do
+mkEnv streamStatus systemState memMap wsConns' logs' rtr = do
   pure $
     Env
       { _streamStatusState = streamStatus
       , _systemDataState = systemState
       , _memoryMap = memMap
+      , _wsConns = wsConns'
       , _router = rtr
       , _logs = logs'
       }
@@ -150,7 +156,10 @@ serveDir path = do
   serveDirectoryWith staticSettings
 
 app :: Env -> Application
-app env = serve (Proxy @Api) $ server env
+app env =
+  websocketServer (env ^. wsConns) $
+    serve (Proxy @Api) $
+      server env
 
 runApp ::
   FilePath -> FilePath -> FilePath -> HostName -> PortNumber -> Env -> IO ()

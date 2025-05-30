@@ -1,11 +1,12 @@
 module Proxy.Main (proxyMain, main) where
 
 import Connection.TLS (setupTLSServerParams)
-import Control.Concurrent (MVar, forkIO, killThread)
+import Control.Concurrent (MVar, forkIO, killThread, modifyMVar_)
 import Control.Exception.Lifted (bracket)
 import Control.Monad (void, when)
 import Control.Monad.Trans (liftIO)
 import Data.Aeson (eitherDecodeFileStrict)
+import Data.Int (Int32)
 import Data.Map.Strict qualified as Map
 import Data.ProtoLens (defMessage)
 import Data.Vector qualified as V
@@ -20,12 +21,13 @@ import EventLoop (
   runEventLoopT,
   setInterval,
  )
-import Home.AudioStreamTypes (StationId, StreamStatus)
+import Home.AudioStreamTypes (StationId, StreamStatus (..))
 import Islands (Island (..))
 import Lens.Micro
 import Logger (Logs)
 import Network.Socket (HostName, PortNumber, Socket, close)
 import Network.TLS (ServerParams)
+import Network.WebSockets qualified as WS
 import Options (runCommand)
 import Proto.Messages qualified as Proto
 import ProtoHelper (toMessage)
@@ -38,7 +40,7 @@ import Proxy.Env (
   mkEnv,
   router,
   streamStatusState,
-  systemMap,
+  systemMap, websocketsMap,
  )
 import Proxy.Handler (ExProxyHandler (..), proxyHandler)
 import Proxy.Options (
@@ -51,12 +53,13 @@ import Proxy.Options (
   httpsKeyPath,
   tlsCACertificatePath,
   tlsCertificatePath,
+  tlsHostname,
   tlsKeyPath,
-  tlsPort, tlsHostname,
+  tlsPort,
  )
 import REST.HomeServer qualified as HTTP
 import Router (Router, trySendMessage)
-import State (State)
+import State (State, setState)
 import System (SystemData, mkSystemData)
 import System.Memory (MemoryInformation)
 
@@ -69,48 +72,40 @@ httpServer ::
   -> State (StreamStatus, StationId)
   -> MVar (Map.Map Island SystemData)
   -> MVar (Map.Map Island (V.Vector MemoryInformation))
+  -> MVar (Map.Map Int32 WS.Connection)
   -> Logs
   -> Router
   -> IO ()
-httpServer certPath keyPath caCertPath host port state systemData memoryData logs' rtr = do
-  env <- HTTP.mkEnv state systemData memoryData logs' rtr
+httpServer certPath keyPath caCertPath host port state systemData memoryData wsConns logs' rtr = do
+  env <- HTTP.mkEnv state systemData memoryData wsConns logs' rtr
   HTTP.runApp certPath keyPath caCertPath host port env
-
--- mkServerSocket ::
---   Router
---   -> EventLoop (Island, ExProxyHandler)
---   -> IO Socket
--- mkServerSocket rtr loop =
---   addServerConnection @Proto.ProxyEnvelope
---     (\(island, msg') -> addMsgIO (island, ExProxyHandler msg') loop)
---     rtr
---     sendSystemData
---     (pure ())
---  where
---   sendSystemData = do
---     systemMsg <-
---       toMessage @Proto.SystemData @SystemData <$> mkSystemData RemoteProxy
---     void . trySendMessage rtr LocalHTTP $ toProxyEnvelope systemMsg
 
 mkTLSServerSocket ::
   ServerParams
   -> PortNumber
-  -> Router
+  -> Env
   -> EventLoop (Island, ExProxyHandler)
   -> IO Socket
-mkTLSServerSocket params port rtr loop = do
+mkTLSServerSocket params port env loop = do
   addTLSServerConnection @Proto.ProxyEnvelope
     params
     (\(island, msg') -> addMsgIO (island, ExProxyHandler msg') loop)
-    rtr
+    (env ^. router)
     port
     sendSystemData
-    (pure ())
+    onDisconnect
  where
   sendSystemData = do
     systemMsg <-
       toMessage @Proto.SystemData @SystemData <$> mkSystemData RemoteProxy
-    void . trySendMessage rtr LocalHTTP $ toProxyEnvelope systemMsg
+    void . trySendMessage (env ^. router) LocalHTTP $ toProxyEnvelope systemMsg
+
+  -- When we disconnect, we need to remove the HOME connection from
+  -- the http resources
+  onDisconnect = do
+    modifyMVar_ (env ^. systemMap) $ pure . Map.delete Home
+    modifyMVar_ (env ^. memoryMap) $ pure . Map.delete Home
+    setState (Off, 0) (env ^. streamStatusState)
 
 createHttpServerThread ::
   FilePath -> FilePath -> FilePath -> HostName -> PortNumber -> Env -> IO ()
@@ -124,6 +119,7 @@ createHttpServerThread certPath keyPath caCertPath host port env =
     (env ^. streamStatusState)
     (env ^. systemMap)
     (env ^. memoryMap)
+    (env ^. websocketsMap)
     (env ^. logs)
     (env ^. router)
 
@@ -141,7 +137,7 @@ proxyMain ::
   -> HostName
   -> PortNumber
   -> Env
-  -> (Router -> EventLoop (Island, ExProxyHandler) -> IO a)
+  -> (Env -> EventLoop (Island, ExProxyHandler) -> IO a)
   -> (a -> IO ())
   -> Island
   -> IO ()
@@ -155,7 +151,7 @@ proxyMain certPath keyPath caCertPath host port env mkConnection cleanupConn isl
   action :: EventLoopT Env (Island, ExProxyHandler) IO ()
   action = do
     loop <- getLoop
-    bracket (liftIO $ mkConnection (env ^. router) loop) (liftIO . cleanupConn) $ \_ -> do
+    bracket (liftIO $ mkConnection env loop) (liftIO . cleanupConn) $ \_ -> do
       when (island == RemoteProxy) startCheckMemoryPoll
       start $ uncurry proxyHandler
 

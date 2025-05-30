@@ -71,6 +71,7 @@ data Island
   = Home
   | LocalHTTP
   | RemoteProxy
+  | Camera
   | UnknownIsland
 
 islands :: Array Island
@@ -85,12 +86,14 @@ instance Show Island where
   show Home = "Home"
   show LocalHTTP = "Local Proxy"
   show RemoteProxy = "Remote Proxy"
+  show Camera = "Camera"
   show UnknownIsland = "Unknown"
 
 instance FromMessage Proto.ISLAND Island IslandError where
   fromMessage Proto.ISLAND_HOME = Right Home
   fromMessage Proto.ISLAND_LOCAL_HTTP = Right LocalHTTP
   fromMessage Proto.ISLAND_REMOTE_PROXY = Right RemoteProxy
+  fromMessage Proto.ISLAND_CAMERA = Right Camera
   fromMessage Proto.ISLAND_UNKNOWN = Right UnknownIsland
 
 instance SayError IslandError where
