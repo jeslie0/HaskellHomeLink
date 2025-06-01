@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module REST.HomeServer (runApp, mkEnv, router) where
+module Proxy.REST.HomeServer (runApp, mkEnv, router) where
 
 import Connection.TLS (loadCAStore, mTLSHooks)
 import Control.Concurrent (MVar, readMVar)
@@ -39,7 +39,7 @@ import Proto.Messages qualified as Proto
 import Proto.Messages_Fields qualified as Proto
 import ProtoHelper (toMessage)
 import Proxy.WebsocketServer (websocketServer)
-import REST.Api (Api)
+import Proxy.REST.Api (Api)
 import Router (Router, trySendMessage)
 import Servant (
   Handler,

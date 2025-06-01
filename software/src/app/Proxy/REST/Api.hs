@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeOperators #-}
 
-module REST.Api (Api, Radio, RadioCommand (..), Connection) where
+module Proxy.REST.Api (Api, Radio, RadioCommand (..), Connection) where
 
 import Proto.Messages qualified as Proto
 import Servant (

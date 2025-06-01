@@ -122,6 +122,7 @@ executable Home
                       proto-lens,
                       proto-lens-runtime,
                       random,
+                      rxtx,
                       -- resourcet,
                       -- servant,
                       -- servant-server,
@@ -151,177 +152,178 @@ executable Home
     ghc-options: -main-is Home.Main -O2 -threaded -split-objs
                  -- -Wunused-packages
 
-executable Proxy
-    -- Import common warning flags.
-    import:           warnings
+-- executable Proxy
+--     -- Import common warning flags.
+--     import:           warnings
 
-    -- .hs or .lhs file containing the Main module.
-    main-is:          Proxy/Main.hs
-
-
-    -- Modules included in this executable, other than Main.
-    other-modules:    Connection.Socket,
-                      Connection.TCP,
-                      Connection.TLS,
-                      Connection.Rx,
-                      Connection.RxTx,
-                      Connection.Tx,
-                      ConnectionManager,
-                      Envelope,
-                      EventLoop,
-                      Home.AudioStreamTypes,
-                      Islands,
-                      Logger,
-                      Msg,
-                      REST.Api,
-                      REST.HomeServer,
-                      Router,
-                      System,
-                      System.CPU,
-                      System.Memory,
-                      State,
-                      Parsing,
-                      Proto.Messages,
-                      Proto.Messages_Fields,
-                      ProtoHelper,
-                      Proxy.Env,
-                      Proxy.Handler,
-                      Proxy.Options,
-                      Proxy.WebsocketServer,
-                      TH,
-                      Threads,
-                      Utilities.Either
-    -- LANGUAGE extensions used by modules in this package.
-    -- other-extensions:
-
-    -- Other library packages from which modules are imported.
-    build-depends:    aeson,
-                      attoparsec,
-                      base ^>=4.19.2.0,
-                      bytestring,
-                      cereal,
-                      containers,
-                      crypton-x509,
-                      crypton-x509-store,
-                      crypton-x509-validation,
-                      data-default-class,
-                      directory,
-                      lifted-base,
-                      microlens,
-                      microlens-th,
-                      monad-control,
-                      mtl,
-                      network,
-                      options,
-                      proto-lens,
-                      proto-lens-runtime,
-                      random,
-                      servant-server,
-                      servant-proto-lens,
-                      template-haskell,
-                      text,
-                      time,
-                      tls,
-                      transformers-base,
-                      vector,
-                      wai-app-static,
-                      warp,
-                      warp-tls,
-                      wai-websockets,
-                      websockets,
+--     -- .hs or .lhs file containing the Main module.
+--     main-is:          Proxy/Main.hs
 
 
-    build-tool-depends: proto-lens-protoc:proto-lens-protoc ^>= 0.8.0.1
+--     -- Modules included in this executable, other than Main.
+--     other-modules:    Connection.Socket,
+--                       Connection.TCP,
+--                       Connection.TLS,
+--                       Connection.Rx,
+--                       Connection.RxTx,
+--                       Connection.Tx,
+--                       ConnectionManager,
+--                       Envelope,
+--                       EventLoop,
+--                       Home.AudioStreamTypes,
+--                       Islands,
+--                       Logger,
+--                       Msg,
+--                       Router,
+--                       System,
+--                       System.CPU,
+--                       System.Memory,
+--                       State,
+--                       Parsing,
+--                       Proto.Messages,
+--                       Proto.Messages_Fields,
+--                       ProtoHelper,
+--                       Proxy.Env,
+--                       Proxy.Handler,
+--                       Proxy.Options,
+--                       Proxy.REST.Api,
+--                       Proxy.REST.HomeServer,
+--                       Proxy.WebsocketServer,
+--                       TH,
+--                       Threads,
+--                       Utilities.Either
+--     -- LANGUAGE extensions used by modules in this package.
+--     -- other-extensions:
 
-    -- Directories containing source files.
-    hs-source-dirs:   app
+--     -- Other library packages from which modules are imported.
+--     build-depends:    aeson,
+--                       attoparsec,
+--                       base ^>=4.19.2.0,
+--                       bytestring,
+--                       cereal,
+--                       containers,
+--                       crypton-x509,
+--                       crypton-x509-store,
+--                       crypton-x509-validation,
+--                       data-default-class,
+--                       directory,
+--                       lifted-base,
+--                       microlens,
+--                       microlens-th,
+--                       monad-control,
+--                       mtl,
+--                       network,
+--                       options,
+--                       proto-lens,
+--                       proto-lens-runtime,
+--                       random,
+--                       rxtx,
+--                       servant-server,
+--                       servant-proto-lens,
+--                       template-haskell,
+--                       text,
+--                       time,
+--                       tls,
+--                       transformers-base,
+--                       vector,
+--                       wai-app-static,
+--                       warp,
+--                       warp-tls,
+--                       wai-websockets,
+--                       websockets,
 
-    -- Base language which the package is written in.
-    default-language: GHC2021
 
-    ghc-options: -main-is Proxy.Main -O2 -threaded -split-objs
-                 -- -Wunused-packages
+--     build-tool-depends: proto-lens-protoc:proto-lens-protoc ^>= 0.8.0.1
 
-executable Camera
-    -- Import common warning flags.
-    import:           warnings
+--     -- Directories containing source files.
+--     hs-source-dirs:   app
 
-    -- .hs or .lhs file containing the Main module.
-    main-is:          Camera/Main.hs
+--     -- Base language which the package is written in.
+--     default-language: GHC2021
+
+--     ghc-options: -main-is Proxy.Main -O2 -threaded -split-objs
+--                  -- -Wunused-packages
+
+-- executable Camera
+--     -- Import common warning flags.
+--     import:           warnings
+
+--     -- .hs or .lhs file containing the Main module.
+--     main-is:          Camera/Main.hs
 
 
-    -- Modules included in this executable, other than Main.
-    other-modules:    Camera.Camera,
-                      Camera.Env,
-                      Camera.Handler,
-                      Camera.Options,
-                      Connection.Rx,
-                      Connection.RxTx,
-                      Connection.Socket,
-                      Connection.TCP,
-                      Connection.Tx,
-                      ConnectionManager,
-                      Envelope,
-                      EventLoop,
-                      Home.AudioStreamTypes,
-                      Islands,
-                      Logger,
-                      Msg,
-                      Parsing,
-                      Proto.Messages,
-                      Proto.Messages_Fields,
-                      ProtoHelper,
-                      Proxy.Env,
-                      Router,
-                      State,
-                      System,
-                      System.CPU,
-                      System.Memory,
-                      TH,
-                      Threads,
-                      Utilities.Either
-    -- LANGUAGE extensions used by modules in this package
-    -- other-extensions:
+--     -- Modules included in this executable, other than Main.
+--     other-modules:    Camera.Camera,
+--                       Camera.Env,
+--                       Camera.Handler,
+--                       Camera.Options,
+--                       Connection.Rx,
+--                       Connection.RxTx,
+--                       Connection.Socket,
+--                       Connection.TCP,
+--                       Connection.Tx,
+--                       ConnectionManager,
+--                       Envelope,
+--                       EventLoop,
+--                       Home.AudioStreamTypes,
+--                       Islands,
+--                       Logger,
+--                       Msg,
+--                       Parsing,
+--                       Proto.Messages,
+--                       Proto.Messages_Fields,
+--                       ProtoHelper,
+--                       Proxy.Env,
+--                       Router,
+--                       State,
+--                       System,
+--                       System.CPU,
+--                       System.Memory,
+--                       TH,
+--                       Threads,
+--                       Utilities.Either
+--     -- LANGUAGE extensions used by modules in this package
+--     -- other-extensions:
 
-    -- Other library packages from which modules are imported.
-    build-depends:    aeson,
-                      attoparsec,
-                      base ^>=4.19.2.0,
-                      bytestring,
-                      cereal,
-                      containers,
-                      crypton-x509,
-                      crypton-x509-store,
-                      crypton-x509-validation,
-                      data-default-class,
-                      directory,
-                      lifted-base,
-                      microlens,
-                      microlens-th,
-                      monad-control,
-                      mtl,
-                      network,
-                      options,
-                      process-extras,
-                      proto-lens,
-                      proto-lens-runtime,
-                      random,
-                      servant-server,
-                      servant-proto-lens,
-                      template-haskell,
-                      text,
-                      time,
-                      tls,
-                      transformers-base,
-                      vector
+--     -- Other library packages from which modules are imported.
+--     build-depends:    aeson,
+--                       attoparsec,
+--                       base ^>=4.19.2.0,
+--                       bytestring,
+--                       cereal,
+--                       containers,
+--                       crypton-x509,
+--                       crypton-x509-store,
+--                       crypton-x509-validation,
+--                       data-default-class,
+--                       directory,
+--                       lifted-base,
+--                       microlens,
+--                       microlens-th,
+--                       monad-control,
+--                       mtl,
+--                       network,
+--                       options,
+--                       process-extras,
+--                       proto-lens,
+--                       proto-lens-runtime,
+--                       random,
+--                       servant-server,
+--                       servant-proto-lens,
+--                       template-haskell,
+--                       text,
+--                       time,
+--                       tls,
+--                       transformers-base,
+--                       vector
 
-    build-tool-depends: proto-lens-protoc:proto-lens-protoc ^>= 0.8.0.1
+--     build-tool-depends: proto-lens-protoc:proto-lens-protoc ^>= 0.8.0.1
 
-    -- Directories containing source files.
-    hs-source-dirs:   app
+--     -- Directories containing source files.
+--     hs-source-dirs:   app
 
-    -- Base language which the package is written in.
-    default-language: GHC2021
+--     -- Base language which the package is written in.
+--     default-language: GHC2021
 
-    ghc-options: -main-is Camera.Main -O2 -threaded -split-objs
-                 -- -Wunused-packages
+--     ghc-options: -main-is Camera.Main -O2 -threaded -split-objs
+--                  -- -Wunused-packages

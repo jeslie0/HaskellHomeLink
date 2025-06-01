@@ -5,7 +5,7 @@
 #+author: James Leslie
 #+TODO: TODO IN-PROGRESS WAITING ONGOING POSTPONED | DONE CANCELLED
 
-* [0/2] Tasks
+* [0/5] Tasks
 ** ONGOING Create detailed design documentation
 :PROPERTIES:
 :component: documentation
@@ -18,6 +18,28 @@ I need to create a document explaining how the pieces of this project work. Real
 :type:     task
 :END:
 This project was originally based on some loose principles from the cross domain wiki page. After reading more about the subject, it doesn't seem appropriate or relevant. The references should be removed for clarity.
+
+** TODO Split application into different applications
+:PROPERTIES:
+:type:     task
+:END:
+I think it is safer to use nginx for the external web server and proxy it to my haskell one. This will allow a lower surface area of attack as nginx is well tested.
+
+We should also think about breaking the applications up into services that communicate via message queues or pipes. The services can be started and restarted via systemd and should make for a more reliable system.
+
+This does need to be planned and sketched out in detail.
+
+** TODO Compile raspberry pi application to linux image
+:PROPERTIES:
+:type:     task
+:END:
+Rather than running a docker container on the pi, it might be better to run a pure NixOS image built to run certain programs. This is a massive change and will require a lot of thought and planning.
+** IN-PROGRESS Enable video streaming
+:PROPERTIES:
+:type:     task
+:END:
+We want to be able to live stream video data to the frontend. Work has begun on setting this up in the backend.
+
 
 * [0/1] Bugs
 ** TODO Investigate Audio dropout

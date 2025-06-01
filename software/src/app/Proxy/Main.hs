@@ -57,7 +57,7 @@ import Proxy.Options (
   tlsKeyPath,
   tlsPort,
  )
-import REST.HomeServer qualified as HTTP
+import Proxy.REST.HomeServer qualified as HTTP
 import Router (Router, trySendMessage)
 import State (State, setState)
 import System (SystemData, mkSystemData)
