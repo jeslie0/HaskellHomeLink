@@ -1,4 +1,5 @@
 module RxTx.Socket (
+  RxError (..),
   SocketRxError (..),
   SocketTxError (..),
   recvNBytes,
@@ -15,25 +16,29 @@ import Foreign.C.Types (CInt)
 import Network.Socket (Socket)
 import Network.Socket.ByteString qualified as Socket
 
-data SocketRxError
+data RxError
   = InsufficientHeader
   | FailedToGetBody
   | FailedToParseBody T.Text
   | ConnectionClosed
   | RxIOError CInt
+  deriving Show
+
+data SocketRxError = SocketRxError Socket RxError
 
 newtype SocketTxError = TxIOError CInt
 
 socketHdrSize :: Int
 socketHdrSize = 4
 
-recvNBytes :: Socket -> Int -> IO (Either SocketRxError B.ByteString)
+recvNBytes :: Socket -> Int -> IO (Either RxError B.ByteString)
 recvNBytes sock n = do
   go n B.empty
  where
   go 0 acc = pure $ Right acc
   go m acc = do
     bytes <- Socket.recv sock m
+    print "got bytes!"
     if B.length bytes == 0
       then pure $ Left ConnectionClosed
       else
@@ -42,7 +47,7 @@ recvNBytes sock n = do
 
 -- | We need to read 4 bytes from a socket to get the size of the
 --  incoming header.
-readHeader :: Socket -> IO (Either SocketRxError Word32)
+readHeader :: Socket -> IO (Either RxError Word32)
 readHeader sock = do
   mHdr <- recvNBytes sock socketHdrSize
   case mHdr of
@@ -52,7 +57,7 @@ readHeader sock = do
         Left str -> pure . Left $ FailedToParseBody (T.pack str)
         Right n -> pure $ Right n
 
-runRecvUnsafe :: Socket -> IO (Either SocketRxError B.ByteString)
+runRecvUnsafe :: Socket -> IO (Either RxError B.ByteString)
 runRecvUnsafe sock = do
   mHdr <- readHeader sock
   case mHdr of

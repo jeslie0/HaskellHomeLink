@@ -26,16 +26,20 @@ instance Serialize msg => Rx msg Socket Socket.SocketRxError where
   recvMsg sock = do
     liftIO $
       runRecv
-        `catch` ( \(IOError {ioe_errno} :: IOException) -> pure . Left . Socket.RxIOError $ fromMaybe (-1) ioe_errno
+        `catch` ( \(IOError {ioe_errno} :: IOException) ->
+                    pure . Left . Socket.SocketRxError sock $
+                      Socket.RxIOError $
+                        fromMaybe (-1) ioe_errno
                 )
    where
     runRecv = do
       eBytes <- Socket.runRecvUnsafe sock
       case eBytes of
-        Left err -> pure $ Left err
+        Left err -> pure $ Left . Socket.SocketRxError sock $ err
         Right bytes ->
           case runGet get bytes of
-            Left err -> pure . Left $ Socket.FailedToParseBody (T.pack err)
+            Left err ->
+              pure . Left . Socket.SocketRxError sock $ Socket.FailedToParseBody (T.pack err)
             Right (msg :: msg) -> pure $ Right msg
 
 instance Serialize msg => Rx msg TLS.Context TLS.TLSRxError where
