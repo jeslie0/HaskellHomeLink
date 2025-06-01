@@ -45,9 +45,9 @@ instance Serialize msg => Tx msg TLS.Context TLS.TLSTxError where
   sendMsg ctx msg = do
     liftIO $
       runSend
-        `catch` ( \(IOError {ioe_errno} :: IOException) -> pure . Left . TLS.TxIOError $ fromMaybe (-1) ioe_errno
+        `catch` ( \(IOError {ioe_errno} :: IOException) -> pure . Left . TLS.TLSTxError ctx . TLS.TxIOError $ fromMaybe (-1) ioe_errno
                 )
-        `catch` ( \(tlsExc :: TLSException) -> pure . Left . TLS.TxTLSError $ tlsExc
+        `catch` ( \(tlsExc :: TLSException) -> pure . Left . TLS.TLSTxError ctx . TLS.TxTLSError $ tlsExc
                 )
    where
     runSend = do

@@ -46,17 +46,18 @@ instance Serialize msg => Rx msg TLS.Context TLS.TLSRxError where
   recvMsg ctx = do
     liftIO $
       runRecv
-        `catch` ( \(IOError {ioe_errno} :: IOException) -> pure . Left . TLS.IOException $ fromMaybe (-1) ioe_errno
+        `catch` ( \(IOError {ioe_errno} :: IOException) ->
+                    pure . Left . TLS.TLSRxError ctx . TLS.IOException $ fromMaybe (-1) ioe_errno
                 )
-        `catch` ( \(tlsExc :: TLSException) -> pure . Left . TLS.RxTLSError $ tlsExc
+        `catch` ( \(tlsExc :: TLSException) -> pure . Left . TLS.TLSRxError ctx . TLS.RxTLSError $ tlsExc
                 )
    where
     runRecv = do
       bytes <- TLS.recvData ctx
       if B.null bytes
-        then pure $ Left TLS.ConnectionClosed
+        then pure . Left . TLS.TLSRxError ctx $ TLS.ConnectionClosed
         else case runGet get bytes of
-          Left err -> pure . Left $ TLS.FailedToParseBody (T.pack err)
+          Left err -> pure . Left . TLS.TLSRxError ctx $ TLS.FailedToParseBody (T.pack err)
           Right (msg :: msg) -> pure $ Right msg
 
 data RxChanError

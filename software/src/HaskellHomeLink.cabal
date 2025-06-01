@@ -61,14 +61,7 @@ executable Home
 
 
     -- Modules included in this executable, other than Main.
-    other-modules:    Connection.Socket,
-                      Connection.TCP,
-                      Connection.TLS,
-                      Connection.Rx,
-                      Connection.RxTx,
-                      Connection.Tx,
-                      ConnectionManager,
-                      Envelope,
+    other-modules:    Envelope,
                       EventLoop,
                       Home.AudioStream,
                       Home.AudioStreamTypes,
@@ -77,7 +70,6 @@ executable Home
                       Home.Options,
                       Islands,
                       Logger,
-                      Msg,
                       Router,
                       System,
                       System.CPU,
@@ -87,10 +79,7 @@ executable Home
                       Proto.Messages,
                       Proto.Messages_Fields,
                       ProtoHelper,
-                      Proxy.Env,
-                      Proxy.Options,
                       TH,
-                      Threads,
                       Utilities.Either
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
@@ -108,10 +97,10 @@ executable Home
                       crypton-x509-validation,
                       data-default-class,
                       directory,
-                      lifted-base,
                       http-client,
                       http-client-tls,
                       http-types,
+                      lifted-base,
                       microlens,
                       microlens-th,
                       minimp3-hs,
@@ -123,22 +112,13 @@ executable Home
                       proto-lens-runtime,
                       random,
                       rxtx,
-                      -- resourcet,
-                      -- servant,
-                      -- servant-server,
-                      -- servant-proto-lens,
+                      websockets,
                       template-haskell,
                       text,
                       time,
                       tls,
-                      -- transformers,
                       transformers-base,
-                      -- unordered-containers,
                       vector
-                      -- wai,
-                      -- wai-app-static,
-                      -- warp,
-                      -- warp-tls
 
 
     build-tool-depends: proto-lens-protoc:proto-lens-protoc ^>= 0.8.0.1

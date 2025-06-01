@@ -21,7 +21,7 @@ data Connection msg rxErr txErr = Connection
 
 mkConnection ::
   forall msg chan rxErr txErr.
-  (RxTx msg chan rxErr txErr) =>
+  RxTx msg chan rxErr txErr =>
   chan
   -> (chan -> IO ())
   -> IO (Connection msg rxErr txErr)
@@ -50,6 +50,6 @@ runSomeConnection conn@(SomeConnection (Connection {recvAndDispatch})) = do
   result <- recvAndDispatch
   case result of
     Nothing -> runSomeConnection conn
-    Just err -> pure ()
+    Just _ -> pure ()
 
 data AsyncSomeConnection msg = AsyncSomeConnection ThreadId (SomeConnection msg)

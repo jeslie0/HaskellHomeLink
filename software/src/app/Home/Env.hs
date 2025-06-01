@@ -6,12 +6,10 @@ module Home.Env (
   mkEnv,
   audioStreamRef,
   router,
-  addLocalHTTPServerConnection,
-  addRemoteProxyConnection,
+  -- addRemoteProxyConnection,
   cleanupEnv,
 ) where
 
-import ConnectionManager (initTCPClientConnection, killConnections)
 import Control.Concurrent (ThreadId, killThread)
 import Data.Foldable (for_)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
@@ -19,9 +17,8 @@ import Home.AudioStream (StationId, StreamStatus (..))
 import Islands (Island (..))
 import Lens.Micro ((^.))
 import Lens.Micro.TH (makeLenses)
-import Msg (Msg)
-import Network.Socket (HostName, ServiceName)
-import Router (Router, connectionsManager, handleBytes, mkRouter)
+import Router (Router, connectionsRegistry, mkRouter)
+import RxTx.ConnectionRegistry (killConnections)
 
 data Env = Env
   { _router :: Router
@@ -45,34 +42,22 @@ cleanupEnv env = do
   (mThread, _, _) <- readIORef (env ^. audioStreamRef)
   for_ mThread killThread
   writeIORef (env ^. audioStreamRef) (Nothing, Off, 0)
-  killConnections (env ^. (router . connectionsManager))
-
-addLocalHTTPServerConnection ::
-  forall msg. Msg msg => ((Island, msg) -> IO ()) -> Router -> IO ()
-addLocalHTTPServerConnection actOnMsg rtr = do
-  initTCPClientConnection
-    LocalHTTP
-    (rtr ^. connectionsManager)
-    "127.0.0.1"
-    "3000"
-    (handleBytes actOnMsg rtr)
-    (pure ())
-    (pure ())
-
-addRemoteProxyConnection ::
-  forall msg.
-  Msg msg =>
-  ((Island, msg) -> IO ())
-  -> HostName
-  -> ServiceName
-  -> Router
-  -> IO ()
-addRemoteProxyConnection actOnMsg host port rtr = do
-  initTCPClientConnection
-    RemoteProxy
-    (rtr ^. connectionsManager)
-    host
-    port
-    (handleBytes actOnMsg rtr)
-    (pure ())
-    (pure ())
+  killConnections (env ^. (router . connectionsRegistry))
+ 
+-- addRemoteProxyConnection ::
+--   forall msg.
+--   Msg msg =>
+--   ((Island, msg) -> IO ())
+--   -> HostName
+--   -> ServiceName
+--   -> Router
+--   -> IO ()
+-- addRemoteProxyConnection actOnMsg host port rtr = do
+--   initTCPClientConnection
+--     RemoteProxy
+--     (rtr ^. connectionsManager)
+--     host
+--     port
+--     (handleBytes actOnMsg rtr)
+--     (pure ())
+--     (pure ())

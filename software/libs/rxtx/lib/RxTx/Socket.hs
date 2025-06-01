@@ -25,8 +25,10 @@ data RxError
   deriving Show
 
 data SocketRxError = SocketRxError Socket RxError
+  deriving Show
 
 newtype SocketTxError = TxIOError CInt
+  deriving Show
 
 socketHdrSize :: Int
 socketHdrSize = 4
@@ -38,7 +40,6 @@ recvNBytes sock n = do
   go 0 acc = pure $ Right acc
   go m acc = do
     bytes <- Socket.recv sock m
-    print "got bytes!"
     if B.length bytes == 0
       then pure $ Left ConnectionClosed
       else
@@ -55,7 +56,9 @@ readHeader sock = do
     Right hdr ->
       case Binary.runGet Binary.getWord32le hdr of
         Left str -> pure . Left $ FailedToParseBody (T.pack str)
-        Right n -> pure $ Right n
+        Right n -> do
+          print $ "header size: " <> show n
+          pure $ Right n
 
 runRecvUnsafe :: Socket -> IO (Either RxError B.ByteString)
 runRecvUnsafe sock = do

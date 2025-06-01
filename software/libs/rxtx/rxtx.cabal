@@ -62,13 +62,15 @@ library
     exposed-modules: RxTx,
                      RxTx.Connection,
                      RxTx.Connection.Socket,
+                     RxTx.Connection.TLS,
                      RxTx.ConnectionRegistry,
                      RxTx.Rx,
-                     RxTx.Tx
+                     RxTx.Tx,
+                     RxTx.Socket,
+                     RxTx.TLS
 
     -- Modules included in this library but not exported.
-    other-modules:   RxTx.Socket,
-                     RxTx.TLS
+    -- other-modules:
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:

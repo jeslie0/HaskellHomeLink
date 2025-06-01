@@ -11,31 +11,51 @@ module Home.Handler (
   ExHomeHandler (..),
 ) where
 
-import Control.Concurrent (forkFinally, killThread)
+import Control.Concurrent (forkFinally, forkIO, killThread)
+import Control.Exception (bracketOnError)
 import Control.Monad (void)
 import Control.Monad.Reader
-import Data.Foldable (forM_)
+import Data.Foldable (forM_, traverse_)
 import Data.IORef (atomicModifyIORef')
 import Data.ProtoLens (defMessage)
 import Data.Text qualified as T
+import Data.Typeable (cast)
 import Envelope (ToProxyEnvelope (..))
-import EventLoop (MonadEventLoop(..), addMsg, EventLoopT, getLoop, addMsgIO)
+import EventLoop (
+  EventLoopT,
+  MonadEventLoop (..),
+  addMsg,
+  addMsgIO,
+  getLoop,
+  setTimeoutIO,
+ )
 import Home.AudioStream (startAudioStream)
 import Home.AudioStreamTypes (StationId, StreamStatus (..))
-import Home.Env (addRemoteProxyConnection, audioStreamRef, router, Env)
+import Home.Env (Env, audioStreamRef, router)
 import Islands (Island (..), islands, proxies)
 import Lens.Micro ((&), (.~), (?~), (^.), _1, _2, _3)
+import Logger (LogLevel (..), reportLog)
+import Network.Socket (AddrInfo (addrAddress), Socket, close)
 import Proto.Messages qualified as Proto
 import Proto.Messages_Fields qualified as Proto
 import ProtoHelper (ToMessage (..))
-import Router (Router, tryForwardMessage, trySendMessage)
+import Router (
+  Routable (..),
+  Router,
+  connectionsRegistry,
+  tryForwardMessage,
+  trySendMessage,
+ )
+import RxTx.Connection (addSub, cleanup, mkConnection, recvAndDispatch)
+import RxTx.Connection.Socket (aquireClientSocket, connectToHost)
+import RxTx.ConnectionRegistry (addConnection)
+import RxTx.Socket (SocketRxError (..), SocketTxError)
 import System.Memory (getMemoryInformation)
 import TH (makeInstance)
-import Logger (reportLog, LogLevel (..))
 
 class HomeHandler msg where
   homeHandler ::
-     Island -> msg -> EventLoopT Env (Island, ExHomeHandler) IO ()
+    Island -> msg -> EventLoopT Env (Island, ExHomeHandler) IO ()
 
 data ExHomeHandler = forall a. HomeHandler a => ExHomeHandler a
 
@@ -70,7 +90,7 @@ notifyProxyRadioStatus rtr island status stationId =
 -- thread. If one exists, report the error.
 instance HomeHandler Proto.ModifyRadioRequest where
   homeHandler src req = do
-    env <- getEnv 
+    env <- getEnv
     let notify = do
           (_, status, stationId) <- atomicModifyIORef' (env ^. audioStreamRef) $ \a -> (a, a)
           void $ notifyProxyRadioStatus (env ^. router) src status stationId
@@ -119,12 +139,50 @@ instance HomeHandler Proto.ConnectTCP where
   homeHandler _ msg = do
     env <- getEnv
     loop <- getLoop
-    liftIO $
-      addRemoteProxyConnection @Proto.HomeEnvelope
-        (\ (island, msg') -> addMsgIO (island, ExHomeHandler msg') loop )
-        (T.unpack $ msg ^. Proto.host)
-        (T.unpack $ msg ^. Proto.port)
-        (env ^. router)
+    let
+      host = msg ^. Proto.host
+      port = msg ^. Proto.port
+      registry = env ^. router . connectionsRegistry
+
+    void . liftIO $
+      bracketOnError
+        (aquireClientSocket (T.unpack host) (T.unpack port))
+        (traverse_ $ \(sock, _) -> close sock)
+        (withSocket loop registry)
+   where
+    withSocket loop _ Nothing =
+      void $ setTimeoutIO (Home, ExHomeHandler msg) 2000 loop
+    withSocket loop registry (Just (sock, addr)) = do
+      success <- connectToHost sock addr
+      if success
+        then do
+          putStrLn $ "Connected to " <> show (addrAddress addr)
+          conn <- mkConnection @Routable @Socket @SocketRxError @SocketTxError sock close
+          addSub conn $ \rtrMsg -> do
+            case parseMessage rtrMsg of
+              Nothing -> putStrLn "Failed to parse message!"
+              Just homeMsg -> addMsgIO (Home, ExHomeHandler homeMsg) loop
+          threadId <- forkIO . void $ runConnection conn loop
+          addConnection RemoteProxy threadId conn registry
+        else do
+          putStrLn $
+            "Failed to connect to server: "
+              <> show (addrAddress addr)
+              <> ". Trying again in 2s..."
+          void $ setTimeoutIO (Home, ExHomeHandler msg) 2000 loop
+
+    parseMessage :: Routable -> Maybe Proto.HomeEnvelope
+    parseMessage (Routable rmsg) =
+      cast rmsg :: Maybe Proto.HomeEnvelope
+
+    runConnection conn loop = do
+      merror <- recvAndDispatch conn
+      case merror of
+        Nothing -> runConnection conn loop
+        Just (SocketRxError _ err) -> do
+          print $ "ERROR: " <> show err
+          cleanup conn
+          void $ setTimeoutIO (Home, ExHomeHandler msg) 2000 loop
 
 --
 instance HomeHandler Proto.SystemData where

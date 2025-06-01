@@ -14,6 +14,10 @@ module EventLoop (
   TimeoutId,
   IntervalId,
   runEventLoopT,
+  setTimeoutIO,
+  setIntervalIO,
+  killIntervalIO,
+  killTimeoutIO,
 ) where
 
 import Control.Concurrent (
@@ -60,6 +64,39 @@ $(makeLenses ''EventLoop)
 addMsgIO :: msg -> EventLoop msg -> IO ()
 addMsgIO msg loop =
   writeChan (loop ^. events) msg
+
+setIntervalIO :: msg -> Int -> EventLoop msg -> IO IntervalId
+setIntervalIO msg n loop = do
+  threadId <- forkFinally action $ \case
+    Left _ -> pure ()
+    Right _ -> do
+      thisThread <- myThreadId
+      modifyMVar_ (loop ^. waitingThreads) $ pure . Set.delete thisThread
+  modifyMVar_ (loop ^. waitingThreads) $ pure . Set.insert threadId
+  pure $ IntervalId threadId
+ where
+  action = do
+    threadDelay (n * 1000)
+    writeChan (loop ^. events) msg
+    action
+
+setTimeoutIO :: msg -> Int -> EventLoop msg -> IO TimeoutId
+setTimeoutIO msg n loop = do
+  threadId <- forkFinally (threadDelay (n * 1000) >> writeChan (loop ^. events) msg) $ \case
+    Left _ -> pure ()
+    Right _ -> do
+      thisThread <- myThreadId
+      modifyMVar_ (loop ^. waitingThreads) $ pure . Set.delete thisThread
+  modifyMVar_ (loop ^. waitingThreads) $ pure . Set.insert threadId
+  pure $ TimeoutId threadId
+
+killIntervalIO :: IntervalId -> IO ()
+killIntervalIO (IntervalId threadId) = do
+  killThread threadId
+
+killTimeoutIO :: TimeoutId -> IO ()
+killTimeoutIO (TimeoutId threadId) = do
+  killThread threadId
 
 mkEventLoop :: IO (EventLoop msg)
 mkEventLoop = do
@@ -130,36 +167,19 @@ instance MonadIO m => MonadEventLoop env msg (EventLoopT env msg m) where
     (loop, _) <- ask
     void . liftIO $ tryTakeMVar $ loop ^. shouldStopMVar
 
-  setInterval msg n = EventLoopT $ do
+  setInterval msg n = do
     (loop, _) <- ask
-    threadId <- liftIO . forkFinally (action loop) $ \case
-      Left _ -> pure ()
-      Right _ -> do
-        thisThread <- myThreadId
-        liftIO . modifyMVar_ (loop ^. waitingThreads) $ pure . Set.delete thisThread
-    liftIO . modifyMVar_ (loop ^. waitingThreads) $ pure . Set.insert threadId
-    pure $ IntervalId threadId
-   where
-    action loop = do
-      threadDelay (n * 1000)
-      writeChan (loop ^. events) msg
-      action loop
+    liftIO $ setIntervalIO msg n loop
 
   setTimeout msg n = EventLoopT $ do
     (loop, _) <- ask
-    threadId <- liftIO . forkFinally (threadDelay (n * 1000) >> writeChan (loop ^. events) msg) $ \case
-      Left _ -> pure ()
-      Right _ -> do
-        thisThread <- myThreadId
-        liftIO . modifyMVar_ (loop ^. waitingThreads) $ pure . Set.delete thisThread
-    liftIO . modifyMVar_ (loop ^. waitingThreads) $ pure . Set.insert threadId
-    pure $ TimeoutId threadId
+    liftIO $ setTimeoutIO msg n loop
 
-  killInterval (IntervalId threadId) = EventLoopT $ do
-    liftIO $ killThread threadId
+  killInterval intervalId = do
+    liftIO $ killIntervalIO intervalId
 
-  killTimeout (TimeoutId threadId) = EventLoopT $ do
-    liftIO $ killThread threadId
+  killTimeout timeoutId = do
+    liftIO $ killTimeoutIO timeoutId
 
 instance MonadBase b m => MonadBase b (EventLoopT env msg m) where
   liftBase = EventLoopT . liftBase
