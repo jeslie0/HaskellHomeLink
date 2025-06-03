@@ -40,7 +40,6 @@ import Proto.Messages qualified as Proto
 import Proto.Messages_Fields qualified as Proto
 import ProtoHelper (ToMessage (..))
 import Router (
-  Routable (..),
   Router,
   connectionsRegistry,
   tryForwardMessage,
@@ -48,10 +47,18 @@ import Router (
  )
 import RxTx.Connection (addSub, cleanup, mkConnection, recvAndDispatch)
 import RxTx.Connection.Socket (aquireClientSocket, connectToHost)
+import RxTx.Connection.TLS (upgradeSocket)
 import RxTx.ConnectionRegistry (addConnection)
 import RxTx.Socket (SocketRxError (..), SocketTxError)
 import System.Memory (getMemoryInformation)
 import TH (makeInstance)
+import TLSHelper (setupTLSServerParams, setupTLSClientParams)
+import RxTx.TLS (TLSRxError(..))
+import RxTx.Connection (send)
+import Network.Socket.ByteString (sendAll)
+import Network.TLS (contextNew, handshake)
+import qualified Data.ByteString as B
+import Data.Serialize (decode)
 
 class HomeHandler msg where
   homeHandler ::
@@ -135,8 +142,9 @@ instance HomeHandler Proto.ModifyRadioRequest where
     void . liftIO $ notify
 
 -- | Spawn a new thread and try to connect to the given TCP server.
-instance HomeHandler Proto.ConnectTCP where
+instance HomeHandler Proto.ConnectTLS where
   homeHandler _ msg = do
+    liftIO $ putStrLn "1bb"
     env <- getEnv
     loop <- getLoop
     let
@@ -150,20 +158,36 @@ instance HomeHandler Proto.ConnectTCP where
         (traverse_ $ \(sock, _) -> close sock)
         (withSocket loop registry)
    where
-    withSocket loop _ Nothing =
+    withSocket loop _ Nothing = do
+      liftIO $ putStrLn "Failed to reach server"
       void $ setTimeoutIO (Home, ExHomeHandler msg) 2000 loop
     withSocket loop registry (Just (sock, addr)) = do
+      putStrLn $ "Connecting to host: " <> show (addrAddress addr)
       success <- connectToHost sock addr
       if success
         then do
           putStrLn $ "Connected to " <> show (addrAddress addr)
-          conn <- mkConnection @Routable @Socket @SocketRxError @SocketTxError sock close
-          addSub conn $ \rtrMsg -> do
-            case parseMessage rtrMsg of
-              Nothing -> putStrLn "Failed to parse message!"
-              Just homeMsg -> addMsgIO (Home, ExHomeHandler homeMsg) loop
-          threadId <- forkIO . void $ runConnection conn loop
-          addConnection RemoteProxy threadId conn registry
+          mParams <-
+            setupTLSClientParams
+              (T.unpack $ msg ^. Proto.certPath)
+              (T.unpack $ msg ^. Proto.keyPath)
+              (T.unpack $ msg ^. Proto.caCertPath)
+              ("raspberrypi")
+          case mParams of
+            Nothing -> putStrLn "Failed to unpack TLS server params"
+            Just params -> do
+              ctx <- contextNew sock params
+              mConn <- upgradeSocket @_ @B.ByteString params sock
+              case mConn of
+                Nothing -> putStrLn "Failed to upgrade socket to TLS context"
+                Just conn -> do
+                  putStrLn "Established TLS connection"
+                  addSub conn $ \rtrMsg -> do
+                    case parseMessage rtrMsg of
+                      Nothing -> putStrLn "Failed to parse message!"
+                      Just homeMsg -> addMsgIO (Home, ExHomeHandler homeMsg) loop
+                  threadId <- forkIO . void $ runConnection conn loop
+                  addConnection RemoteProxy threadId conn registry
         else do
           putStrLn $
             "Failed to connect to server: "
@@ -171,15 +195,17 @@ instance HomeHandler Proto.ConnectTCP where
               <> ". Trying again in 2s..."
           void $ setTimeoutIO (Home, ExHomeHandler msg) 2000 loop
 
-    parseMessage :: Routable -> Maybe Proto.HomeEnvelope
-    parseMessage (Routable rmsg) =
-      cast rmsg :: Maybe Proto.HomeEnvelope
+    parseMessage :: B.ByteString -> Maybe Proto.HomeEnvelope
+    parseMessage bytes =
+      case decode bytes of
+        Left err -> Nothing
+        Right env -> Just env
 
     runConnection conn loop = do
       merror <- recvAndDispatch conn
       case merror of
         Nothing -> runConnection conn loop
-        Just (SocketRxError _ err) -> do
+        Just (TLSRxError _ err) -> do
           print $ "ERROR: " <> show err
           cleanup conn
           void $ setTimeoutIO (Home, ExHomeHandler msg) 2000 loop

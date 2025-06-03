@@ -79,6 +79,7 @@ executable Home
                       Proto.Messages,
                       Proto.Messages_Fields,
                       ProtoHelper,
+                      TLSHelper,
                       TH,
                       Utilities.Either
     -- LANGUAGE extensions used by modules in this package.

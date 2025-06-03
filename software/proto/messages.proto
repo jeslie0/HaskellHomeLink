@@ -100,15 +100,18 @@ message AddLog {
 
 // * Home Received Msgs
 
-message ConnectTCP {
+message ConnectTLS {
   string host = 1;
   string port = 2;
+  string certPath = 3;
+  string keyPath = 4;
+  string caCertPath = 5;
 }
 
 message HomeEnvelope {
   oneof payload {
     ModifyRadioRequest m1 = 1;
-    ConnectTCP m2 = 2;
+    ConnectTLS m2 = 2;
     SystemData m3 = 3;
     MemoryInformation m4 = 4;
     CheckMemoryUsage m5 = 5;

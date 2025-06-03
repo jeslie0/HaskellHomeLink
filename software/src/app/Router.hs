@@ -3,7 +3,6 @@
 
 module Router (
   Router,
-  Routable (..),
   MessagePackage (..),
   thisIsland,
   connectionsRegistry,
@@ -18,7 +17,7 @@ import Control.Monad (void)
 import Data.ByteString qualified as B
 import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
-import Data.Serialize (Serialize (..), runGet)
+import Data.Serialize (Serialize (..), runGet, encode)
 import Data.Typeable (Typeable)
 import Islands (Island (..))
 import Lens.Micro ((^.))
@@ -29,18 +28,9 @@ import RxTx.ConnectionRegistry (
   mkConnectionRegistry,
  )
 
-data Routable = forall msg. (Typeable msg, Serialize msg) => Routable msg
-  deriving (Typeable)
-
-instance Serialize Routable where
-  get = fail "Deserialisation not implemented"
-
-  put (Routable msg) =
-    put msg
-
 data Router = Router
   { _thisIsland :: Island
-  , _connectionsRegistry :: AsyncConnectionRegistry Island Routable
+  , _connectionsRegistry :: AsyncConnectionRegistry Island B.ByteString
   }
 
 $(makeLenses ''Router)
@@ -82,7 +72,7 @@ instance Serialize msg => Serialize (MessagePackage msg) where
 trySendMsg ::
   forall msg.
   (Typeable msg, Serialize msg) =>
-  AsyncConnectionRegistry Island Routable
+  AsyncConnectionRegistry Island B.ByteString
   -> Island
   -- ^ Source of msg
   -> Island
@@ -94,7 +84,7 @@ trySendMsg ::
 trySendMsg (AsyncConnectionRegistry mvar) src finalDest nextDest msg = do
   withMVar mvar $ \connMap -> case Map.lookup nextDest connMap of
     Just (AsyncSomeConnection _ (SomeConnection conn)) -> do
-      eErr <- send conn $ Routable $ MessagePackage src finalDest msg
+      eErr <- send conn $ encode $ MessagePackage src finalDest msg
       case eErr of
         Left _ -> pure False
         Right _ -> pure True
