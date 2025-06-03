@@ -64,6 +64,7 @@ library
                      RxTx.Connection.Socket,
                      RxTx.Connection.TLS,
                      RxTx.ConnectionRegistry,
+                     RxTx.Internal,
                      RxTx.Rx,
                      RxTx.Tx,
                      RxTx.Socket,
@@ -91,3 +92,18 @@ library
 
     -- Base language which the package is written in.
     default-language: GHC2021
+
+test-suite test-rxtx
+    type:             exitcode-stdio-1.0
+
+    main-is:          Test.hs
+
+    build-depends:    base,
+                      rxtx,
+                      tls
+
+    hs-source-dirs:   test
+
+    default-language: GHC2021
+
+    ghc-options: -main-is Test

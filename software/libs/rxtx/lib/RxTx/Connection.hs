@@ -21,7 +21,7 @@ data Connection msg rxErr txErr = Connection
 
 mkConnection ::
   forall msg chan rxErr txErr.
-  RxTx msg chan rxErr txErr =>
+  (RxTx msg chan rxErr txErr) =>
   chan
   -> (chan -> IO ())
   -> IO (Connection msg rxErr txErr)

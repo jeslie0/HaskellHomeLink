@@ -5,60 +5,48 @@ module RxTx.Rx (
 ) where
 
 import Control.Concurrent.Chan qualified as Chan
-import Control.Exception (IOException, catch)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.ByteString qualified as B
-import Data.Maybe (fromMaybe)
-import Data.Serialize (Serialize (get))
-import Data.Serialize.Get (runGet)
+import Data.Serialize (Serialize, decode)
 import Data.Text qualified as T
-import GHC.IO.Exception (IOException (IOError, ioe_errno))
 import Network.Socket (Socket)
-import Network.TLS (TLSException)
 import Network.TLS qualified as TLS
+import RxTx.Internal (recvMsgSock, recvMsgTLS)
 import RxTx.Socket qualified as Socket
 import RxTx.TLS qualified as TLS
 
 class Rx msg chan err where
   recvMsg :: MonadIO m => chan -> m (Either err msg)
 
-instance Serialize msg => Rx msg Socket Socket.SocketRxError where
-  recvMsg sock = do
-    liftIO $
-      runRecv
-        `catch` ( \(IOError {ioe_errno} :: IOException) ->
-                    pure . Left . Socket.SocketRxError sock $
-                      Socket.RxIOError $
-                        fromMaybe (-1) ioe_errno
-                )
-   where
-    runRecv = do
-      eBytes <- Socket.runRecvUnsafe sock
-      case eBytes of
-        Left err -> pure $ Left . Socket.SocketRxError sock $ err
-        Right bytes ->
-          case runGet get bytes of
-            Left err ->
-              pure . Left . Socket.SocketRxError sock $ Socket.FailedToParseBody (T.pack err)
-            Right (msg :: msg) -> pure $ Right msg
+-- * Socket
 
-instance Serialize msg => Rx msg TLS.Context TLS.TLSRxError where
-  recvMsg ctx = do
-    liftIO $
-      runRecv
-        `catch` ( \(IOError {ioe_errno} :: IOException) ->
-                    pure . Left . TLS.TLSRxError ctx . TLS.IOException $ fromMaybe (-1) ioe_errno
-                )
-        `catch` ( \(tlsExc :: TLSException) -> pure . Left . TLS.TLSRxError ctx . TLS.RxTLSError $ tlsExc
-                )
+instance {-# OVERLAPPABLE #-} Serialize msg => Rx msg Socket Socket.SocketRxError where
+  recvMsg sock = recvMsgSock withBytes sock
    where
-    runRecv = do
-      bytes <- TLS.recvData ctx
-      if B.null bytes
-        then pure . Left . TLS.TLSRxError ctx $ TLS.ConnectionClosed
-        else case runGet get bytes of
-          Left err -> pure . Left . TLS.TLSRxError ctx $ TLS.FailedToParseBody (T.pack err)
-          Right (msg :: msg) -> pure $ Right msg
+    withBytes bytes =
+      case decode bytes of
+        Left err ->
+          Left . Socket.SocketRxError sock $ Socket.FailedToParseBody (T.pack err)
+        Right (msg :: msg) ->
+          Right msg
+
+instance {-# OVERLAPPING #-} Rx B.ByteString Socket Socket.SocketRxError where
+  recvMsg = recvMsgSock Right
+
+-- * TLS
+
+instance {-# OVERLAPPABLE #-} Serialize msg => Rx msg TLS.Context TLS.TLSRxError where
+  recvMsg ctx = recvMsgTLS withBytes ctx
+   where
+    withBytes bytes =
+      case decode @msg bytes of
+        Left err -> Left . TLS.TLSRxError ctx $ TLS.FailedToParseBody (T.pack err)
+        Right (msg :: msg) -> Right msg
+
+instance {-# OVERLAPPING #-} Rx B.ByteString TLS.Context TLS.TLSRxError where
+  recvMsg = recvMsgTLS Right
+
+-- * Channels
 
 data RxChanError
 

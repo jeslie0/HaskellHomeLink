@@ -2,7 +2,6 @@ module RxTx.Connection.Socket where
 
 import Control.Exception (IOException, catch)
 import Control.Monad.IO.Class (MonadIO (..))
-import Data.Serialize (Serialize)
 import Network.Socket (
   AddrInfo (..),
   AddrInfoFlag (AI_PASSIVE),
@@ -22,6 +21,7 @@ import Network.Socket (
   setSocketOption,
   socket,
  )
+import RxTx (RxTx)
 import RxTx.Connection (Connection (..), mkConnection)
 import RxTx.Socket (SocketRxError (..), SocketTxError)
 
@@ -77,7 +77,7 @@ getNewClientSocket sock = do
   pure client
 
 getNewClientConnection ::
-  Serialize msg =>
+  RxTx msg Socket SocketRxError SocketTxError =>
   Socket
   -- ^ Server socket.
   -> IO (Connection msg SocketRxError SocketTxError)
@@ -113,7 +113,7 @@ createClientSocket host port = do
       pure $ if bool then Just sock else Nothing
 
 createClientConnection ::
-  Serialize msg =>
+  RxTx msg Socket SocketRxError SocketTxError =>
   HostName
   -> ServiceName
   -> IO (Maybe (Connection msg SocketRxError SocketTxError))
