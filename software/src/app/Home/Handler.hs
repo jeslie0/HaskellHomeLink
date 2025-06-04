@@ -18,8 +18,8 @@ import Control.Monad.Reader
 import Data.Foldable (forM_, traverse_)
 import Data.IORef (atomicModifyIORef')
 import Data.ProtoLens (defMessage)
+import Data.Serialize (decode)
 import Data.Text qualified as T
-import Data.Typeable (cast)
 import Envelope (ToProxyEnvelope (..))
 import EventLoop (
   EventLoopT,
@@ -35,7 +35,7 @@ import Home.Env (Env, audioStreamRef, router)
 import Islands (Island (..), islands, proxies)
 import Lens.Micro ((&), (.~), (?~), (^.), _1, _2, _3)
 import Logger (LogLevel (..), reportLog)
-import Network.Socket (AddrInfo (addrAddress), Socket, close)
+import Network.Socket (AddrInfo (addrAddress), close)
 import Proto.Messages qualified as Proto
 import Proto.Messages_Fields qualified as Proto
 import ProtoHelper (ToMessage (..))
@@ -45,20 +45,14 @@ import Router (
   tryForwardMessage,
   trySendMessage,
  )
-import RxTx.Connection (addSub, cleanup, mkConnection, recvAndDispatch)
+import RxTx.Connection (cleanup, recvAndDispatch)
 import RxTx.Connection.Socket (aquireClientSocket, connectToHost)
 import RxTx.Connection.TLS (upgradeSocket)
 import RxTx.ConnectionRegistry (addConnection)
-import RxTx.Socket (SocketRxError (..), SocketTxError)
+import RxTx.TLS (TLSRxError (..))
 import System.Memory (getMemoryInformation)
 import TH (makeInstance)
-import TLSHelper (setupTLSServerParams, setupTLSClientParams)
-import RxTx.TLS (TLSRxError(..))
-import RxTx.Connection (send)
-import Network.Socket.ByteString (sendAll)
-import Network.TLS (contextNew, handshake)
-import qualified Data.ByteString as B
-import Data.Serialize (decode)
+import TLSHelper (setupTLSClientParams)
 
 class HomeHandler msg where
   homeHandler ::
@@ -144,7 +138,6 @@ instance HomeHandler Proto.ModifyRadioRequest where
 -- | Spawn a new thread and try to connect to the given TCP server.
 instance HomeHandler Proto.ConnectTLS where
   homeHandler _ msg = do
-    liftIO $ putStrLn "1bb"
     env <- getEnv
     loop <- getLoop
     let
@@ -172,20 +165,15 @@ instance HomeHandler Proto.ConnectTLS where
               (T.unpack $ msg ^. Proto.certPath)
               (T.unpack $ msg ^. Proto.keyPath)
               (T.unpack $ msg ^. Proto.caCertPath)
-              ("raspberrypi")
+              "raspberrypi"
           case mParams of
             Nothing -> putStrLn "Failed to unpack TLS server params"
             Just params -> do
-              ctx <- contextNew sock params
-              mConn <- upgradeSocket @_ @B.ByteString params sock
+              mConn <- upgradeSocket params sock
               case mConn of
                 Nothing -> putStrLn "Failed to upgrade socket to TLS context"
                 Just conn -> do
                   putStrLn "Established TLS connection"
-                  addSub conn $ \rtrMsg -> do
-                    case parseMessage rtrMsg of
-                      Nothing -> putStrLn "Failed to parse message!"
-                      Just homeMsg -> addMsgIO (Home, ExHomeHandler homeMsg) loop
                   threadId <- forkIO . void $ runConnection conn loop
                   addConnection RemoteProxy threadId conn registry
         else do
@@ -195,20 +183,18 @@ instance HomeHandler Proto.ConnectTLS where
               <> ". Trying again in 2s..."
           void $ setTimeoutIO (Home, ExHomeHandler msg) 2000 loop
 
-    parseMessage :: B.ByteString -> Maybe Proto.HomeEnvelope
-    parseMessage bytes =
-      case decode bytes of
-        Left err -> Nothing
-        Right env -> Just env
-
     runConnection conn loop = do
       merror <- recvAndDispatch conn
       case merror of
-        Nothing -> runConnection conn loop
-        Just (TLSRxError _ err) -> do
+        Left (TLSRxError _ err) -> do
           print $ "ERROR: " <> show err
           cleanup conn
           void $ setTimeoutIO (Home, ExHomeHandler msg) 2000 loop
+        Right bytes -> do
+          case decode @Proto.HomeEnvelope bytes of
+            Left parseErr -> putStrLn $ "Failed to parse message " <> parseErr
+            Right homeMsg -> addMsgIO (Home, ExHomeHandler homeMsg) loop
+          runConnection conn loop
 
 --
 instance HomeHandler Proto.SystemData where

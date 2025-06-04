@@ -43,21 +43,3 @@ cleanupEnv env = do
   for_ mThread killThread
   writeIORef (env ^. audioStreamRef) (Nothing, Off, 0)
   killConnections (env ^. (router . connectionsRegistry))
- 
--- addRemoteProxyConnection ::
---   forall msg.
---   Msg msg =>
---   ((Island, msg) -> IO ())
---   -> HostName
---   -> ServiceName
---   -> Router
---   -> IO ()
--- addRemoteProxyConnection actOnMsg host port rtr = do
---   initTCPClientConnection
---     RemoteProxy
---     (rtr ^. connectionsManager)
---     host
---     port
---     (handleBytes actOnMsg rtr)
---     (pure ())
---     (pure ())
