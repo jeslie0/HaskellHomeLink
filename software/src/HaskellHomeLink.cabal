@@ -62,7 +62,6 @@ executable Home
 
     -- Modules included in this executable, other than Main.
     other-modules:    Envelope,
-                      EventLoop,
                       Home.AudioStream,
                       Home.AudioStreamTypes,
                       Home.Handler,
@@ -98,14 +97,13 @@ executable Home
                       crypton-x509-validation,
                       data-default-class,
                       directory,
+                      eventloop-hs,
                       http-client,
                       http-client-tls,
                       http-types,
-                      lifted-base,
                       microlens,
                       microlens-th,
                       minimp3-hs,
-                      monad-control,
                       mtl,
                       network,
                       options,
@@ -113,12 +111,10 @@ executable Home
                       proto-lens-runtime,
                       random,
                       rxtx,
-                      websockets,
                       template-haskell,
                       text,
                       time,
                       tls,
-                      transformers-base,
                       vector
 
 

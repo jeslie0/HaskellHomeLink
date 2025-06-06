@@ -2,7 +2,7 @@
 
 module Home.Main (main) where
 
-import Control.Exception.Lifted (bracket)
+import Control.Exception (bracket)
 import Control.Monad (void)
 import Data.Aeson (eitherDecodeFileStrict)
 import Data.ProtoLens (defMessage)
@@ -32,7 +32,6 @@ import Network.Socket (HostName, ServiceName)
 import Options (runCommand)
 import Proto.Messages qualified as Proto
 import Proto.Messages_Fields qualified as Proto
-import System.Directory (doesFileExist)
 
 startCheckMemoryPoll ::
   EventLoopT Env (Island, ExHomeHandler) IO ()

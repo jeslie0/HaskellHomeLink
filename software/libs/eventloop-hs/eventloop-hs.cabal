@@ -11,7 +11,7 @@ cabal-version:      3.0
 --   http://haskell.org/cabal/users-guide/
 --
 -- The name of the package.
-name:               rxtx
+name:               eventloop-hs
 
 -- The package version.
 -- See the Haskell package versioning policy (PVP) for standards
@@ -59,16 +59,7 @@ library
     import:           warnings
 
     -- Modules exported by the library.
-    exposed-modules: RxTx,
-                     RxTx.Connection,
-                     RxTx.Connection.Socket,
-                     RxTx.Connection.TLS,
-                     RxTx.ConnectionRegistry,
-                     RxTx.Internal,
-                     RxTx.Rx,
-                     RxTx.Tx,
-                     RxTx.Socket,
-                     RxTx.TLS
+    exposed-modules: EventLoop
 
     -- Modules included in this library but not exported.
     -- other-modules:
@@ -78,13 +69,12 @@ library
 
     -- Other library packages from which modules are imported.
     build-depends:    base,
-                      cereal,
                       containers,
-                      bytestring,
-                      network,
-                      random,
-                      text,
-                      tls
+                      microlens,
+                      microlens-th,
+                      mtl,
+                      monad-control,
+                      transformers-base
 
     -- Directories containing source files.
     hs-source-dirs:   lib
