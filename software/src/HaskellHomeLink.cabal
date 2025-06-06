@@ -85,37 +85,52 @@ executable Home
     -- other-extensions:
 
     -- Other library packages from which modules are imported.
-    build-depends:    aeson,
-                      alsa-hs,
+    build-depends:
+                      -- Data
+                      aeson,
                       attoparsec,
-                      base ^>=4.19.2.0,
                       bytestring,
                       cereal,
                       containers,
+                      mtl,
+                      text,
+                      vector,
+
+                      -- Services
+                      alsa-hs,
+                      minimp3-hs,
+
+
+                      -- TLS
                       crypton-x509,
                       crypton-x509-store,
                       crypton-x509-validation,
                       data-default-class,
-                      directory,
-                      eventloop-hs,
+                      tls,
+
+                      -- HTTP Client
                       http-client,
                       http-client-tls,
                       http-types,
+
+                      -- Tools
                       microlens,
                       microlens-th,
-                      minimp3-hs,
-                      mtl,
-                      network,
-                      options,
+                      template-haskell,
+
+                      -- Protobuf
                       proto-lens,
                       proto-lens-runtime,
+
+                      -- General
+                      base,
+                      directory,
+                      eventloop-hs,
+                      network,
+                      options,
                       random,
                       rxtx,
-                      template-haskell,
-                      text,
-                      time,
-                      tls,
-                      vector
+                      time
 
 
     build-tool-depends: proto-lens-protoc:proto-lens-protoc ^>= 0.8.0.1
