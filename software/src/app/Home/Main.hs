@@ -3,7 +3,7 @@
 module Home.Main (main) where
 
 import Control.Exception (bracket)
-import Control.Monad (void)
+import Control.Monad (void, when)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Aeson (eitherDecodeFileStrict)
 import Data.ProtoLens (defMessage)
@@ -52,7 +52,7 @@ connectToProxyTLS ::
   -> FilePath
   -> FilePath
   -> FilePath
-  -> EventLoopT Env (Device, ExHomeHandler) IO ()
+  -> EventLoopT Env (Device, ExHomeHandler) IO Bool
 connectToProxyTLS host port certPath keyPath caCertPath = do
   mParams <-
     liftIO $
@@ -62,12 +62,15 @@ connectToProxyTLS host port certPath keyPath caCertPath = do
         caCertPath
         "raspberrypi"
   case mParams of
-    Nothing -> liftIO $ putStrLn "Failed to unpack TLS server params"
+    Nothing -> do
+      liftIO $ putStrLn "Failed to unpack TLS server params"
+      pure False
     Just params -> do
       addMsg
         ( Home
         , ExHomeHandler $ EstablishTLSConnection params (T.pack host) (T.pack port)
         )
+      pure True
 
 main :: IO ()
 main = runCommand $ \(opts :: HomeOptions) _args -> do
@@ -82,11 +85,12 @@ main = runCommand $ \(opts :: HomeOptions) _args -> do
   action ::
     HomeConfiguration -> EventLoopT Env (Device, ExHomeHandler) IO ()
   action config = do
-    connectToProxyTLS
+    success <- connectToProxyTLS
       (config ^. proxyURL)
       (show $ config ^. proxyPort)
       (config ^. tlsCertificatePath)
       (config ^. tlsKeyPath)
       (config ^. tlsCACertificatePath)
-    startCheckMemoryPoll
-    start $ uncurry homeHandler
+    when success $ do
+        startCheckMemoryPoll
+        start $ uncurry homeHandler

@@ -10,7 +10,6 @@ import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Traversable (traverse)
 import Data.UInt (UInt)
 import Debug (trace)
-import Proto.Messages as Proto
 import ProtoHelper (class FromMessage, class SayError, fromMessage, sayError, toEither)
 
 type CPUDataR = (modelName :: String)

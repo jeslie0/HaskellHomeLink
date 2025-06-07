@@ -29,7 +29,6 @@ import Fetch (fetch)
 import Logs (Log, Logs(..))
 import Parsing (fail, runParserT)
 import Poller (Poller, mkPoller)
-import Proto.Messages as Proto
 import ProtoHelper (fromMessage, sayError, toMessage)
 import Radio (Stream(..), StreamStatus(..), StreamStatusError, radioStreams)
 import System (AllIslandsMemoryData(..), Island(..), IslandMemoryInformation(..), IslandsSystemData(..), SystemData(..))

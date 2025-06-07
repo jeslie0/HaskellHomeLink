@@ -42,8 +42,6 @@ import Proto.DeviceData qualified as Proto
 import Proto.DeviceData_Fields qualified as Proto
 import Proto.Envelope qualified as Proto
 import Proto.Envelope_Fields qualified as Proto
-import Proto.Messages qualified as Proto
-import Proto.Messages_Fields qualified as Proto
 import Proto.Radio qualified as Proto
 import Proto.Radio_Fields qualified as Proto
 import ProtoHelper (ToMessage (..))
@@ -52,6 +50,7 @@ import Router (
   connectionsRegistry,
   tryForwardMessage,
   trySendMessage,
+  handleBytes
  )
 import RxTx.Connection (cleanup, recvAndDispatch)
 import RxTx.Connection.Socket (aquireClientSocket, connectToHost)
@@ -131,9 +130,10 @@ instance HomeHandler EstablishTLSConnection where
           cleanup conn
           void $ setTimeoutIO (Home, ExHomeHandler msg) 2000 loop
         Right bytes -> do
-          case decode @Proto.HomeEnvelope bytes of
-            Left parseErr -> putStrLn $ "Failed to parse message " <> parseErr
-            Right homeMsg -> addMsgIO (Home, ExHomeHandler homeMsg) loop
+          handleBytes @Proto.WrappedEnvelope bytes router $ \src wrappedEnv ->
+            case wrappedEnv ^. Proto.maybe'wrappedPayload of
+              Just (Proto.WrappedEnvelope'HomeMsg homeMsg) -> addMsgIO (src, ExHomeHandler homeMsg) loop
+              _ -> putStrLn "Dropping message for wrong device..."
           runConnection conn loop
 
 -- * Helper functions

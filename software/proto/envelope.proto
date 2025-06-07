@@ -4,7 +4,6 @@ package proto.Envelope;
 
 import "radio.proto";
 import "deviceData.proto";
-import "messages.proto";
 import "logging.proto";
 import "camera.proto";
 
@@ -32,5 +31,13 @@ message ProxyEnvelope {
 message CameraEnvelope {
   oneof payload {
     proto.Camera.TakePicture m1 = 1;
+  }
+}
+
+message WrappedEnvelope {
+  oneof wrappedPayload {
+    HomeEnvelope homeMsg = 1;
+    ProxyEnvelope proxyMsg = 2;
+    CameraEnvelope cameraMsg = 3;
   }
 }

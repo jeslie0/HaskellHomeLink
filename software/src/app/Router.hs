@@ -17,8 +17,7 @@ import Control.Monad (void)
 import Data.ByteString qualified as B
 import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
-import Data.Serialize (Serialize (..), encode, runGet)
-import Data.Typeable (Typeable)
+import Data.Serialize (Serialize (..), encode, decode)
 import Devices (Device (..))
 import Lens.Micro ((^.))
 import Lens.Micro.TH (makeLenses)
@@ -54,7 +53,7 @@ mkRouter island = do
 data MessagePackage msg = MessagePackage
   { source :: {-# UNPACK #-} !Device
   , destination :: {-# UNPACK #-} !Device
-  , msg :: !msg
+  , msg :: msg
   }
 
 instance Serialize msg => Serialize (MessagePackage msg) where
@@ -71,7 +70,7 @@ instance Serialize msg => Serialize (MessagePackage msg) where
 
 trySendMsg ::
   forall msg.
-  (Typeable msg, Serialize msg) =>
+  (Serialize msg) =>
   AsyncConnectionRegistry Device B.ByteString
   -> Device
   -- ^ Source of msg
@@ -91,13 +90,13 @@ trySendMsg (AsyncConnectionRegistry mvar) src finalDest nextDest msg = do
     _ -> pure False
 
 trySendMessage ::
-  (Typeable msg, Serialize msg) => Router -> Device -> msg -> IO Bool
+  (Serialize msg) => Router -> Device -> msg -> IO Bool
 trySendMessage (Router island connMgr) dest msg =
   let hop = fromMaybe dest $ nextHop island dest
   in trySendMsg connMgr island dest hop msg
 
 tryForwardMessage ::
-  (Typeable msg, Serialize msg) =>
+  Serialize msg =>
   Router
   -> Device
   -> Device
@@ -109,13 +108,13 @@ tryForwardMessage (Router island connMgr) src dest msg =
 
 handleBytes ::
   forall msg.
-  (Typeable msg, Serialize msg) =>
-  (Device -> msg -> IO ())
+  (Serialize msg) =>
+   B.ByteString
   -> Router
-  -> B.ByteString
+  -> (Device -> msg -> IO ())
   -> IO ()
-handleBytes handleMsg rtr bytes = do
-  case runGet get bytes of
+handleBytes bytes rtr handleMsg = do
+  case decode bytes of
     Left errStr -> putStrLn $ "Error extracting bytes: " <> errStr
     Right (MessagePackage src dest msg) ->
       if dest == rtr ^. thisDevice

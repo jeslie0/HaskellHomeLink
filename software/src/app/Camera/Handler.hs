@@ -20,8 +20,6 @@ import EventLoop (EventLoopT, getEnv)
 import Islands (Island (..))
 import Lens.Micro ((&), (.~), (^.))
 import Logger (LogLevel (..), addLog, reportLog)
-import Proto.Messages qualified as Proto
-import Proto.Messages_Fields qualified as Proto
 import ProtoHelper (FromMessage (..), toMessage)
 import Proxy.Env (Env, logs, memoryMap, router, streamStatusState, systemMap)
 import Router (trySendMessage)

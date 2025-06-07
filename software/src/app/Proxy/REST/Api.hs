@@ -4,7 +4,9 @@
 
 module Proxy.REST.Api (Api, Radio, RadioCommand (..), Connection) where
 
-import Proto.Messages qualified as Proto
+import Proto.DeviceData qualified as Proto
+import Proto.Logging qualified as Proto
+import Proto.Radio qualified as Proto
 import Servant (
   FromHttpApiData (..),
   Get,
@@ -17,7 +19,7 @@ import Servant (
   (:<|>) (..),
   (:>),
  )
-import Servant.API.ContentTypes.Proto
+import Servant.API.ContentTypes.Proto ( Proto )
 import State (StateId)
 
 type Api =
@@ -39,10 +41,10 @@ type Radio =
             :> PostAccepted '[JSON] Bool
        )
 
-type Memory = "memory" :> Get '[Proto] Proto.AllIslandMemoryData
+type Memory = "memory" :> Get '[Proto] Proto.AllDeviceMemoryData
 
 type System =
-  "system" :> Get '[Proto] Proto.IslandsSystemData
+  "system" :> Get '[Proto] Proto.AllDeviceData
 
 type Logs =
   "logs" :> Get '[Proto] Proto.Logs

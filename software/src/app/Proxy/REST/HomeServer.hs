@@ -4,7 +4,14 @@
 
 module Proxy.REST.HomeServer (runApp, mkEnv, router) where
 
-import Connection.TLS (loadCAStore, mTLSHooks)
+import Proto.Logging qualified as Proto
+import Proto.Logging_Fields qualified as Proto
+import Proto.Radio qualified as Proto
+import Proto.Radio_Fields qualified as Proto
+import Proto.DeviceData qualified as Proto
+import Proto.DeviceData_Fields qualified as Proto
+
+import TLSHelper (loadCAStore, mTLSHooks)
 import Control.Concurrent (MVar, readMVar)
 import Control.Exception (SomeAsyncException, catch, throwIO)
 import Control.Monad (void)
@@ -15,7 +22,7 @@ import Data.ProtoLens (defMessage)
 import Data.Vector qualified as V
 import Envelope (toEnvelope)
 import Home.AudioStreamTypes (StationId, StreamStatus)
-import Islands (Island (..))
+import Devices qualified as Dev
 import Lens.Micro ((&), (.~), (^.))
 import Lens.Micro.TH (makeLenses)
 import Logger (Logs, getLogs)
@@ -35,8 +42,6 @@ import Network.Wai.Handler.WarpTLS (
   tlsSettings,
  )
 import Network.WebSockets qualified as WS
-import Proto.Messages qualified as Proto
-import Proto.Messages_Fields qualified as Proto
 import ProtoHelper (toMessage)
 import Proxy.WebsocketServer (websocketServer)
 import Proxy.REST.Api (Api)
@@ -52,14 +57,14 @@ import Servant (
  )
 import Servant.Server (Application)
 import State (State, StateId, waitForStateUpdate, withState)
-import System (SystemData)
+import System (DeviceData)
 import System.Memory (MemoryInformation)
 import WaiAppStatic.Types (unsafeToPiece)
 
 data Env = Env
   { _streamStatusState :: State (StreamStatus, StationId)
-  , _systemDataState :: MVar (Map.Map Island SystemData)
-  , _memoryMap :: MVar (Map.Map Island (V.Vector MemoryInformation))
+  , _deviceDataState :: MVar (Map.Map Dev.Device DeviceData)
+  , _memoryMap :: MVar (Map.Map Dev.Device (V.Vector MemoryInformation))
   , _wsConns :: MVar (Map.Map Int32 WS.Connection)
   , _router :: Router
   , _logs :: Logs
@@ -69,8 +74,8 @@ $(makeLenses ''Env)
 
 mkEnv ::
   State (StreamStatus, StationId)
-  -> MVar (Map.Map Island SystemData)
-  -> MVar (Map.Map Island (V.Vector MemoryInformation))
+  -> MVar (Map.Map Dev.Device DeviceData)
+  -> MVar (Map.Map Dev.Device (V.Vector MemoryInformation))
   -> MVar (Map.Map Int32 WS.Connection)
   -> Logs
   -> Router
@@ -79,7 +84,7 @@ mkEnv streamStatus systemState memMap wsConns' logs' rtr = do
   pure $
     Env
       { _streamStatusState = streamStatus
-      , _systemDataState = systemState
+      , _deviceDataState = systemState
       , _memoryMap = memMap
       , _wsConns = wsConns'
       , _router = rtr
@@ -108,17 +113,17 @@ handleModifyRadioRequest env req (Just stateId) = do
     void $
       trySendMessage
         (env ^. router)
-        Home
+        Dev.Home
         (toEnvelope req)
   pure True
 
-handleGetSystemDataRequest :: Env -> Handler Proto.IslandsSystemData
-handleGetSystemDataRequest env = do
-  sysMap <- liftIO $ readMVar (env ^. systemDataState)
-  pure $ toMessage sysMap
+handleGetDeviceDataRequest :: Env -> Handler Proto.AllDeviceData
+handleGetDeviceDataRequest env = do
+  devMap <- liftIO $ readMVar (env ^. deviceDataState)
+  pure $ toMessage devMap
 
-handleGetAllIslandsMemoryDataRequest :: Env -> Handler Proto.AllIslandMemoryData
-handleGetAllIslandsMemoryDataRequest env = do
+handleGetAllDevicesMemoryDataRequest :: Env -> Handler Proto.AllDeviceMemoryData
+handleGetAllDevicesMemoryDataRequest env = do
   memMap <- liftIO $ readMVar (env ^. memoryMap)
   pure . toMessage $ memMap
 
@@ -137,8 +142,8 @@ server env =
   ( ( handleGetRadioStatus env
         :<|> handleModifyRadioRequest env
     )
-      :<|> handleGetSystemDataRequest env
-      :<|> handleGetAllIslandsMemoryDataRequest env
+      :<|> handleGetDeviceDataRequest env
+      :<|> handleGetAllDevicesMemoryDataRequest env
       :<|> handleGetLogs env
   )
     :<|> serveDir "/usr/local/haskell-home-link"

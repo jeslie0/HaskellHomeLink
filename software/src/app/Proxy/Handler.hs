@@ -15,27 +15,32 @@ import Data.Vector qualified as V
 import Data.Vector.Mutable qualified as VM
 import Envelope (toEnvelope)
 import EventLoop (EventLoopT, getEnv)
-import Islands (Island (..))
+import Devices (Device (..))
 import Lens.Micro ((^.))
 import Logger (LogLevel (..), addLog, reportLog)
-import Proto.Messages qualified as Proto
-import Proto.Messages_Fields qualified as Proto
 import ProtoHelper (FromMessage (..), toMessage)
-import Proxy.Env (Env, logs, memoryMap, router, streamStatusState, systemMap)
+import Proxy.Env (Env, logs, memoryMap, router, streamStatusState, deviceMap)
+import Proto.Envelope qualified as Proto
+import Proto.Envelope_Fields qualified as Proto
+import Proto.Radio qualified as Proto
+import Proto.Radio_Fields qualified as Proto
+import Proto.Logging qualified as Proto
+import Proto.Logging_Fields qualified as Proto
+import Proto.DeviceData qualified as Proto
+import Proto.DeviceData_Fields qualified as Proto
 import Router (trySendMessage)
 import State (fulfilPromise)
 import System.Memory (MemoryInformation, getMemoryInformation)
 import TH (makeInstance)
-import System (island)
 
 class ProxyHandler msg where
   proxyHandler ::
-    Island -> msg -> EventLoopT Env (Island, ExProxyHandler) IO ()
+    Device -> msg -> EventLoopT Env (Device, ExProxyHandler) IO ()
 
 data ExProxyHandler = forall a. ProxyHandler a => ExProxyHandler a
 
 instance ProxyHandler ExProxyHandler where
-  proxyHandler island' (ExProxyHandler msg) = proxyHandler island' msg
+  proxyHandler device' (ExProxyHandler msg) = proxyHandler device' msg
 
 -- * Message instances
 
@@ -66,14 +71,14 @@ instance ProxyHandler Proto.GetRadioStatusResponse where
         (fromMessage $ resp ^. Proto.status, resp ^. Proto.currentStationId)
         (env ^. streamStatusState)
 
-instance ProxyHandler Proto.SystemData where
-  proxyHandler _ resp = do
+instance ProxyHandler Proto.DeviceData where
+  proxyHandler device resp = do
     env <- getEnv
-    liftIO $ modifyMVar_ (env ^. systemMap) $ \sysMap ->
+    liftIO $ modifyMVar_ (env ^. deviceMap) $ \sysMap ->
       let
         sysData = fromMessage resp 
       in
-        pure $ Map.insert (sysData ^. island) sysData sysMap
+        pure $ Map.insert device sysData sysMap
 
 instance ProxyHandler Proto.MemoryInformation where
   proxyHandler src resp = do

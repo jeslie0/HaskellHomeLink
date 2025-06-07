@@ -4,7 +4,6 @@ import Prelude
 
 import Data.Either (Either(..))
 import Data.UInt (UInt, fromInt)
-import Proto.Messages as Proto
 import ProtoHelper (class FromMessage, class ToMessage)
 import Protobuf.Internal.Prelude (toInt)
 

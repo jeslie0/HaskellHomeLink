@@ -8,7 +8,6 @@ import Data.DateTime.Instant (Instant, instant)
 import Data.Either (Either(..))
 import Data.Time.Duration (Milliseconds(..))
 import Data.Int64 as Int64
-import Proto.Messages as Proto
 import ProtoHelper (class FromMessage, fromMessage, class SayError, toEither)
 import System (Island, IslandError)
 
