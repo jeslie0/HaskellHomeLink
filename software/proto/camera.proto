@@ -1,0 +1,13 @@
+syntax="proto3";
+
+package proto.Camera;
+
+// * Camera msgs
+
+message TakePicture {
+
+}
+
+message PictureData {
+  bytes imageData = 1;
+}

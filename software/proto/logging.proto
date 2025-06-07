@@ -1,0 +1,30 @@
+syntax="proto3";
+
+package proto.Logging;
+
+import "deviceData.proto";
+
+enum LOG_LEVEL {
+  UNDEFINED = 0;
+  TRACE = 1;
+  DEBUG = 2;
+  INFO = 3;
+  WARN = 4;
+  ERROR = 5;
+  FATAL = 6;
+}
+
+message Log {
+  int64 timestampMs = 1;
+  proto.Device_Data.DEVICE device = 2;
+  LOG_LEVEL level = 3;
+  string content = 4;
+}
+
+message Logs {
+  repeated Log logs = 1;
+}
+
+message AddLog {
+  Log log = 1;
+}

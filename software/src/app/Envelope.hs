@@ -4,8 +4,8 @@ module Envelope (ToEnvelope (..), ToProxyEnvelope (..)) where
 
 import Data.ProtoLens (defMessage)
 import Lens.Micro ((?~))
-import Proto.Messages qualified as Proto
-import Proto.Messages_Fields qualified as Proto
+import Proto.Envelope qualified as Proto
+import Proto.Envelope_Fields qualified as Proto
 import TH (makeToEnvelopeInstances)
 
 class ToEnvelope msg where

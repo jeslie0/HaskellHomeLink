@@ -19,13 +19,14 @@ import Data.Time.Clock.System (SystemTime (..), getSystemTime, systemToUTCTime)
 import Data.Time.Format
 import Data.Vector qualified as V
 import Data.Vector.Mutable qualified as VM
+import Devices (Device, proxies)
 import Envelope (ToProxyEnvelope (..))
-import Islands (Island, proxies)
 import Lens.Micro ((&), (.~), (^.))
-import Proto.Messages qualified as Proto
-import Proto.Messages_Fields qualified as Proto
+import Proto.DeviceData qualified as Proto
+import Proto.Logging qualified as Proto
+import Proto.Logging_Fields qualified as Proto
 import ProtoHelper (FromMessage (..), ToMessage (..))
-import Router (Router, thisIsland, trySendMessage)
+import Router (Router, thisDevice, trySendMessage)
 
 data LogLevel
   = Trace
@@ -74,7 +75,7 @@ formatLog :: Proto.Log -> T.Text
 formatLog log' =
   let
     island =
-      T.pack (show $ fromMessage @Proto.ISLAND @Island $ log' ^. Proto.island)
+      T.pack (show $ fromMessage @Proto.DEVICE @Device $ log' ^. Proto.device)
     time =
       T.pack . formatTime defaultTimeLocale "%Y-%m-%d %H:%M:%S" $
         systemToUTCTime (MkSystemTime (log' ^. Proto.timestampMs `div` 1000) 0)
@@ -90,8 +91,8 @@ reportLog rtr lvl txt = do
       defMessage
         & Proto.timestampMs
         .~ (1000 * sec + fromIntegral nano `div` 1000000)
-        & Proto.island
-        .~ toMessage (rtr ^. thisIsland)
+        & Proto.device
+        .~ toMessage (rtr ^. thisDevice)
         & Proto.level
         .~ toMessage lvl
         & Proto.content

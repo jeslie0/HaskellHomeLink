@@ -1,0 +1,38 @@
+syntax="proto3";
+
+package proto.Radio;
+
+enum STREAM_STATUS {
+  OFF = 0;
+  INITIATED = 1;
+  PLAYING = 2;
+}
+
+
+
+message RadioStation {
+  string url = 1;
+  uint32 id = 2;
+}
+
+// Received from HTTP Server.
+message ModifyRadioRequest {
+  optional RadioStation station = 1;
+}
+
+message RadioStatusUpdate {
+  STREAM_STATUS status = 1;
+  uint32 currentStationId = 2;
+}
+
+// Received from HTTP Server.
+message GetRadioStatusRequest {
+
+}
+
+// Sent to HTTP Server
+message GetRadioStatusResponse {
+  int32 stateId = 1;
+  STREAM_STATUS status = 2;
+  uint32 currentStationId = 3;
+}

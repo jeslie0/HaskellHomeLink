@@ -1,6 +1,6 @@
 module Home.AudioStreamTypes where
 
-import Proto.Messages qualified as Proto
+import Proto.Radio qualified as Proto
 import ProtoHelper (FromMessage (fromMessage), ToMessage (toMessage))
 import Data.Word (Word32)
 

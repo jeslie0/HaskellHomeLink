@@ -9,6 +9,7 @@
 module Home.Handler (
   HomeHandler (..),
   ExHomeHandler (..),
+  EstablishTLSConnection(..)
 ) where
 
 import Control.Concurrent (forkFinally, forkIO, killThread)
@@ -20,6 +21,7 @@ import Data.IORef (atomicModifyIORef')
 import Data.ProtoLens (defMessage)
 import Data.Serialize (decode)
 import Data.Text qualified as T
+import Devices (Device (..), devices, proxies)
 import Envelope (ToProxyEnvelope (..))
 import EventLoop (
   EventLoopT,
@@ -32,12 +34,18 @@ import EventLoop (
 import Home.AudioStream (startAudioStream)
 import Home.AudioStreamTypes (StationId, StreamStatus (..))
 import Home.Env (Env, audioStreamRef, router)
-import Islands (Island (..), islands, proxies)
 import Lens.Micro ((&), (.~), (?~), (^.), _1, _2, _3)
 import Logger (LogLevel (..), reportLog)
 import Network.Socket (AddrInfo (addrAddress), close)
+import Network.TLS qualified as TLS
+import Proto.DeviceData qualified as Proto
+import Proto.DeviceData_Fields qualified as Proto
+import Proto.Envelope qualified as Proto
+import Proto.Envelope_Fields qualified as Proto
 import Proto.Messages qualified as Proto
 import Proto.Messages_Fields qualified as Proto
+import Proto.Radio qualified as Proto
+import Proto.Radio_Fields qualified as Proto
 import ProtoHelper (ToMessage (..))
 import Router (
   Router,
@@ -56,14 +64,12 @@ import TLSHelper (setupTLSClientParams)
 
 class HomeHandler msg where
   homeHandler ::
-    Island -> msg -> EventLoopT Env (Island, ExHomeHandler) IO ()
+    Device -> msg -> EventLoopT Env (Device, ExHomeHandler) IO ()
 
 data ExHomeHandler = forall a. HomeHandler a => ExHomeHandler a
 
 instance HomeHandler ExHomeHandler where
   homeHandler island (ExHomeHandler msg) = homeHandler island msg
-
--- * Message instances
 
 -- Make HomeHandler Home.Envelope instance.
 $( makeInstance
@@ -73,8 +79,67 @@ $( makeInstance
     ''Proto.HomeEnvelope'Payload
  )
 
+
+-- * Non protobuf messages
+
+data EstablishTLSConnection = EstablishTLSConnection
+  { clientParams :: {-# UNPACK #-} !TLS.ClientParams
+  , hostname :: {-# UNPACK #-} !T.Text
+  , port :: {-# UNPACK #-} !T.Text
+  }
+
+instance HomeHandler EstablishTLSConnection where
+  homeHandler device msg@(EstablishTLSConnection params host port) = do
+    env <- getEnv
+    loop <- getLoop
+    let registry = env ^. router . connectionsRegistry
+
+    void . liftIO $
+      bracketOnError
+        (aquireClientSocket (T.unpack host) (T.unpack port))
+        (traverse_ $ \(sock, _) -> close sock)
+        (withSocket loop registry)
+   where
+    withSocket loop _ Nothing = do
+      liftIO $ putStrLn "Failed to reach server"
+      void $ setTimeoutIO (Home, ExHomeHandler msg) 2000 loop
+    withSocket loop registry (Just (sock, addr)) = do
+      putStrLn $ "Connecting to host: " <> show (addrAddress addr)
+      success <- connectToHost sock addr
+      if success
+        then do
+          putStrLn $ "Connected to " <> show (addrAddress addr)
+          mConn <- upgradeSocket params sock
+          case mConn of
+            Nothing -> putStrLn "Failed to upgrade socket to TLS context"
+            Just conn -> do
+              putStrLn "Established TLS connection"
+              threadId <- forkIO . void $ runConnection conn loop
+              addConnection Proxy threadId conn registry
+        else do
+          putStrLn $
+            "Failed to connect to server: "
+              <> show (addrAddress addr)
+              <> ". Trying again in 2s..."
+          void $ setTimeoutIO (Home, ExHomeHandler msg) 2000 loop
+
+    runConnection conn loop = do
+      merror <- recvAndDispatch conn
+      case merror of
+        Left (TLSRxError _ err) -> do
+          print $ "ERROR: " <> show err
+          cleanup conn
+          void $ setTimeoutIO (Home, ExHomeHandler msg) 2000 loop
+        Right bytes -> do
+          case decode @Proto.HomeEnvelope bytes of
+            Left parseErr -> putStrLn $ "Failed to parse message " <> parseErr
+            Right homeMsg -> addMsgIO (Home, ExHomeHandler homeMsg) loop
+          runConnection conn loop
+
+-- * Helper functions
+
 notifyProxyRadioStatus ::
-  Router -> Island -> StreamStatus -> StationId -> IO Bool
+  Router -> Device -> StreamStatus -> StationId -> IO Bool
 notifyProxyRadioStatus rtr island status stationId =
   trySendMessage
     rtr
@@ -87,6 +152,7 @@ notifyProxyRadioStatus rtr island status stationId =
           .~ stationId
     )
 
+-- * Protobuf handlers
 -- | Try to make a new asynchronous audio stream in a separate
 -- thread. If one exists, report the error.
 instance HomeHandler Proto.ModifyRadioRequest where
@@ -136,71 +202,12 @@ instance HomeHandler Proto.ModifyRadioRequest where
     void . liftIO $ notify
 
 -- | Spawn a new thread and try to connect to the given TCP server.
-instance HomeHandler Proto.ConnectTLS where
-  homeHandler _ msg = do
-    env <- getEnv
-    loop <- getLoop
-    let
-      host = msg ^. Proto.host
-      port = msg ^. Proto.port
-      registry = env ^. router . connectionsRegistry
-
-    void . liftIO $
-      bracketOnError
-        (aquireClientSocket (T.unpack host) (T.unpack port))
-        (traverse_ $ \(sock, _) -> close sock)
-        (withSocket loop registry)
-   where
-    withSocket loop _ Nothing = do
-      liftIO $ putStrLn "Failed to reach server"
-      void $ setTimeoutIO (Home, ExHomeHandler msg) 2000 loop
-    withSocket loop registry (Just (sock, addr)) = do
-      putStrLn $ "Connecting to host: " <> show (addrAddress addr)
-      success <- connectToHost sock addr
-      if success
-        then do
-          putStrLn $ "Connected to " <> show (addrAddress addr)
-          mParams <-
-            setupTLSClientParams
-              (T.unpack $ msg ^. Proto.certPath)
-              (T.unpack $ msg ^. Proto.keyPath)
-              (T.unpack $ msg ^. Proto.caCertPath)
-              "raspberrypi"
-          case mParams of
-            Nothing -> putStrLn "Failed to unpack TLS server params"
-            Just params -> do
-              mConn <- upgradeSocket params sock
-              case mConn of
-                Nothing -> putStrLn "Failed to upgrade socket to TLS context"
-                Just conn -> do
-                  putStrLn "Established TLS connection"
-                  threadId <- forkIO . void $ runConnection conn loop
-                  addConnection RemoteProxy threadId conn registry
-        else do
-          putStrLn $
-            "Failed to connect to server: "
-              <> show (addrAddress addr)
-              <> ". Trying again in 2s..."
-          void $ setTimeoutIO (Home, ExHomeHandler msg) 2000 loop
-
-    runConnection conn loop = do
-      merror <- recvAndDispatch conn
-      case merror of
-        Left (TLSRxError _ err) -> do
-          print $ "ERROR: " <> show err
-          cleanup conn
-          void $ setTimeoutIO (Home, ExHomeHandler msg) 2000 loop
-        Right bytes -> do
-          case decode @Proto.HomeEnvelope bytes of
-            Left parseErr -> putStrLn $ "Failed to parse message " <> parseErr
-            Right homeMsg -> addMsgIO (Home, ExHomeHandler homeMsg) loop
-          runConnection conn loop
 
 --
-instance HomeHandler Proto.SystemData where
+instance HomeHandler Proto.DeviceData where
   homeHandler _ msg = do
     env <- getEnv
-    liftIO . forM_ (filter (/= Home) islands) $ \island ->
+    liftIO . forM_ (filter (/= Home) devices) $ \island ->
       trySendMessage (env ^. router) island msg
 
 instance HomeHandler Proto.MemoryInformation where

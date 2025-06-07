@@ -8,7 +8,7 @@ module System.Memory (
   systemTimeNs,
   memUsedkB,
   getMemoryInformation,
-  island,
+  device,
   timeMem,
 ) where
 
@@ -20,18 +20,18 @@ import Data.Text qualified as T
 import Data.Time.Clock.System (SystemTime (..), getSystemTime)
 import Data.Vector qualified as V
 import Data.Word (Word32, Word64)
-import Islands (Island)
+import Devices (Device)
 import Lens.Micro ((.~), (^.))
 import Lens.Micro.TH (makeLenses)
 import Parsing (parseKeyValuePairFile)
-import Proto.Messages qualified as Proto
-import Proto.Messages_Fields qualified as Proto
+import Proto.DeviceData qualified as Proto
+import Proto.DeviceData_Fields qualified as Proto
 import ProtoHelper (FromMessage (..), ToMessage (..))
 import Text.Read (readMaybe)
 
 data MemoryInformation = MemoryInformation
-  { _systemTimeNs :: !Word64
-  , _memUsedkB :: !Word32
+  { _systemTimeNs :: {-# UNPACK #-} !Word64
+  , _memUsedkB :: {-# UNPACK #-} !Word32
   }
   deriving (Eq, Show)
 
@@ -50,35 +50,37 @@ instance FromMessage Proto.MemoryInformation MemoryInformation where
         , _memUsedkB = round mem
         }
 
-data IslandMemoryInformation = IslandMemoryInformation
-  { _island :: Island
-  , _timeMem :: V.Vector MemoryInformation
+data DeviceMemoryInformation = DeviceMemoryInformation
+  { _device :: {-# UNPACK #-} !Device
+  , _timeMem :: {-# UNPACK #-} !(V.Vector MemoryInformation)
   }
 
-instance ToMessage Proto.IslandMemoryInformation IslandMemoryInformation where
-  toMessage (IslandMemoryInformation island' memInfos') =
+instance ToMessage Proto.DeviceMemoryInformation DeviceMemoryInformation where
+  toMessage (DeviceMemoryInformation island' memInfos') =
     defMessage
-      & Proto.island .~ toMessage island'
+      & Proto.device .~ toMessage island'
       & Proto.timeMem .~ V.toList (toMessage <$> memInfos')
 
-instance FromMessage Proto.IslandMemoryInformation IslandMemoryInformation where
+instance FromMessage Proto.DeviceMemoryInformation DeviceMemoryInformation where
   fromMessage msg =
-    IslandMemoryInformation
-      { _island = fromMessage $ msg ^. Proto.island
+    DeviceMemoryInformation
+      { _device = fromMessage $ msg ^. Proto.device
       , _timeMem = V.fromList $ fromMessage <$> msg ^. Proto.timeMem
       }
 
-$(makeLenses ''IslandMemoryInformation)
+$(makeLenses ''DeviceMemoryInformation)
 
 instance
   ToMessage
-    Proto.AllIslandMemoryData
-    (Map.Map Island (V.Vector MemoryInformation))
+    Proto.AllDeviceMemoryData
+    (Map.Map Device (V.Vector MemoryInformation))
   where
   toMessage memMap =
     defMessage
-      & Proto.allIslandMemoryData
-        .~ (Map.toList memMap <> Map.toList memMap <&> toMessage . uncurry IslandMemoryInformation)
+      & Proto.allDeviceMemoryData
+        .~ ( Map.toList memMap <> Map.toList memMap
+              <&> toMessage . uncurry DeviceMemoryInformation
+           )
 
 getTotalMemory :: IO (Maybe Word32)
 getTotalMemory = do
@@ -103,4 +105,7 @@ getMemoryInformation :: IO (Maybe MemoryInformation)
 getMemoryInformation = do
   mem <- getUsedMemory
   MkSystemTime sec nanosec <- getSystemTime
-  pure $ MemoryInformation (fromIntegral sec * 1000 + (fromIntegral nanosec `div` 1000000)) <$> mem
+  pure $
+    MemoryInformation
+      (fromIntegral sec * 1000 + (fromIntegral nanosec `div` 1000000))
+      <$> mem

@@ -1,14 +1,13 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module System (
-  SystemData,
+  DeviceData,
   cpuData,
-  mkSystemData,
+  mkDeviceData,
   inDockerContainer,
   operatingSystemName,
   architecture,
   memTotalKb,
-  island,
 ) where
 
 import Control.Monad.IO.Class (MonadIO (liftIO))
@@ -16,38 +15,36 @@ import Data.Map.Strict qualified as Map
 import Data.ProtoLens (defMessage)
 import Data.Text qualified as T
 import Data.Word (Word32)
-import Islands (Island)
+import Devices (Device)
 import Lens.Micro ((&), (.~), (^.))
 import Lens.Micro.TH (makeLenses)
-import Proto.Messages qualified as Proto
-import Proto.Messages_Fields qualified as Proto
+import Proto.DeviceData qualified as Proto
+import Proto.DeviceData_Fields qualified as Proto
 import ProtoHelper (FromMessage (fromMessage), ToMessage, toMessage)
 import System.CPU (CPUData, getCPUData)
 import System.Directory (doesFileExist)
 import System.Info (arch, os)
 import System.Memory (getTotalMemory)
 
-data SystemData = SystemData
+data DeviceData = DeviceData
   { _cpuData :: {-# UNPACK #-} !(Maybe CPUData)
   , _inDockerContainer :: {-# UNPACK #-} !Bool
   , _operatingSystemName :: {-# UNPACK #-} !T.Text
   , _architecture :: {-# UNPACK #-} !T.Text
-  , _memTotalKb :: {-# UNPACK #-} !(Maybe Word32)
-  , _island :: {-# UNPACK #-} !Island
+  , _memTotalKb :: {-# UNPACK #-} !Word32
   }
   deriving (Show, Eq)
 
-$(makeLenses ''SystemData)
+$(makeLenses ''DeviceData)
 
-instance ToMessage Proto.SystemData SystemData where
+instance ToMessage Proto.DeviceData DeviceData where
   toMessage
-    ( SystemData
+    ( DeviceData
         cpuData'
         inDockerContainer'
         operatingSystemName'
         architecture'
         memTotalkB'
-        island'
       ) =
       defMessage
         & Proto.maybe'cpuData
@@ -58,29 +55,31 @@ instance ToMessage Proto.SystemData SystemData where
         .~ operatingSystemName'
         & Proto.architecture
         .~ architecture'
-        & Proto.maybe'memTotalkB
+        & Proto.memTotalkB
         .~ memTotalkB'
-        & Proto.island
-        .~ toMessage island'
 
-instance FromMessage Proto.SystemData SystemData where
-  fromMessage systemDataMessage =
-    SystemData
-      { _cpuData = fromMessage <$> systemDataMessage ^. Proto.maybe'cpuData
-      , _inDockerContainer = systemDataMessage ^. Proto.inDockerContainer
-      , _operatingSystemName = systemDataMessage ^. Proto.operatingSystemName
-      , _architecture = systemDataMessage ^. Proto.architecture
-      , _memTotalKb = systemDataMessage ^. Proto.maybe'memTotalkB
-      , _island = fromMessage $ systemDataMessage ^. Proto.island
+instance FromMessage Proto.DeviceData DeviceData where
+  fromMessage deviceDataMsg =
+    DeviceData
+      { _cpuData = fromMessage <$> deviceDataMsg ^. Proto.maybe'cpuData
+      , _inDockerContainer = deviceDataMsg ^. Proto.inDockerContainer
+      , _operatingSystemName = deviceDataMsg ^. Proto.operatingSystemName
+      , _architecture = deviceDataMsg ^. Proto.architecture
+      , _memTotalKb = deviceDataMsg ^. Proto.memTotalkB
       }
 
-instance ToMessage Proto.IslandsSystemData (Map.Map Island SystemData) where
+instance ToMessage Proto.AllDeviceData (Map.Map Device DeviceData) where
   toMessage mp =
     defMessage
-      & Proto.allSystemData
+      & Proto.allDeviceData
       .~ ( Map.toList mp
             & fmap
-              ( \(_island, sysData) -> toMessage sysData
+              ( \(dev, deviceData) ->
+                  defMessage
+                    & Proto.device
+                    .~ toMessage dev
+                    & Proto.deviceData
+                    .~ toMessage deviceData
               )
          )
 
@@ -88,17 +87,19 @@ isInDockerContainer :: IO Bool
 isInDockerContainer = do
   doesFileExist "/.dockerenv"
 
-mkSystemData :: Island -> IO SystemData
-mkSystemData island' = do
+mkDeviceData :: IO (Maybe DeviceData)
+mkDeviceData = do
   mCPUData <- getCPUData
   inDockerContainer' <- liftIO isInDockerContainer
-  totalMem <- getTotalMemory
+  mTotalMem <- getTotalMemory
   pure $
-    SystemData
-      { _cpuData = mCPUData
-      , _inDockerContainer = inDockerContainer'
-      , _operatingSystemName = T.pack os
-      , _architecture = T.pack arch
-      , _memTotalKb = totalMem
-      , _island = island'
-      }
+    ( \totalMem ->
+        DeviceData
+          { _cpuData = mCPUData
+          , _inDockerContainer = inDockerContainer'
+          , _operatingSystemName = T.pack os
+          , _architecture = T.pack arch
+          , _memTotalKb = totalMem
+          }
+    )
+      <$> mTotalMem

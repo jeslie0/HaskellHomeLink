@@ -1,0 +1,58 @@
+syntax="proto3";
+
+package proto.Device_Data;
+
+// Marks the device.
+enum DEVICE {
+  UNKNOWN = 0;
+  HOME = 1;
+  PROXY = 2;
+  CAMERA = 3;
+}
+
+// Possible CPU information
+message CPUData {
+  optional string vendor = 1;
+  optional string modelName = 2;
+}
+
+// Various static data about a device
+message DeviceData {
+  CPUData cpuData = 1;
+  bool inDockerContainer = 2;
+  string operatingSystemName = 3;
+  string architecture = 4;
+  uint32 memTotalkB = 5;
+}
+
+message DeviceDataPair {
+  DEVICE device = 1;
+  DeviceData deviceData = 2;
+}
+
+message AllDeviceData {
+  repeated DeviceDataPair allDeviceData = 1;
+}
+
+
+message MemoryUpdate {
+  uint32 systemTimeMs = 1;
+  uint32 memUsedkB = 2;
+}
+
+message MemoryInformation {
+  repeated double pair = 1;
+}
+
+message DeviceMemoryInformation {
+  DEVICE device = 1;
+  repeated MemoryInformation timeMem = 2;
+}
+
+message AllDeviceMemoryData {
+  repeated DeviceMemoryInformation allDeviceMemoryData = 1;
+}
+
+message CheckMemoryUsage {
+
+}

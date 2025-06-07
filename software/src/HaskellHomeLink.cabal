@@ -67,7 +67,7 @@ executable Home
                       Home.Handler,
                       Home.Env,
                       Home.Options,
-                      Islands,
+                      Devices,
                       Logger,
                       Router,
                       System,
@@ -75,12 +75,24 @@ executable Home
                       System.Memory,
                       State,
                       Parsing,
-                      Proto.Messages,
-                      Proto.Messages_Fields,
                       ProtoHelper,
                       TLSHelper,
                       TH,
-                      Utilities.Either
+                      Utilities.Either,
+
+                      -- Proto medules
+                      Proto.Camera,
+                      Proto.Camera_Fields,
+                      Proto.Envelope,
+                      Proto.Envelope_Fields,
+                      Proto.Logging,
+                      Proto.Logging_Fields,
+                      Proto.Radio,
+                      Proto.Radio_Fields,
+                      Proto.Messages,
+                      Proto.Messages_Fields,
+                      Proto.DeviceData,
+                      Proto.DeviceData_Fields,
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
 
@@ -99,7 +111,6 @@ executable Home
                       -- Services
                       alsa-hs,
                       minimp3-hs,
-
 
                       -- TLS
                       crypton-x509,

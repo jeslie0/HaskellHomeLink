@@ -1,0 +1,36 @@
+syntax="proto3";
+
+package proto.Envelope;
+
+import "radio.proto";
+import "deviceData.proto";
+import "messages.proto";
+import "logging.proto";
+import "camera.proto";
+
+message HomeEnvelope {
+  oneof payload {
+    proto.Radio.ModifyRadioRequest m1 = 1;
+    proto.Device_Data.DeviceData m2 = 2;
+    proto.Device_Data.MemoryInformation m3 = 3;
+    proto.Device_Data.CheckMemoryUsage m4 = 4;
+  }
+}
+
+message ProxyEnvelope {
+  oneof payload {
+    proto.Radio.RadioStatusUpdate m1 = 1;
+    proto.Radio.GetRadioStatusResponse m2 = 2;
+    proto.Device_Data.DeviceData m3 = 3;
+    proto.Device_Data.MemoryInformation m4 = 4;
+    proto.Device_Data.CheckMemoryUsage m5 = 5;
+    proto.Logging.AddLog m6 = 6;
+  }
+}
+
+
+message CameraEnvelope {
+  oneof payload {
+    proto.Camera.TakePicture m1 = 1;
+  }
+}

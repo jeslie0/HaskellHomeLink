@@ -16,7 +16,6 @@ import Data.X509.Validation (
 import Network.TLS as TLS
 import Network.TLS.Extra (ciphersuite_strong)
 
-
 loadCredentials :: FilePath -> FilePath -> IO (Maybe Credential)
 loadCredentials certPath keyPath = do
   certs :: [SignedExact Certificate] <- readSignedObject certPath

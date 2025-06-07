@@ -6,7 +6,6 @@ module Home.Env (
   mkEnv,
   audioStreamRef,
   router,
-  -- addRemoteProxyConnection,
   cleanupEnv,
 ) where
 
@@ -14,7 +13,7 @@ import Control.Concurrent (ThreadId, killThread)
 import Data.Foldable (for_)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Home.AudioStream (StationId, StreamStatus (..))
-import Islands (Island (..))
+import Devices (Device (..))
 import Lens.Micro ((^.))
 import Lens.Micro.TH (makeLenses)
 import Router (Router, connectionsRegistry, mkRouter)

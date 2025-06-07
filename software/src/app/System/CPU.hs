@@ -14,8 +14,8 @@ import Data.Text qualified as T
 import Lens.Micro ((&), (.~), (^.))
 import Lens.Micro.TH (makeLenses)
 import Parsing (parseKeyValuePairFile)
-import Proto.Messages qualified as Proto
-import Proto.Messages_Fields qualified as Proto
+import Proto.DeviceData qualified as Proto
+import Proto.DeviceData_Fields qualified as Proto
 import ProtoHelper (FromMessage (..), ToMessage (..))
 
 newtype CPUData = CPUData

@@ -4,9 +4,11 @@ module Home.Main (main) where
 
 import Control.Exception (bracket)
 import Control.Monad (void)
+import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Aeson (eitherDecodeFileStrict)
 import Data.ProtoLens (defMessage)
 import Data.Text qualified as T
+import Devices (Device (..))
 import EventLoop (
   EventLoopT,
   MonadEventLoop (..),
@@ -15,7 +17,11 @@ import EventLoop (
   setInterval,
  )
 import Home.Env (Env, cleanupEnv, mkEnv)
-import Home.Handler (ExHomeHandler (..), homeHandler)
+import Home.Handler (
+  EstablishTLSConnection (..),
+  ExHomeHandler (..),
+  homeHandler,
+ )
 import Home.Options (
   HomeConfiguration,
   HomeOptions,
@@ -26,15 +32,14 @@ import Home.Options (
   tlsCertificatePath,
   tlsKeyPath,
  )
-import Islands (Island (..))
 import Lens.Micro
 import Network.Socket (HostName, ServiceName)
 import Options (runCommand)
-import Proto.Messages qualified as Proto
-import Proto.Messages_Fields qualified as Proto
+import Proto.DeviceData qualified as Proto
+import TLSHelper (setupTLSClientParams)
 
 startCheckMemoryPoll ::
-  EventLoopT Env (Island, ExHomeHandler) IO ()
+  EventLoopT Env (Device, ExHomeHandler) IO ()
 startCheckMemoryPoll = do
   addMsg (Home, ExHomeHandler (defMessage @Proto.CheckMemoryUsage))
   void $
@@ -47,24 +52,22 @@ connectToProxyTLS ::
   -> FilePath
   -> FilePath
   -> FilePath
-  -> EventLoopT Env (Island, ExHomeHandler) IO ()
+  -> EventLoopT Env (Device, ExHomeHandler) IO ()
 connectToProxyTLS host port certPath keyPath caCertPath = do
-  addMsg
-    ( Home
-    , ExHomeHandler
-        ( defMessage @Proto.ConnectTLS
-            & Proto.host
-            .~ T.pack host
-            & Proto.port
-            .~ T.pack port
-            & Proto.certPath
-            .~ T.pack certPath
-            & Proto.keyPath
-            .~ T.pack keyPath
-            & Proto.caCertPath
-            .~ T.pack caCertPath
+  mParams <-
+    liftIO $
+      setupTLSClientParams
+        certPath
+        keyPath
+        caCertPath
+        "raspberrypi"
+  case mParams of
+    Nothing -> liftIO $ putStrLn "Failed to unpack TLS server params"
+    Just params -> do
+      addMsg
+        ( Home
+        , ExHomeHandler $ EstablishTLSConnection params (T.pack host) (T.pack port)
         )
-    )
 
 main :: IO ()
 main = runCommand $ \(opts :: HomeOptions) _args -> do
@@ -77,7 +80,7 @@ main = runCommand $ \(opts :: HomeOptions) _args -> do
         writeFile "/mnt/normalexit" ""
  where
   action ::
-    HomeConfiguration -> EventLoopT Env (Island, ExHomeHandler) IO ()
+    HomeConfiguration -> EventLoopT Env (Device, ExHomeHandler) IO ()
   action config = do
     connectToProxyTLS
       (config ^. proxyURL)
