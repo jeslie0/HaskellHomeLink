@@ -20,7 +20,7 @@ import Data.Time.Format
 import Data.Vector qualified as V
 import Data.Vector.Mutable qualified as VM
 import Devices (Device, proxies)
-import Envelope (ToProxyEnvelope (..))
+import Envelope (wrapProxyMsg)
 import Lens.Micro ((&), (.~), (^.))
 import Proto.DeviceData qualified as Proto
 import Proto.Logging qualified as Proto
@@ -101,4 +101,4 @@ reportLog rtr lvl txt = do
       defMessage & Proto.log .~ log'
   T.putStrLn . formatLog $ log'
   forM_ proxies $ \i ->
-    trySendMessage rtr i $ toProxyEnvelope msg
+    trySendMessage rtr i $ wrapProxyMsg msg

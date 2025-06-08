@@ -13,21 +13,21 @@ import Data.Map.Strict qualified as Map
 import Data.Text qualified as T
 import Data.Vector qualified as V
 import Data.Vector.Mutable qualified as VM
-import Envelope (toEnvelope)
-import EventLoop (EventLoopT, getEnv)
 import Devices (Device (..))
+import Envelope (wrapHomeMsg)
+import EventLoop (EventLoopT, getEnv)
 import Lens.Micro ((^.))
 import Logger (LogLevel (..), addLog, reportLog)
-import ProtoHelper (FromMessage (..), toMessage)
-import Proxy.Env (Env, logs, memoryMap, router, streamStatusState, deviceMap)
-import Proto.Envelope qualified as Proto
-import Proto.Envelope_Fields qualified as Proto
-import Proto.Radio qualified as Proto
-import Proto.Radio_Fields qualified as Proto
-import Proto.Logging qualified as Proto
-import Proto.Logging_Fields qualified as Proto
 import Proto.DeviceData qualified as Proto
 import Proto.DeviceData_Fields qualified as Proto
+import Proto.Envelope qualified as Proto
+import Proto.Envelope_Fields qualified as Proto
+import Proto.Logging qualified as Proto
+import Proto.Logging_Fields qualified as Proto
+import Proto.Radio qualified as Proto
+import Proto.Radio_Fields qualified as Proto
+import ProtoHelper (FromMessage (..), toMessage)
+import Proxy.Env (Env, deviceMap, logs, memoryMap, router, streamStatusState)
 import Router (trySendMessage)
 import State (fulfilPromise)
 import System.Memory (MemoryInformation, getMemoryInformation)
@@ -75,10 +75,8 @@ instance ProxyHandler Proto.DeviceData where
   proxyHandler device resp = do
     env <- getEnv
     liftIO $ modifyMVar_ (env ^. deviceMap) $ \sysMap ->
-      let
-        sysData = fromMessage resp 
-      in
-        pure $ Map.insert device sysData sysMap
+      let sysData = fromMessage resp
+      in pure $ Map.insert device sysData sysMap
 
 instance ProxyHandler Proto.MemoryInformation where
   proxyHandler src resp = do
@@ -112,7 +110,7 @@ instance ProxyHandler Proto.CheckMemoryUsage where
       Nothing -> liftIO $ reportLog (env ^. router) Error "Failed to get memory info"
       Just memInfo -> do
         void . liftIO . trySendMessage (env ^. router) Home $
-          toEnvelope $
+          wrapHomeMsg $
             toMessage @Proto.MemoryInformation memInfo
 
 instance ProxyHandler Proto.AddLog where

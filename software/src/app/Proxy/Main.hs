@@ -12,7 +12,7 @@ import Data.ProtoLens (defMessage)
 import Data.Serialize (decode)
 import Data.Vector qualified as V
 import Devices (Device (..))
-import Envelope (toProxyEnvelope)
+import Envelope (wrapProxyMsg)
 import EventLoop (
   EventLoop,
   EventLoopT,
@@ -206,16 +206,22 @@ main = runCommand $ \(opts :: ProxyOptions) _args -> do
           bracket (mkEnv Proxy) cleanupEnv $ \env ->
             bracket
               ( forkIO $
-                  createHttpServerThread
-                    (config ^. httpsCertificatePath)
-                    (config ^. httpsKeyPath)
-                    (config ^. httpsCACertificatePath)
-                    (config ^. httpHostname)
-                    (config ^. httpPort)
-                    env
+                  pure ()
+                  -- createHttpServerThread
+                  --   (config ^. httpsCertificatePath)
+                  --   (config ^. httpsKeyPath)
+                  --   (config ^. httpsCACertificatePath)
+                  --   (config ^. httpHostname)
+                  --   (config ^. httpPort)
+                  --   env
               )
               killThread
-              $ \_ -> bracket (aquireBoundListeningServerSocket (show $ config ^. tlsPort)) close $ \serverSock -> do
+              $ \_ -> bracket
+                      (aquireBoundListeningServerSocket
+                      "3000"
+                        -- (show $ config ^. tlsPort)
+                      )
+                      close $ \serverSock -> do
                 runEventLoopT (action config params serverSock) env
                 writeFile "/mnt/normalexit" ""
          where

@@ -86,8 +86,10 @@ main = runCommand $ \(opts :: HomeOptions) _args -> do
     HomeConfiguration -> EventLoopT Env (Device, ExHomeHandler) IO ()
   action config = do
     success <- connectToProxyTLS
-      (config ^. proxyURL)
-      (show $ config ^. proxyPort)
+      "127.0.0.1"
+      "3000"
+      -- (config ^. proxyURL)
+      -- (show $ config ^. proxyPort)
       (config ^. tlsCertificatePath)
       (config ^. tlsKeyPath)
       (config ^. tlsCACertificatePath)

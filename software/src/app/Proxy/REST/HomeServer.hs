@@ -20,7 +20,7 @@ import Data.Int (Int32)
 import Data.Map.Strict qualified as Map
 import Data.ProtoLens (defMessage)
 import Data.Vector qualified as V
-import Envelope (toEnvelope)
+import Envelope (wrapHomeMsg)
 import Home.AudioStreamTypes (StationId, StreamStatus)
 import Devices qualified as Dev
 import Lens.Micro ((&), (.~), (^.))
@@ -114,7 +114,7 @@ handleModifyRadioRequest env req (Just stateId) = do
       trySendMessage
         (env ^. router)
         Dev.Home
-        (toEnvelope req)
+        (wrapHomeMsg req)
   pure True
 
 handleGetDeviceDataRequest :: Env -> Handler Proto.AllDeviceData

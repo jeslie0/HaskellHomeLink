@@ -22,7 +22,7 @@ import Data.ProtoLens (defMessage)
 import Data.Serialize (decode)
 import Data.Text qualified as T
 import Devices (Device (..), devices, proxies)
-import Envelope (ToProxyEnvelope (..))
+import Envelope (wrapProxyMsg)
 import EventLoop (
   EventLoopT,
   MonadEventLoop (..),
@@ -97,12 +97,12 @@ instance HomeHandler EstablishTLSConnection where
       bracketOnError
         (aquireClientSocket (T.unpack host) (T.unpack port))
         (traverse_ $ \(sock, _) -> close sock)
-        (withSocket loop registry)
+        (withSocket env loop registry)
    where
-    withSocket loop _ Nothing = do
+    withSocket _ loop _ Nothing = do
       liftIO $ putStrLn "Failed to reach server"
       void $ setTimeoutIO (Home, ExHomeHandler msg) 2000 loop
-    withSocket loop registry (Just (sock, addr)) = do
+    withSocket env loop registry (Just (sock, addr)) = do
       putStrLn $ "Connecting to host: " <> show (addrAddress addr)
       success <- connectToHost sock addr
       if success
@@ -113,7 +113,7 @@ instance HomeHandler EstablishTLSConnection where
             Nothing -> putStrLn "Failed to upgrade socket to TLS context"
             Just conn -> do
               putStrLn "Established TLS connection"
-              threadId <- forkIO . void $ runConnection conn loop
+              threadId <- forkIO . void $ runConnection loop (env ^. router) conn
               addConnection Proxy threadId conn registry
         else do
           putStrLn $
@@ -122,7 +122,7 @@ instance HomeHandler EstablishTLSConnection where
               <> ". Trying again in 2s..."
           void $ setTimeoutIO (Home, ExHomeHandler msg) 2000 loop
 
-    runConnection conn loop = do
+    runConnection loop rtr conn = do
       merror <- recvAndDispatch conn
       case merror of
         Left (TLSRxError _ err) -> do
@@ -130,11 +130,11 @@ instance HomeHandler EstablishTLSConnection where
           cleanup conn
           void $ setTimeoutIO (Home, ExHomeHandler msg) 2000 loop
         Right bytes -> do
-          handleBytes @Proto.WrappedEnvelope bytes router $ \src wrappedEnv ->
+          handleBytes @Proto.WrappedEnvelope bytes rtr $ \src wrappedEnv ->
             case wrappedEnv ^. Proto.maybe'wrappedPayload of
               Just (Proto.WrappedEnvelope'HomeMsg homeMsg) -> addMsgIO (src, ExHomeHandler homeMsg) loop
               _ -> putStrLn "Dropping message for wrong device..."
-          runConnection conn loop
+          runConnection loop rtr conn
 
 -- * Helper functions
 
@@ -144,7 +144,7 @@ notifyProxyRadioStatus rtr island status stationId =
   trySendMessage
     rtr
     island
-    ( toProxyEnvelope $
+    ( wrapProxyMsg $
         defMessage @Proto.RadioStatusUpdate
           & Proto.status
           .~ toMessage status
@@ -215,7 +215,7 @@ instance HomeHandler Proto.MemoryInformation where
     env <- getEnv
     forM_ proxies $ \proxy -> do
       liftIO $ do
-        void . tryForwardMessage (env ^. router) src proxy $ toProxyEnvelope msg
+        void . tryForwardMessage (env ^. router) src proxy $ wrapProxyMsg msg
 
 instance HomeHandler Proto.CheckMemoryUsage where
   homeHandler _ _ = do
