@@ -11,15 +11,15 @@ import Deku.DOM.Attributes as DA
 import Deku.Hooks ((<#~>))
 import FRP.Poll (Poll)
 import Patternfly (dlistGroup)
-import System (CPUData(..), SystemData(..))
+import System (CPUData(..), DeviceData(..))
 
 type SystemPageState =
   { home ::
-      { systemData :: Poll (Maybe SystemData)
+      { systemData :: Poll (Maybe DeviceData)
       , chart :: Nut
       }
   , proxy ::
-      { systemData :: Poll (Maybe SystemData)
+      { systemData :: Poll (Maybe DeviceData)
       , chart :: Nut
       }
   }
@@ -28,11 +28,11 @@ type SystemPageState =
 -- renderDiskCapacity freeSpaceGB totalSpaceGB =
 --   show freeSpaceGB <> " / " <> show totalSpaceGB <> " GB"
 
-makeIslandSystemDataCard :: Poll (Maybe SystemData) -> Nut
-makeIslandSystemDataCard systemDataMPoll =
+makeIslandDeviceDataCard :: Poll (Maybe DeviceData) -> Nut
+makeIslandDeviceDataCard systemDataMPoll =
   systemDataMPoll <#~> case _ of
     Nothing -> DD.text_ "NOTIHNG"
-    Just (SystemData { cpuData, inDockerContainer, operatingSystemName, architecture, memTotalKb }) ->
+    Just (DeviceData { cpuData, inDockerContainer, operatingSystemName, architecture, memTotalKb }) ->
       DD.dl [ DA.klass_ "pf-v5-c-description-list pf-m-horizontal" ]
         [ dlistGroup "CPU Model Name" <<< pure $ case cpuData of
             Nothing -> "-"
@@ -52,10 +52,10 @@ makeIslandMemoryChartCard chart =
         [ chart ]
     ]
 
-makeIslandCardBody :: Poll (Maybe SystemData) -> Nut -> Nut
+makeIslandCardBody :: Poll (Maybe DeviceData) -> Nut -> Nut
 makeIslandCardBody systemDataPoll chart =
   DD.div [ DA.klass_ "pf-v5-l-grid pf-m-all-6-col-on-lg pf-m-all--col-on-md" ]
-    [ makeIslandSystemDataCard systemDataPoll
+    [ makeIslandDeviceDataCard systemDataPoll
     , makeIslandMemoryChartCard chart
     ]
 

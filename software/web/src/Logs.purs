@@ -9,7 +9,9 @@ import Data.Either (Either(..))
 import Data.Time.Duration (Milliseconds(..))
 import Data.Int64 as Int64
 import ProtoHelper (class FromMessage, fromMessage, class SayError, toEither)
-import System (Island, IslandError)
+import System (Device, DeviceError)
+import Proto.Logging.Logging (LOG_LEVEL(..), Log(..), Logs(..)) as Proto
+import Proto.DeviceData.DeviceData (DEVICE) as Proto
 
 data LogLevel
   = Undefined
@@ -46,7 +48,7 @@ instance FromMessage Proto.LOG_LEVEL LogLevel LogLevelError where
 data Log = Log
   { timestamp :: Instant
   , logLevel :: LogLevel
-  , island :: Island
+  , device :: Device
   , content :: String
   }
 
@@ -54,8 +56,8 @@ data LogError
   = InvalidTimeStamp
   | MissingLogLevel
   | LogErrorLogLevel LogLevelError
-  | MissingIsland
-  | LogErrorIsland IslandError
+  | MissingDevice
+  | LogErrorDevice DeviceError
   | MissingContent
 
 instance FromMessage Proto.Log Log LogError where
@@ -66,10 +68,10 @@ instance FromMessage Proto.Log Log LogError where
 
     levelProto <- toEither MissingLogLevel $ msg.level
     logLevel <- lmap LogErrorLogLevel $ fromMessage @Proto.LOG_LEVEL @LogLevel levelProto
-    islandProto <- toEither MissingIsland $ msg.island
-    island <- lmap LogErrorIsland $ fromMessage @Proto.ISLAND @Island islandProto
+    deviceProto <- toEither MissingDevice $ msg.device
+    device <- lmap LogErrorDevice $ fromMessage @Proto.DEVICE @Device deviceProto
     content <- toEither MissingContent msg.content
-    pure $ Log { timestamp, logLevel, island, content }
+    pure $ Log { timestamp, logLevel, device, content }
 
 
 newtype Logs = Logs (Array Log)

@@ -52,7 +52,7 @@ logsPage { logsPoll } =
                 <#> \(Log log) ->
                   DD.tr [ DA.klass_ "pf-v5-c-table__tr", DA.role_ "row" ]
                     [ makeCell $ format formatter (toDateTime log.timestamp)
-                    , makeCell $ show log.island
+                    , makeCell $ show log.device
                     , makeCell $ show log.logLevel
                     , makeCell $ log.content
                     ]

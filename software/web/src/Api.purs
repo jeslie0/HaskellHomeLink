@@ -24,17 +24,17 @@ import Requests
   , mkSystemsDataPoller
   , modifyStream
   )
-import System (SystemData)
+import System (DeviceData)
 
 type Api =
   { islandState ::
       { home ::
-          { systemData :: Poll (Maybe SystemData)
+          { systemData :: Poll (Maybe DeviceData)
           , memoryChartOptions :: Poll (Options Apexoptions)
           , chart :: Nut
           }
       , proxy ::
-          { systemData :: Poll (Maybe SystemData)
+          { systemData :: Poll (Maybe DeviceData)
           , memoryChartOptions :: Poll (Options Apexoptions)
           , chart :: Nut
           }
@@ -69,10 +69,10 @@ type Api =
 mkApi :: Effect Api
 mkApi = do
   -- Systems Polls
-  setHomeSystemDataPoll /\ homeSystemDataPoll <- DE.useState Nothing
+  setHomeDeviceDataPoll /\ homeDeviceDataPoll <- DE.useState Nothing
   _ /\ setHomeMemoryChartOptionsPoll /\ homeMemoryChartOptionsPoll <- DE.useHot (defaultChartOptions 10.0)
 
-  setProxySystemDataPoll /\ proxySystemDataPoll <- DE.useState Nothing
+  setProxyDeviceDataPoll /\ proxyDeviceDataPoll <- DE.useState Nothing
   _ /\ setProxyMemoryChartOptionsPoll /\ proxyMemoryChartOptionsPoll <- DE.useHot (defaultChartOptions 10.0)
 
   homeChartStuff <- apexchart [ DA.style_ "display: block;" ]
@@ -92,7 +92,7 @@ mkApi = do
 
   -- Pollers
   streamStatusPoller <- mkStreamStatusPoller streamStateIdRef selectStream setStreamStatusPoll
-  systemsDataPoller <- mkSystemsDataPoller { setHomeSystemDataPoll, setProxySystemDataPoll }
+  systemsDataPoller <- mkSystemsDataPoller { setHomeDeviceDataPoll, setProxyDeviceDataPoll }
   memoryDataPoller <- mkMemoryChartOptionsPoller { setHomeMemoryChartOptionsPoll, setProxyMemoryChartOptionsPoll }
   logsPoller <- mkLogsPoller setLogsPoll
 
@@ -101,12 +101,12 @@ mkApi = do
   pure
     { islandState:
         { home:
-            { systemData: homeSystemDataPoll
+            { systemData: homeDeviceDataPoll
             , memoryChartOptions: homeMemoryChartOptionsPoll
             , chart: homeChartStuff.chart
             }
         , proxy:
-            { systemData: proxySystemDataPoll
+            { systemData: proxyDeviceDataPoll
             , memoryChartOptions: proxyMemoryChartOptionsPoll
             , chart: proxyChartStuff.chart
             }

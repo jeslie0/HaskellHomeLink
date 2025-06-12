@@ -6,6 +6,7 @@ import Data.Either (Either(..))
 import Data.UInt (UInt, fromInt)
 import ProtoHelper (class FromMessage, class ToMessage)
 import Protobuf.Internal.Prelude (toInt)
+import Proto.Radio.Radio as Proto
 
 data Format
   = MP3

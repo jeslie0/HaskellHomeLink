@@ -34,7 +34,6 @@ message AllDeviceData {
   repeated DeviceDataPair allDeviceData = 1;
 }
 
-
 message MemoryUpdate {
   uint32 systemTimeMs = 1;
   uint32 memUsedkB = 2;

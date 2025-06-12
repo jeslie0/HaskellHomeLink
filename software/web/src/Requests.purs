@@ -29,9 +29,12 @@ import Fetch (fetch)
 import Logs (Log, Logs(..))
 import Parsing (fail, runParserT)
 import Poller (Poller, mkPoller)
+import Proto.DeviceData.DeviceData (parseAllDeviceData, parseAllDeviceMemoryData) as Proto
+import Proto.Logging.Logging (parseLogs) as Proto
+import Proto.Radio.Radio (GetRadioStatusResponse(..), RadioStation(..), defaultRadioStation, mkModifyRadioRequest, parseGetRadioStatusResponse, putModifyRadioRequest) as Proto
 import ProtoHelper (fromMessage, sayError, toMessage)
 import Radio (Stream(..), StreamStatus(..), StreamStatusError, radioStreams)
-import System (AllIslandsMemoryData(..), Island(..), IslandMemoryInformation(..), IslandsSystemData(..), SystemData(..))
+import System (AllDeviceData(..), AllDevicesMemoryData(..), Device(..), DeviceData, DeviceDataPair(..), DeviceMemoryInformation(..))
 
 type AppPollers =
   { streamStatusPoller :: Poller
@@ -111,26 +114,26 @@ modifyStream stateIdRef ({ force }) payload = do
 
 -- | Get the current system data
 mkSystemsDataPoller
-  :: { setHomeSystemDataPoll :: Maybe SystemData -> Effect Unit
-     , setProxySystemDataPoll :: Maybe SystemData -> Effect Unit
+  :: { setHomeDeviceDataPoll :: Maybe DeviceData -> Effect Unit
+     , setProxyDeviceDataPoll :: Maybe DeviceData -> Effect Unit
      }
   -> Effect Poller
-mkSystemsDataPoller { setHomeSystemDataPoll, setProxySystemDataPoll } = do
+mkSystemsDataPoller { setHomeDeviceDataPoll, setProxyDeviceDataPoll } = do
   mkPoller "system" 5000 $ \body -> do
     result <- liftEffect $ runParserT body do
-      resp <- Proto.parseIslandsSystemData (byteLength body)
+      resp <- Proto.parseAllDeviceData (byteLength body)
       case fromMessage resp of
         Left errs -> fail <<< show $ sayError errs
-        Right islandsData -> do
-          pure islandsData
+        Right devicesData -> do
+          pure devicesData
     case result of
       Left err -> liftEffect $ Console.logShow err
-      Right (IslandsSystemData { allSystemData }) -> do
+      Right (AllDeviceData { allDeviceData }) -> do
         let
-          updateIsland island callback =
-            callback $ Array.find (\(SystemData sysdata) -> sysdata.island == island) allSystemData
-        liftEffect $ updateIsland Home setHomeSystemDataPoll
-        liftEffect $ updateIsland RemoteProxy setProxySystemDataPoll
+          updateDevice device callback =
+            callback $ (\(DeviceDataPair msg) -> msg.deviceData) <$> Array.find (\(DeviceDataPair msg) -> msg.device == device) allDeviceData
+        liftEffect $ updateDevice Home setHomeDeviceDataPoll
+        liftEffect $ updateDevice Proxy setProxyDeviceDataPoll
 
 mkMemoryChartOptionsPoller
   :: { setHomeMemoryChartOptionsPoll :: Options Apexoptions -> Effect Unit
@@ -140,26 +143,26 @@ mkMemoryChartOptionsPoller
 mkMemoryChartOptionsPoller { setHomeMemoryChartOptionsPoll, setProxyMemoryChartOptionsPoll } = do
   mkPoller "memory" (30 * 1000) $ \body -> do
     result <- liftEffect $ runParserT body do
-      resp <- Proto.parseAllIslandMemoryData (byteLength body)
+      resp <- Proto.parseAllDeviceMemoryData (byteLength body)
       case fromMessage resp of
         Left _errs -> fail "Error parsing response"
-        Right allIslandsMemoryData -> do
-          pure allIslandsMemoryData
+        Right allDevicesMemoryData -> do
+          pure allDevicesMemoryData
     case result of
       Left err ->
         liftEffect $ Console.log $ "Error getting memory data: " <> show err
-      Right (AllIslandsMemoryData { allIslandMemoryData }) -> do
+      Right (AllDevicesMemoryData { allDeviceMemoryData }) -> do
         let
-          getOptions :: Island -> (Options Apexoptions)
-          getOptions island =
+          getOptions :: Device -> (Options Apexoptions)
+          getOptions device =
             fromMaybe (defaultChartOptions 10.0) $ do
-              IslandMemoryInformation info <-
+              DeviceMemoryInformation info <-
                 Array.find
-                  (\(IslandMemoryInformation info) -> info.island == island)
-                  allIslandMemoryData
+                  (\(DeviceMemoryInformation info) -> info.device == device)
+                  allDeviceMemoryData
               pure $ updatedChartOptions info.timeMem
         liftEffect <<< setHomeMemoryChartOptionsPoll <<< getOptions $ Home
-        liftEffect <<< setProxyMemoryChartOptionsPoll <<< getOptions $ RemoteProxy
+        liftEffect <<< setProxyMemoryChartOptionsPoll <<< getOptions $ Proxy
 
 mkLogsPoller :: (Array Log -> Effect Unit) -> Effect Poller
 mkLogsPoller setLogsPoll = do

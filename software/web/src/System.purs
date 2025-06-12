@@ -6,10 +6,10 @@ import Data.Array ((:))
 import Data.Array as Array
 import Data.Bifunctor (lmap)
 import Data.Either (Either(..))
-import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Maybe (Maybe, fromMaybe)
 import Data.Traversable (traverse)
 import Data.UInt (UInt)
-import Debug (trace)
+import Proto.DeviceData.DeviceData as Proto
 import ProtoHelper (class FromMessage, class SayError, fromMessage, sayError, toEither)
 
 type CPUDataR = (modelName :: String)
@@ -25,123 +25,135 @@ instance FromMessage Proto.CPUData CPUData CPUDataError where
 instance SayError CPUDataError where
   sayError MissingModelName = pure "Model name is missing from CPUData"
 
-type SystemDataR =
+type DeviceDataR =
   ( cpuData :: Maybe CPUData
   , inDockerContainer :: Boolean
   , operatingSystemName :: String
   , architecture :: String
   , memTotalKb :: Maybe UInt
-  , island :: Island
   )
 
-newtype SystemData = SystemData (Record SystemDataR)
+newtype DeviceData = DeviceData (Record DeviceDataR)
 
-data SystemDataError
+data DeviceDataError
   = MissingCPUData
   | MissingPartOfCPUData CPUDataError
   | MissingInDockerContainer
   | MissingOperatingSystemName
   | MissingArchitecture
-  | SystemDataMissingIsland
-  | SystemDataIslandError IslandError
+  | DeviceDataDeviceError DeviceError
 
-instance FromMessage Proto.SystemData SystemData SystemDataError where
-  fromMessage (Proto.SystemData msg) = do
-    let inDockerContainer = fromMaybe false msg.inDockerContainer
-        mCPUDataProt = msg.cpuData
+instance FromMessage Proto.DeviceData DeviceData DeviceDataError where
+  fromMessage (Proto.DeviceData msg) = do
+    let
+      inDockerContainer = fromMaybe false msg.inDockerContainer
+      mCPUDataProt = msg.cpuData
     cpuData <- lmap MissingPartOfCPUData $ traverse fromMessage mCPUDataProt
     operatingSystemName <- toEither MissingOperatingSystemName msg.operatingSystemName
     architecture <- toEither MissingArchitecture msg.architecture
     memTotalKb <- Right $ msg.memTotalkB
-    islandProt <- toEither SystemDataMissingIsland msg.island
-    island <- lmap SystemDataIslandError $ fromMessage islandProt
-    pure $ SystemData { cpuData, inDockerContainer, operatingSystemName, architecture, memTotalKb, island }
+    pure $ DeviceData { cpuData, inDockerContainer, operatingSystemName, architecture, memTotalKb }
 
-instance SayError SystemDataError where
-  sayError MissingCPUData = pure "SystemData is missing cpuData"
-  sayError (MissingPartOfCPUData errs) = "SystemData is missing cpuData" : sayError errs
-  sayError MissingInDockerContainer = pure "SystemData is missing inDockerContainer"
-  sayError MissingOperatingSystemName = pure "SystemData is missing operatingSystemName"
-  sayError MissingArchitecture = pure "SystemData is missing architecture"
-  sayError SystemDataMissingIsland = pure "SystemData is missing island"
-  sayError (SystemDataIslandError _) = pure "SystemData is missing island"
+instance SayError DeviceDataError where
+  sayError MissingCPUData = pure "DeviceData is missing cpuData"
+  sayError (MissingPartOfCPUData errs) = "DeviceData is missing cpuData" : sayError errs
+  sayError MissingInDockerContainer = pure "DeviceData is missing inDockerContainer"
+  sayError MissingOperatingSystemName = pure "DeviceData is missing operatingSystemName"
+  sayError MissingArchitecture = pure "DeviceData is missing architecture"
+  sayError (DeviceDataDeviceError _) = pure "DeviceData is missing device"
 
-data Island
+data Device
   = Home
-  | LocalHTTP
-  | RemoteProxy
+  | Proxy
   | Camera
-  | UnknownIsland
+  | UnknownDevice
 
-islands :: Array Island
-islands = [ Home, LocalHTTP, RemoteProxy ]
+devices :: Array Device
+devices = [ Home, Proxy, Camera ]
 
-data IslandError = InvalidIsland
+data DeviceError = InvalidDevice
 
-derive instance eqIsland :: Eq Island
-derive instance ordIsland :: Ord Island
+derive instance eqDevice :: Eq Device
+derive instance ordDevice :: Ord Device
 
-instance Show Island where
+instance Show Device where
   show Home = "Home"
-  show LocalHTTP = "Local Proxy"
-  show RemoteProxy = "Remote Proxy"
+  show Proxy = "Remote Proxy"
   show Camera = "Camera"
-  show UnknownIsland = "Unknown"
+  show UnknownDevice = "Unknown"
 
-instance FromMessage Proto.ISLAND Island IslandError where
-  fromMessage Proto.ISLAND_HOME = Right Home
-  fromMessage Proto.ISLAND_LOCAL_HTTP = Right LocalHTTP
-  fromMessage Proto.ISLAND_REMOTE_PROXY = Right RemoteProxy
-  fromMessage Proto.ISLAND_CAMERA = Right Camera
-  fromMessage Proto.ISLAND_UNKNOWN = Right UnknownIsland
+instance FromMessage Proto.DEVICE Device DeviceError where
+  fromMessage Proto.DEVICE_HOME = Right Home
+  fromMessage Proto.DEVICE_PROXY = Right Proxy
+  fromMessage Proto.DEVICE_CAMERA = Right Camera
+  fromMessage Proto.DEVICE_UNKNOWN = Right UnknownDevice
 
-instance SayError IslandError where
-  sayError InvalidIsland = pure "Island error: Invalid island"
+type DeviceDataPairR = (device :: Device, deviceData :: DeviceData)
+newtype DeviceDataPair = DeviceDataPair (Record DeviceDataPairR)
+data DeviceDataPairError
+  = MissingDevice
+  | InvalidDeviceInDevicePair DeviceError
+  | MissingDeviceData
+  | InvalidDeviceDataInDevicePair DeviceDataError
+instance SayError DeviceDataPairError where
+  sayError MissingDevice = pure "Missing device"
+  sayError (InvalidDeviceInDevicePair err) = Array.cons "Invalid device in device pair" (sayError err)
+  sayError MissingDeviceData = pure "Missing device data"
+  sayError (InvalidDeviceDataInDevicePair err) = Array.cons "Invalid device data in device data pair" (sayError err)
 
-type IslandsSystemDataR = (allSystemData :: Array SystemData)
-newtype IslandsSystemData = IslandsSystemData (Record IslandsSystemDataR)
+instance FromMessage Proto.DeviceDataPair DeviceDataPair DeviceDataPairError where
+  fromMessage (Proto.DeviceDataPair pair) = do
+    deviceProt <- toEither MissingDevice pair.device
+    device <- lmap InvalidDeviceInDevicePair $ fromMessage deviceProt
+    deviceDataProt <- toEither MissingDeviceData pair.deviceData
+    deviceData <- lmap InvalidDeviceDataInDevicePair $ fromMessage deviceDataProt
+    pure $ DeviceDataPair { device, deviceData: deviceData }
 
-data IslandsSystemDataError
-  = MissingIslandsSystemData
-  | MissingPartOfAllSystemData (Array SystemDataError)
+instance SayError DeviceError where
+  sayError InvalidDevice = pure "Device error: Invalid device"
 
-instance FromMessage Proto.IslandsSystemData IslandsSystemData IslandsSystemDataError where
-  fromMessage (Proto.IslandsSystemData msg) =
-    IslandsSystemData <<< { allSystemData: _ }
-      <$>
-        ( lmap MissingPartOfAllSystemData
-            $ traverse (lmap pure <<< fromMessage) (msg.allSystemData)
-        )
+type AllDeviceDataR = (allDeviceData :: Array DeviceDataPair)
+newtype AllDeviceData = AllDeviceData (Record AllDeviceDataR)
 
-instance SayError IslandsSystemDataError where
-  sayError MissingIslandsSystemData = pure "IslandsSystemData is missing allSystemData"
-  sayError (MissingPartOfAllSystemData err) = "IslandSystemData has invalid allSystemData" : Array.concatMap sayError err
+data AllDeviceDataError
+  = MissingAllDeviceData
+  | MissingPartOfAllDeviceData DeviceDataPairError
 
-type IslandMemoryInformationR = (island :: Island, timeMem :: Array (Array Number))
-newtype IslandMemoryInformation = IslandMemoryInformation (Record IslandMemoryInformationR)
-data IslandMemoryInformationError
-  = MissingMemIsland
-  | InvalidMemIsland IslandError
+instance FromMessage Proto.AllDeviceData AllDeviceData AllDeviceDataError where
+  fromMessage (Proto.AllDeviceData msg) =
+    AllDeviceData <<< { allDeviceData: _ }
+      <$> (lmap MissingPartOfAllDeviceData <<< traverse fromMessage $ msg.allDeviceData)
+
+
+instance SayError AllDeviceDataError where
+  sayError MissingAllDeviceData = pure "AllDeviceData is missing allDeviceData"
+  sayError (MissingPartOfAllDeviceData err) = "DeviceDeviceData has invalid allDeviceData" : sayError err
+
+type DeviceMemoryInformationR = (device :: Device, timeMem :: Array (Array Number))
+newtype DeviceMemoryInformation = DeviceMemoryInformation (Record DeviceMemoryInformationR)
+data DeviceMemoryInformationError
+  = MissingMemDevice
+  | InvalidMemDevice DeviceError
   | MissingMemoryInformation
 
-instance FromMessage Proto.IslandMemoryInformation IslandMemoryInformation IslandMemoryInformationError where
-  fromMessage (Proto.IslandMemoryInformation msg) = do
-    islandProt <- toEither MissingMemIsland (msg.island)
-    island <- lmap InvalidMemIsland $ fromMessage islandProt
-    pure $ IslandMemoryInformation { island, timeMem: msg.timeMem <#> \(Proto.MemoryInformation info) -> info.pair }
+instance FromMessage Proto.DeviceMemoryInformation DeviceMemoryInformation DeviceMemoryInformationError where
+  fromMessage (Proto.DeviceMemoryInformation msg) = do
+    deviceProt <- toEither MissingMemDevice (msg.device)
+    device <- lmap InvalidMemDevice $ fromMessage deviceProt
+    pure $ DeviceMemoryInformation { device, timeMem: msg.timeMem <#> \(Proto.MemoryInformation info) -> info.pair }
 
-type AllIslandMemoryDataR = (allIslandMemoryData :: Array IslandMemoryInformation)
-newtype AllIslandsMemoryData = AllIslandsMemoryData (Record AllIslandMemoryDataR)
-data AllIslandsMemoryDataError
-  = MissingAllIslandsMemoryData
-  | MissingPartOfAllMemoryData (Array IslandMemoryInformationError)
-  | Foo IslandMemoryInformationError
+type AllDeviceMemoryDataR = (allDeviceMemoryData :: Array DeviceMemoryInformation)
+newtype AllDevicesMemoryData = AllDevicesMemoryData (Record AllDeviceMemoryDataR)
+data AllDevicesMemoryDataError
+  = MissingAllDevicesMemoryData
+  | MissingPartOfAllMemoryData (Array DeviceMemoryInformationError)
+  | Foo DeviceMemoryInformationError
 
-instance FromMessage Proto.AllIslandMemoryData AllIslandsMemoryData AllIslandsMemoryDataError where
-  fromMessage (Proto.AllIslandMemoryData msg) = do
+instance FromMessage Proto.AllDeviceMemoryData AllDevicesMemoryData AllDevicesMemoryDataError where
+  fromMessage (Proto.AllDeviceMemoryData msg) = do
     foo <- lmap MissingPartOfAllMemoryData $
       ( traverse
           (\e -> lmap (\_ -> []) e)
-          (fromMessage @Proto.IslandMemoryInformation @IslandMemoryInformation <$> msg.allIslandMemoryData)
+          (fromMessage @Proto.DeviceMemoryInformation @DeviceMemoryInformation <$> msg.allDeviceMemoryData)
       )
-    pure $ AllIslandsMemoryData { allIslandMemoryData: foo }
+    pure $ AllDevicesMemoryData { allDeviceMemoryData: foo }
