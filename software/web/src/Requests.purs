@@ -34,7 +34,7 @@ import Proto.Logging.Logging (parseLogs) as Proto
 import Proto.Radio.Radio (GetRadioStatusResponse(..), RadioStation(..), defaultRadioStation, mkModifyRadioRequest, parseGetRadioStatusResponse, putModifyRadioRequest) as Proto
 import ProtoHelper (fromMessage, sayError, toMessage)
 import Radio (Stream(..), StreamStatus(..), StreamStatusError, radioStreams)
-import System (AllDeviceData(..), AllDevicesMemoryData(..), Device(..), DeviceData, DeviceDataPair(..), DeviceMemoryInformation(..))
+import System (AllDeviceData(..), AllDevicesMemoryData(..), Device(..), DeviceData(..))
 
 type AppPollers =
   { streamStatusPoller :: Poller
@@ -131,7 +131,7 @@ mkSystemsDataPoller { setHomeDeviceDataPoll, setProxyDeviceDataPoll } = do
       Right (AllDeviceData { allDeviceData }) -> do
         let
           updateDevice device callback =
-            callback $ (\(DeviceDataPair msg) -> msg.deviceData) <$> Array.find (\(DeviceDataPair msg) -> msg.device == device) allDeviceData
+            callback $ (\msg -> DeviceData msg.deviceData) <$> Array.find (\msg -> msg.device == device) allDeviceData
         liftEffect $ updateDevice Home setHomeDeviceDataPoll
         liftEffect $ updateDevice Proxy setProxyDeviceDataPoll
 
@@ -156,9 +156,9 @@ mkMemoryChartOptionsPoller { setHomeMemoryChartOptionsPoll, setProxyMemoryChartO
           getOptions :: Device -> (Options Apexoptions)
           getOptions device =
             fromMaybe (defaultChartOptions 10.0) $ do
-              DeviceMemoryInformation info <-
+              info <-
                 Array.find
-                  (\(DeviceMemoryInformation info) -> info.device == device)
+                  (\info -> info.device == device)
                   allDeviceMemoryData
               pure $ updatedChartOptions info.timeMem
         liftEffect <<< setHomeMemoryChartOptionsPoll <<< getOptions $ Home

@@ -11,7 +11,7 @@ import Deku.DOM.Attributes as DA
 import Deku.Hooks ((<#~>))
 import FRP.Poll (Poll)
 import Patternfly (dlistGroup)
-import System (CPUData(..), DeviceData(..))
+import System (DeviceData(..))
 
 type SystemPageState =
   { home ::
@@ -31,12 +31,12 @@ type SystemPageState =
 makeIslandDeviceDataCard :: Poll (Maybe DeviceData) -> Nut
 makeIslandDeviceDataCard systemDataMPoll =
   systemDataMPoll <#~> case _ of
-    Nothing -> DD.text_ "NOTIHNG"
+    Nothing -> DD.text_ "NOTHING"
     Just (DeviceData { cpuData, inDockerContainer, operatingSystemName, architecture, memTotalKb }) ->
       DD.dl [ DA.klass_ "pf-v5-c-description-list pf-m-horizontal" ]
         [ dlistGroup "CPU Model Name" <<< pure $ case cpuData of
             Nothing -> "-"
-            Just (CPUData { modelName }) -> modelName
+            Just ({ modelName }) -> modelName
         , dlistGroup "OS" $ pure operatingSystemName
         , dlistGroup "Architecture" $ pure architecture
         , dlistGroup "Container" <<< pure <<< show @Boolean $ inDockerContainer

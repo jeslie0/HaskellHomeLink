@@ -11,6 +11,7 @@ import Data.Traversable (traverse)
 import Data.UInt (UInt)
 import Proto.DeviceData.DeviceData as Proto
 import ProtoHelper (class FromMessage, class SayError, fromMessage, sayError, toEither)
+import Safe.Coerce (coerce)
 
 type CPUDataR = (modelName :: String)
 newtype CPUData = CPUData (Record CPUDataR)
@@ -26,7 +27,7 @@ instance SayError CPUDataError where
   sayError MissingModelName = pure "Model name is missing from CPUData"
 
 type DeviceDataR =
-  ( cpuData :: Maybe CPUData
+  ( cpuData :: Maybe (Record CPUDataR)
   , inDockerContainer :: Boolean
   , operatingSystemName :: String
   , architecture :: String
@@ -48,7 +49,7 @@ instance FromMessage Proto.DeviceData DeviceData DeviceDataError where
     let
       inDockerContainer = fromMaybe false msg.inDockerContainer
       mCPUDataProt = msg.cpuData
-    cpuData <- lmap MissingPartOfCPUData $ traverse fromMessage mCPUDataProt
+    cpuData <- lmap MissingPartOfCPUData $ traverse ((map \(CPUData cpudata) -> cpudata) <<< fromMessage) mCPUDataProt
     operatingSystemName <- toEither MissingOperatingSystemName msg.operatingSystemName
     architecture <- toEither MissingArchitecture msg.architecture
     memTotalKb <- Right $ msg.memTotalkB
@@ -88,13 +89,14 @@ instance FromMessage Proto.DEVICE Device DeviceError where
   fromMessage Proto.DEVICE_CAMERA = Right Camera
   fromMessage Proto.DEVICE_UNKNOWN = Right UnknownDevice
 
-type DeviceDataPairR = (device :: Device, deviceData :: DeviceData)
+type DeviceDataPairR = (device :: Device, deviceData :: Record DeviceDataR)
 newtype DeviceDataPair = DeviceDataPair (Record DeviceDataPairR)
 data DeviceDataPairError
   = MissingDevice
   | InvalidDeviceInDevicePair DeviceError
   | MissingDeviceData
   | InvalidDeviceDataInDevicePair DeviceDataError
+
 instance SayError DeviceDataPairError where
   sayError MissingDevice = pure "Missing device"
   sayError (InvalidDeviceInDevicePair err) = Array.cons "Invalid device in device pair" (sayError err)
@@ -106,13 +108,13 @@ instance FromMessage Proto.DeviceDataPair DeviceDataPair DeviceDataPairError whe
     deviceProt <- toEither MissingDevice pair.device
     device <- lmap InvalidDeviceInDevicePair $ fromMessage deviceProt
     deviceDataProt <- toEither MissingDeviceData pair.deviceData
-    deviceData <- lmap InvalidDeviceDataInDevicePair $ fromMessage deviceDataProt
+    deviceData <- lmap InvalidDeviceDataInDevicePair $ (map (\(DeviceData deviceData) -> deviceData)) <<< fromMessage $ deviceDataProt
     pure $ DeviceDataPair { device, deviceData: deviceData }
 
 instance SayError DeviceError where
   sayError InvalidDevice = pure "Device error: Invalid device"
 
-type AllDeviceDataR = (allDeviceData :: Array DeviceDataPair)
+type AllDeviceDataR = (allDeviceData :: Array (Record DeviceDataPairR))
 newtype AllDeviceData = AllDeviceData (Record AllDeviceDataR)
 
 data AllDeviceDataError
@@ -122,8 +124,12 @@ data AllDeviceDataError
 instance FromMessage Proto.AllDeviceData AllDeviceData AllDeviceDataError where
   fromMessage (Proto.AllDeviceData msg) =
     AllDeviceData <<< { allDeviceData: _ }
-      <$> (lmap MissingPartOfAllDeviceData <<< traverse fromMessage $ msg.allDeviceData)
-
+      <$>
+        ( lmap MissingPartOfAllDeviceData
+            <<< traverse
+              ((map (\(DeviceDataPair rec) -> rec)) <<< fromMessage @Proto.DeviceDataPair @DeviceDataPair)
+            $ msg.allDeviceData
+        )
 
 instance SayError AllDeviceDataError where
   sayError MissingAllDeviceData = pure "AllDeviceData is missing allDeviceData"
@@ -142,7 +148,7 @@ instance FromMessage Proto.DeviceMemoryInformation DeviceMemoryInformation Devic
     device <- lmap InvalidMemDevice $ fromMessage deviceProt
     pure $ DeviceMemoryInformation { device, timeMem: msg.timeMem <#> \(Proto.MemoryInformation info) -> info.pair }
 
-type AllDeviceMemoryDataR = (allDeviceMemoryData :: Array DeviceMemoryInformation)
+type AllDeviceMemoryDataR = (allDeviceMemoryData :: Array (Record DeviceMemoryInformationR))
 newtype AllDevicesMemoryData = AllDevicesMemoryData (Record AllDeviceMemoryDataR)
 data AllDevicesMemoryDataError
   = MissingAllDevicesMemoryData
@@ -156,4 +162,4 @@ instance FromMessage Proto.AllDeviceMemoryData AllDevicesMemoryData AllDevicesMe
           (\e -> lmap (\_ -> []) e)
           (fromMessage @Proto.DeviceMemoryInformation @DeviceMemoryInformation <$> msg.allDeviceMemoryData)
       )
-    pure $ AllDevicesMemoryData { allDeviceMemoryData: foo }
+    pure $ AllDevicesMemoryData { allDeviceMemoryData: coerce foo }
