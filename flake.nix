@@ -37,7 +37,7 @@
         });
 
       ghcVersion =
-        "ghc984";
+        "ghc966";
 
       extendHaskellPackages = { haskellPackages, alsa-lib }:
         haskellPackages.extend ( hpFinal: hpPrev: {
@@ -184,10 +184,14 @@
                   [ toolsShell ];
 
                 tools = {
-                  haskell-language-server =
-                    {};
+                  haskell-language-server = {
+                    src = pkgs.haskell-nix.sources."hls-2.10";
+                    cabalProjectLocal = ''
+                          allow-newer: haddock-library:base
+                          '';
+                  };
                   cabal =
-                    "3.12.1.0";
+                    {};
                 };
               }
           );

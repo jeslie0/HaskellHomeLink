@@ -9,7 +9,7 @@
 module Home.Handler (
   HomeHandler (..),
   ExHomeHandler (..),
-  EstablishTLSConnection(..)
+  EstablishTLSConnection (..),
 ) where
 
 import Control.Concurrent (forkFinally, forkIO, killThread)
@@ -19,7 +19,6 @@ import Control.Monad.Reader
 import Data.Foldable (forM_, traverse_)
 import Data.IORef (atomicModifyIORef')
 import Data.ProtoLens (defMessage)
-import Data.Serialize (decode)
 import Data.Text qualified as T
 import Devices (Device (..), devices, proxies)
 import Envelope (wrapProxyMsg)
@@ -39,7 +38,6 @@ import Logger (LogLevel (..), reportLog)
 import Network.Socket (AddrInfo (addrAddress), close)
 import Network.TLS qualified as TLS
 import Proto.DeviceData qualified as Proto
-import Proto.DeviceData_Fields qualified as Proto
 import Proto.Envelope qualified as Proto
 import Proto.Envelope_Fields qualified as Proto
 import Proto.Radio qualified as Proto
@@ -48,9 +46,9 @@ import ProtoHelper (ToMessage (..))
 import Router (
   Router,
   connectionsRegistry,
+  handleBytes,
   tryForwardMessage,
   trySendMessage,
-  handleBytes
  )
 import RxTx.Connection (cleanup, recvAndDispatch)
 import RxTx.Connection.Socket (aquireClientSocket, connectToHost)
@@ -59,7 +57,6 @@ import RxTx.ConnectionRegistry (addConnection)
 import RxTx.TLS (TLSRxError (..))
 import System.Memory (getMemoryInformation)
 import TH (makeInstance)
-import TLSHelper (setupTLSClientParams)
 
 class HomeHandler msg where
   homeHandler ::
@@ -78,7 +75,6 @@ $( makeInstance
     ''Proto.HomeEnvelope'Payload
  )
 
-
 -- * Non protobuf messages
 
 data EstablishTLSConnection = EstablishTLSConnection
@@ -88,7 +84,7 @@ data EstablishTLSConnection = EstablishTLSConnection
   }
 
 instance HomeHandler EstablishTLSConnection where
-  homeHandler device msg@(EstablishTLSConnection params host port) = do
+  homeHandler _device msg@(EstablishTLSConnection params host port) = do
     env <- getEnv
     loop <- getLoop
     let registry = env ^. router . connectionsRegistry
@@ -153,6 +149,7 @@ notifyProxyRadioStatus rtr island status stationId =
     )
 
 -- * Protobuf handlers
+
 -- | Try to make a new asynchronous audio stream in a separate
 -- thread. If one exists, report the error.
 instance HomeHandler Proto.ModifyRadioRequest where

@@ -141,7 +141,8 @@ executable Home
                       time
 
 
-    build-tool-depends: proto-lens-protoc:proto-lens-protoc ^>= 0.8.0.1
+    build-tool-depends: proto-lens-protoc:proto-lens-protoc
+                        -- ^>= 0.9.0.0
 
     -- Directories containing source files.
     hs-source-dirs:   app
@@ -243,7 +244,8 @@ executable Proxy
                       time
 
 
-    build-tool-depends: proto-lens-protoc:proto-lens-protoc ^>= 0.8.0.1
+    build-tool-depends: proto-lens-protoc:proto-lens-protoc
+                        --^>= 0.9.0.0
 
     -- Directories containing source files.
     hs-source-dirs:   app
@@ -327,7 +329,7 @@ executable Proxy
 --                       transformers-base,
 --                       vector
 
---     build-tool-depends: proto-lens-protoc:proto-lens-protoc ^>= 0.8.0.1
+--     build-tool-depends: proto-lens-protoc:proto-lens-protoc == 0.8.0.1
 
 --     -- Directories containing source files.
 --     hs-source-dirs:   app

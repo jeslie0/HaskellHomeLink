@@ -28,8 +28,10 @@ let
 
       modules = [{
         packages = {
-          ${packageName}.components.exes.Home = {
-            build-tools = [ pkgs.protobuf ];
+          ${packageName}.components.exes.Home= {
+            build-tools = [ pkgs.protobuf
+                            pkgs.haskellPackages.proto-lens-protoc
+                          ];
             dontStrip = false;
           };
         };
