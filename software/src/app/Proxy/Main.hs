@@ -43,6 +43,7 @@ import Proxy.Env (
   memoryMap,
   mkEnv,
   router,
+  serverSocket,
   streamStatusState,
   websocketsMap,
  )
@@ -79,8 +80,8 @@ import RxTx.ConnectionRegistry (
   removeConnection,
  )
 import RxTx.TLS (TLSRxError (..))
-import State (State, setState)
-import System (DeviceData, mkDeviceData)
+import State (State)
+import System (DeviceData)
 import System.Memory (MemoryInformation)
 import TLSHelper (setupTLSServerParams)
 
@@ -148,13 +149,13 @@ createHttpServerThread certPath keyPath caCertPath host port env =
 
 listeningSocketThread ::
   EventLoop (Device, ExProxyHandler)
-  -> Router 
+  -> Router
   -> ServerParams
   -> Socket
   -> IO ()
-listeningSocketThread loop router params listenSock =
+listeningSocketThread loop rtr params listenSock =
   forever $ do
-    bracket (accept listenSock) (\(sock, peer) -> close sock) $ \(sock, peer) -> do
+    bracket (accept listenSock) (\(sock, _) -> close sock) $ \(sock, peer) -> do
       putStrLn $ "Accepted TCP connection from " <> show peer
       mConn <- upgradeSocket params sock
       case mConn of
@@ -164,8 +165,8 @@ listeningSocketThread loop router params listenSock =
           putStrLn "Established TLS connection"
           threadId <- myThreadId
           bracket_
-            (addConnection Home threadId conn (router ^. connectionsRegistry))
-            (removeConnection Home (router ^. connectionsRegistry))
+            (addConnection Home threadId conn (rtr ^. connectionsRegistry))
+            (removeConnection Home (rtr ^. connectionsRegistry))
             (runConnection conn)
  where
   runConnection conn = do
@@ -175,7 +176,7 @@ listeningSocketThread loop router params listenSock =
         print $ "ERROR: " <> show err
         cleanup conn
       Right bytes -> do
-        handleBytes @Proto.WrappedEnvelope bytes router $ \src wrappedEnv ->
+        handleBytes @Proto.WrappedEnvelope bytes rtr $ \src wrappedEnv ->
           case wrappedEnv ^. Proto.maybe'wrappedPayload of
             Just (Proto.WrappedEnvelope'ProxyMsg proxyMsg) -> addMsgIO (src, ExProxyHandler proxyMsg) loop
             _ -> putStrLn "Dropping message for wrong device..."
@@ -203,38 +204,30 @@ main = runCommand $ \(opts :: ProxyOptions) _args -> do
       case mParams of
         Nothing -> putStrLn "Couldn't make TLS parameters..."
         Just params -> do
-          bracket (mkEnv Proxy) cleanupEnv $ \env ->
+          bracket (mkEnv $ show $ config ^. tlsPort) cleanupEnv $ \env ->
             bracket
               ( forkIO $
-                  pure ()
-                  -- createHttpServerThread
-                  --   (config ^. httpsCertificatePath)
-                  --   (config ^. httpsKeyPath)
-                  --   (config ^. httpsCACertificatePath)
-                  --   (config ^. httpHostname)
-                  --   (config ^. httpPort)
-                  --   env
+                  createHttpServerThread
+                    (config ^. httpsCertificatePath)
+                    (config ^. httpsKeyPath)
+                    (config ^. httpsCACertificatePath)
+                    (config ^. httpHostname)
+                    (config ^. httpPort)
+                    env
               )
               killThread
-              $ \_ -> bracket
-                      (aquireBoundListeningServerSocket
-                      "3000"
-                        -- (show $ config ^. tlsPort)
-                      )
-                      close $ \serverSock -> do
-                runEventLoopT (action config params serverSock) env
+              $ \_ -> do
+                runEventLoopT (action params) env
                 writeFile "/mnt/normalexit" ""
-         where
-          action ::
-            ProxyConfiguration
-            -> ServerParams
-            -> Socket
-            -> EventLoopT Env (Device, ExProxyHandler) IO ()
-          action config params socket = do
-            loop <- getLoop
-            env <- getEnv
-            socketThread <-
-              liftIO . forkIO $
-                listeningSocketThread loop (env ^. router) params socket
-            startCheckMemoryPoll
-            start $ uncurry proxyHandler
+ where
+  action ::
+    ServerParams
+    -> EventLoopT Env (Device, ExProxyHandler) IO ()
+  action params = do
+    loop <- getLoop
+    env <- getEnv
+    _socketThread <-
+      liftIO . forkIO $
+        listeningSocketThread loop (env ^. router) params (env ^. serverSocket)
+    startCheckMemoryPoll
+    start $ uncurry proxyHandler

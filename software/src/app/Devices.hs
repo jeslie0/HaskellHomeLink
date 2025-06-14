@@ -32,4 +32,3 @@ devices =
 
 proxies :: [Device]
 proxies = [Proxy]
-
