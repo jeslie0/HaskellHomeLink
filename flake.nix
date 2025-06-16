@@ -39,24 +39,6 @@
       ghcVersion =
         "ghc966";
 
-      extendHaskellPackages = { haskellPackages, alsa-lib }:
-        haskellPackages.extend ( hpFinal: hpPrev: {
-          alsa-hs =
-            hpPrev.callCabal2nix "alsa-hs" ./software/libs/alsa-hs { inherit alsa-lib; };
-
-          minimp3-hs =
-            hpPrev.callCabal2nix "minimp3-hs" ./software/libs/minimp3-hs { };
-        });
-
-      haskellPackages = system:
-        extendHaskellPackages {
-          haskellPackages =
-            nixpkgsFor.${system}.haskell.packages.${ghcVersion};
-
-          alsa-lib =
-            nixpkgsFor.${system}.alsa-lib;
-        };
-
       packageName = system: with builtins;
         let
           dir =
@@ -185,10 +167,6 @@
 
                 tools = {
                   haskell-language-server = {
-                    src = pkgs.haskell-nix.sources."hls-2.10";
-                    cabalProjectLocal = ''
-                          allow-newer: haddock-library:base
-                          '';
                   };
                   cabal =
                     {};

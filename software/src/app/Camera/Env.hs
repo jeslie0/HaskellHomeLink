@@ -6,31 +6,41 @@ module Camera.Env (
   mkEnv,
   router,
   EnvT,
+  cleanupEnv,
 ) where
 
-import Islands (Island)
+import Devices (Device)
 import Lens.Micro ((^.))
 import Lens.Micro.TH (makeLenses)
-import Router (Router, mkRouter, connectionsManager)
+import Router (Router, mkRouter, connectionsRegistry)
 import Control.Monad.Reader (ReaderT)
-import ConnectionManager (killConnections)
+import RxTx.ConnectionRegistry (killConnections)
+import Camera.VideoStream (VideoStreamResource, cleanupVideoStreamResource)
+import Data.IORef (IORef, newIORef, readIORef, writeIORef)
+import Control.Monad (forM_)
   
 data Env = Env
   { _router :: Router
+  , _videostreamRes :: IORef (Maybe VideoStreamResource)
   }
 
 $(makeLenses ''Env)
 
 type EnvT = ReaderT Env IO
 
-mkEnv :: Island -> IO Env
+mkEnv :: Device -> IO Env
 mkEnv island = do
   _router <- mkRouter island
+  _videostreamRes <- newIORef Nothing
   pure $
     Env
       { _router
+      , _videostreamRes
       }
 
 cleanupEnv :: Env -> IO ()
 cleanupEnv env = do
-  killConnections (env ^. (router . connectionsManager))
+  killConnections (env ^. (router . connectionsRegistry))
+  videoRes <- readIORef $ env ^. videostreamRes
+  forM_ videoRes cleanupVideoStreamResource
+  writeIORef (env ^. videostreamRes) Nothing

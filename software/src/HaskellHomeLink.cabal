@@ -256,86 +256,86 @@ executable Proxy
     ghc-options: -main-is Proxy.Main -O2 -threaded -split-objs
                  -- -Wunused-packages
 
--- executable Camera
---     -- Import common warning flags.
---     import:           warnings
+executable Camera
+    -- Import common warning flags.
+    import:           warnings
 
---     -- .hs or .lhs file containing the Main module.
---     main-is:          Camera/Main.hs
+    -- .hs or .lhs file containing the Main module.
+    main-is:          Camera/Main.hs
 
 
---     -- Modules included in this executable, other than Main.
---     other-modules:    Camera.Camera,
---                       Camera.Env,
---                       Camera.Handler,
---                       Camera.Options,
---                       Connection.Rx,
---                       Connection.RxTx,
---                       Connection.Socket,
---                       Connection.TCP,
---                       Connection.Tx,
---                       ConnectionManager,
---                       Envelope,
---                       EventLoop,
---                       Home.AudioStreamTypes,
---                       Islands,
---                       Logger,
---                       Msg,
---                       Parsing,
---                       Proto.Messages,
---                       Proto.Messages_Fields,
---                       ProtoHelper,
---                       Proxy.Env,
---                       Router,
---                       State,
---                       System,
---                       System.CPU,
---                       System.Memory,
---                       TH,
---                       Threads,
---                       Utilities.Either
---     -- LANGUAGE extensions used by modules in this package
---     -- other-extensions:
+    -- Modules included in this executable, other than Main.
+    other-modules:    Camera.VideoStream,
+                      Camera.Env,
+                      Camera.Handler,
+                      Camera.Options,
 
---     -- Other library packages from which modules are imported.
---     build-depends:    aeson,
---                       attoparsec,
---                       base ^>=4.19.2.0,
---                       bytestring,
---                       cereal,
---                       containers,
---                       crypton-x509,
---                       crypton-x509-store,
---                       crypton-x509-validation,
---                       data-default-class,
---                       directory,
---                       lifted-base,
---                       microlens,
---                       microlens-th,
---                       monad-control,
---                       mtl,
---                       network,
---                       options,
---                       process-extras,
---                       proto-lens,
---                       proto-lens-runtime,
---                       random,
---                       servant-server,
---                       servant-proto-lens,
---                       template-haskell,
---                       text,
---                       time,
---                       tls,
---                       transformers-base,
---                       vector
+                      Envelope,
+                      Devices,
+                      Logger,
+                      Parsing,
+                      ProtoHelper,
+                      Router,
+                      State,
+                      System,
+                      System.CPU,
+                      System.Memory,
+                      TH,
+                      Utilities.Either,
 
---     build-tool-depends: proto-lens-protoc:proto-lens-protoc == 0.8.0.1
+                      -- Proto medules
+                      Proto.Camera,
+                      Proto.Camera_Fields,
+                      Proto.Envelope,
+                      Proto.Envelope_Fields,
+                      Proto.Logging,
+                      Proto.Logging_Fields,
+                      Proto.Radio,
+                      Proto.Radio_Fields,
+                      Proto.DeviceData,
+                      Proto.DeviceData_Fields,
+    -- LANGUAGE extensions used by modules in this package
+    -- other-extensions:
 
---     -- Directories containing source files.
---     hs-source-dirs:   app
+    -- Other library packages from which modules are imported.
+    build-depends:    
+                      -- Data
+                      aeson,
+                      attoparsec,
+                      bytestring,
+                      cereal,
+                      containers,
+                      mtl,
+                      text,
+                      vector,
 
---     -- Base language which the package is written in.
---     default-language: GHC2021
+                      -- Tools
+                      microlens,
+                      microlens-th,
+                      template-haskell,
 
---     ghc-options: -main-is Camera.Main -O2 -threaded -split-objs
---                  -- -Wunused-packages
+                      -- Protobuf
+                      proto-lens,
+                      proto-lens-runtime,
+
+                      -- General
+                      base,
+                      directory,
+                      eventloop-hs,
+                      network,
+                      options,
+                      random,
+                      rxtx,
+                      time,
+                      process
+
+    build-tool-depends: proto-lens-protoc:proto-lens-protoc == 0.8.0.1
+
+    -- Directories containing source files.
+    hs-source-dirs:   app
+
+    -- Base language which the package is written in.
+    default-language: GHC2021
+
+    ghc-options: -main-is Camera.Main -O2 -threaded -split-objs
+                 -- -Wunused-packages
