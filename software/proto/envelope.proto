@@ -24,13 +24,16 @@ message ProxyEnvelope {
     proto.Device_Data.MemoryInformation m4 = 4;
     proto.Device_Data.CheckMemoryUsage m5 = 5;
     proto.Logging.AddLog m6 = 6;
+    proto.Camera.InitialStreamMetaDataChunk m7 = 7;
+    proto.Camera.StreamChunk m8 = 8;
   }
 }
 
 
 message CameraEnvelope {
   oneof payload {
-    proto.Camera.TakePicture m1 = 1;
+    proto.Camera.StartVideoStreamCmd m1 = 1;
+    proto.Camera.StopVideoStreamCmd m2 = 2;
   }
 }
 

@@ -9,6 +9,7 @@ module Camera.VideoStream (
   createVideoStreamResource,
   getInitChunk,
   getChunk,
+  getStreamHandle,
 ) where
 
 import Control.Exception
@@ -25,6 +26,7 @@ import System.Process (
   createProcess_,
   proc,
  )
+import Lens.Micro ((^.), _2)
 
 raspividProc :: CreateProcess
 raspividProc =
@@ -73,6 +75,9 @@ data VideoStreamResource = VideoStreamResource
   }
 
 $(makeLenses ''VideoStreamResource)
+
+getStreamHandle :: VideoStreamResource -> Maybe Handle
+getStreamHandle res = res ^. ffmpegProcess . _2
 
 cleanupVideoStreamResource :: VideoStreamResource -> IO ()
 cleanupVideoStreamResource (VideoStreamResource {_raspividProcess, _ffmpegProcess}) = do

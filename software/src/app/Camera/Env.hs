@@ -7,6 +7,7 @@ module Camera.Env (
   router,
   EnvT,
   cleanupEnv,
+  videostreamRes
 ) where
 
 import Devices (Device)

@@ -4,10 +4,18 @@ package proto.Camera;
 
 // * Camera msgs
 
-message TakePicture {
+message StartVideoStreamCmd {
 
 }
 
-message PictureData {
-  bytes imageData = 1;
+message StopVideoStreamCmd {
+
+}
+
+message InitialStreamMetaDataChunk {
+  bytes metadata = 1;
+}
+
+message StreamChunk {
+  bytes chunk = 1;
 }
