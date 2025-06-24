@@ -329,7 +329,7 @@ executable Camera
                       time,
                       process
 
-    build-tool-depends: proto-lens-protoc:proto-lens-protoc == 0.8.0.1
+    build-tool-depends: proto-lens-protoc:proto-lens-protoc
 
     -- Directories containing source files.
     hs-source-dirs:   app

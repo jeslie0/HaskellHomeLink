@@ -10,7 +10,7 @@ module Camera.Env (
   videostreamRes
 ) where
 
-import Devices (Device)
+import Devices (Device (Camera))
 import Lens.Micro ((^.))
 import Lens.Micro.TH (makeLenses)
 import Router (Router, mkRouter, connectionsRegistry)
@@ -29,9 +29,9 @@ $(makeLenses ''Env)
 
 type EnvT = ReaderT Env IO
 
-mkEnv :: Device -> IO Env
-mkEnv island = do
-  _router <- mkRouter island
+mkEnv :: IO Env
+mkEnv = do
+  _router <- mkRouter Camera
   _videostreamRes <- newIORef Nothing
   pure $
     Env

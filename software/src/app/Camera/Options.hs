@@ -1,8 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Camera.Options (
-) where
+module Camera.Options where
 
 import Data.Aeson (FromJSON (..), withObject, (.:))
 import Lens.Micro.TH (makeLenses)
@@ -10,7 +9,7 @@ import Lens.Micro.TH (makeLenses)
 -- import Network.TLS (HostName)
 import Options (Options (..), simpleOption)
 
-data ProxyConfiguration = ProxyConfiguration
+data CameraConfiguration = CameraConfiguration
   { _httpsCertificatePath :: String
   , _httpsKeyPath :: String
   , _httpsCACertificatePath :: String
@@ -19,7 +18,7 @@ data ProxyConfiguration = ProxyConfiguration
   , _tlsCACertificatePath :: String
   }
 
-$(makeLenses ''ProxyConfiguration)
+$(makeLenses ''CameraConfiguration)
 
 -- instance FromJSON ProxyConfiguration where
 --   parseJSON = withObject "ProxyConfiguration" $ \v -> do
@@ -37,9 +36,9 @@ $(makeLenses ''ProxyConfiguration)
 --       <*> tls .: "hostname"
 --       <*> (toEnum <$> tls .: "port")
 
--- newtype ProxyOptions = ProxyOptions {_configPath :: FilePath}
+data CameraOptions = CameraOptions
 
--- $(makeLenses ''ProxyOptions)
+$(makeLenses ''CameraOptions)
 
 -- instance Options ProxyOptions where
 --   defineOptions =

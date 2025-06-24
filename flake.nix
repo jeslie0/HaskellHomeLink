@@ -30,11 +30,30 @@
       nixpkgsFor = forAllSystems (system:
         import nixpkgs {
           inherit system;
-          overlays = [ # haskellNix.overlay this causes GHC to be rebuilt
+          overlays = [ # haskellNix.overlay 
                        ps-overlay.overlays.default
                        mkSpagoDerivation.overlays.default
+                       (self: super: {
+                         # A minimal build of ffmpeg that works on
+                         # arm6.
+                         ffmpeg = super.ffmpeg.override {
+                           withLcevcdec = false;
+                           withTheora = false;
+                           withPulse = false;
+                           withSdl2 = false;
+                           withVdpau = false;
+                           buildFfplay = false;
+                         };
+                       })
                      ];
         });
+
+      haskellNixFor = forAllSystems (system:
+        import haskellNix {
+          inherit system;
+          overlays = [ (prev: self: self) ];
+        }
+      );
 
       ghcVersion =
         "ghc966";
@@ -99,6 +118,17 @@
                     nix-filter.lib;
                 };
 
+              Camera = 
+                import ./software/apps/Camera/default.nix {
+                  inherit self pkgs ghcVersion web haskellNix system;
+
+                  packageName =
+                    packageName system;
+
+                  nix-filter =
+                    nix-filter.lib;
+                };
+
               linux =
                 import ./nix/linux.nix {
                   inherit self pkgs ghcVersion haskellNix system;
@@ -120,9 +150,10 @@
 
               project =
                 linux.project;
-
-            } // HomeArmv7
-              // ProxyAArch64
+            }
+            // HomeArmv7
+            // ProxyAArch64
+            // Camera
           );
 
 

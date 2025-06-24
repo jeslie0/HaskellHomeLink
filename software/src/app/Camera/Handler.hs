@@ -1,9 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Camera.Handler (
-
-) where
+module Camera.Handler  where
 
 import Camera.Env (Env, videostreamRes, router)
 import Camera.VideoStream (
@@ -25,6 +23,7 @@ import Proto.Camera qualified as Proto
 import Proto.Camera_Fields qualified as Proto
 import Proto.Envelope qualified as Proto
 import Proto.Envelope_Fields qualified as Proto
+import Proto.DeviceData qualified as Proto
 import Router (trySendMessage)
 import TH (makeInstance)
 
@@ -100,3 +99,5 @@ instance CameraHandler Proto.StopVideoStreamCmd where
       videoStream <- readIORef (env ^. videostreamRes)
       forM_ videoStream cleanupVideoStreamResource
       writeIORef (env ^. videostreamRes) Nothing
+
+instance CameraHandler Proto.CheckMemoryUsage where
