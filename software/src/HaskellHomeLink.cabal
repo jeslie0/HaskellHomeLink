@@ -78,6 +78,7 @@ executable Home
                       TLSHelper,
                       TH,
                       Utilities.Either,
+                      Ports,
 
                       -- Proto medules
                       Proto.Camera,
@@ -282,6 +283,7 @@ executable Camera
                       System.Memory,
                       TH,
                       Utilities.Either,
+                      Ports,
 
                       -- Proto medules
                       Proto.Camera,

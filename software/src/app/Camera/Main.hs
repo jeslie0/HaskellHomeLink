@@ -1,7 +1,8 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Camera.Main where
 
 import Camera.Env (Env, mkEnv, cleanupEnv)
-import Camera.Handler (ExCameraHandler (..), CameraHandler (cameraHandler))
+import Camera.Handler (ExCameraHandler (..), CameraHandler (cameraHandler), EstablishHomeConnection(..))
 import Camera.Options(CameraOptions)
 import Camera.VideoStream (getChunk, getInitChunk)
 import Control.Monad (void)
@@ -22,6 +23,11 @@ startCheckMemoryPoll = do
     setInterval (Camera, ExCameraHandler (defMessage @Proto.CheckMemoryUsage)) $
       30 * 1000
 
+startHomeConnection  ::
+  EventLoopT Env (Device, ExCameraHandler) IO ()
+startHomeConnection = do
+  addMsg (Camera, ExCameraHandler $ EstablishHomeConnection "127.0.0.1" 9000)
+
 main :: IO ()
 main = do --runCommand $ \(opts :: CameraOptions) _args -> do
   bracket mkEnv cleanupEnv $ \env -> do
@@ -29,5 +35,6 @@ main = do --runCommand $ \(opts :: CameraOptions) _args -> do
     where
       action :: EventLoopT Env (Device, ExCameraHandler) IO ()
       action = do
+        startHomeConnection
         startCheckMemoryPoll
         start $ uncurry cameraHandler
