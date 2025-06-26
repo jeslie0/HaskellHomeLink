@@ -6,7 +6,7 @@ module Proxy.Handler (
   ExProxyHandler (..),
 ) where
 
-import Control.Concurrent (modifyMVar_)
+import Control.Concurrent (modifyMVar_, withMVar)
 import Control.Monad (forM_, void)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Map.Strict qualified as Map
@@ -18,6 +18,9 @@ import Envelope (wrapHomeMsg)
 import EventLoop (EventLoopT, getEnv)
 import Lens.Micro ((^.))
 import Logger (LogLevel (..), addLog, reportLog)
+import Network.WebSockets qualified as WS
+import Proto.Camera qualified as Proto
+import Proto.Camera_Fields qualified as Proto
 import Proto.DeviceData qualified as Proto
 import Proto.DeviceData_Fields qualified as Proto
 import Proto.Envelope qualified as Proto
@@ -27,7 +30,16 @@ import Proto.Logging_Fields qualified as Proto
 import Proto.Radio qualified as Proto
 import Proto.Radio_Fields qualified as Proto
 import ProtoHelper (FromMessage (..), toMessage)
-import Proxy.Env (Env, deviceMap, logs, memoryMap, router, streamStatusState)
+import Proxy.Env (
+  Env,
+  cameraStreamInitialChunk,
+  deviceMap,
+  logs,
+  memoryMap,
+  router,
+  streamStatusState,
+  websocketsMap,
+ )
 import Router (trySendMessage)
 import State (fulfilPromise)
 import System.Memory (MemoryInformation, getMemoryInformation)
@@ -117,3 +129,18 @@ instance ProxyHandler Proto.AddLog where
   proxyHandler _ req = do
     env <- getEnv
     liftIO $ addLog (env ^. logs) (req ^. Proto.log)
+
+instance ProxyHandler Proto.InitialStreamMetaDataChunk where
+  proxyHandler _ req = do
+    env <- getEnv
+    liftIO $
+      modifyMVar_ (env ^. cameraStreamInitialChunk) $
+        \_ -> pure . Just $ req ^. Proto.metadata
+    liftIO $ withMVar (env ^. websocketsMap) $ \wsMap -> do
+      forM_ wsMap $ \ws -> WS.sendBinaryData ws (req ^. Proto.metadata)
+
+instance ProxyHandler Proto.StreamChunk where
+  proxyHandler _ req = do
+    env <- getEnv
+    liftIO $ withMVar (env ^. websocketsMap) $ \wsMap -> do
+      forM_ wsMap $ \ws -> WS.sendBinaryData ws (req ^. Proto.chunk)

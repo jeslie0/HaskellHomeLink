@@ -12,13 +12,15 @@ module Proxy.Env (
   logs,
   cleanupEnv,
   websocketsMap,
-  serverSocket
+  serverSocket,
+  cameraStreamInitialChunk,
 ) where
 
 import Control.Concurrent (MVar, newEmptyMVar, newMVar)
 import Control.Exception (bracketOnError)
 import Control.Monad.Reader (ReaderT)
 import Data.Int (Int32)
+import Data.ByteString qualified as B
 import Data.Map.Strict qualified as Map
 import Data.Vector qualified as V
 import Devices (Device (..))
@@ -42,6 +44,7 @@ data Env = Env
   , _memoryMap :: MVar (Map.Map Device (V.Vector MemoryInformation))
   , _websocketsMap :: MVar (Map.Map Int32 WS.Connection)
   , _serverSocket :: Socket
+  , _cameraStreamInitialChunk :: MVar (Maybe B.ByteString)
   , _logs :: Logs
   }
 
@@ -60,6 +63,7 @@ mkEnv port = do
   _memoryMap <- newMVar Map.empty
   _websocketsMap <- newMVar Map.empty
   _logs <- mkLogs
+  _cameraStreamInitialChunk <- newMVar Nothing
   bracketOnError (aquireBoundListeningServerSocket port) close $ \serverSock ->
     pure $
       Env
@@ -69,6 +73,7 @@ mkEnv port = do
         , _memoryMap
         , _websocketsMap
         , _logs
+        , _cameraStreamInitialChunk
         , _serverSocket = serverSock
         }
 
