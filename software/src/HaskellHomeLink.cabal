@@ -180,6 +180,7 @@ executable Proxy
                       Proxy.REST.Api,
                       Proxy.REST.HomeServer,
                       Proxy.WebsocketServer,
+                      TLSHelper,
                       TH,
                       Utilities.Either,
 

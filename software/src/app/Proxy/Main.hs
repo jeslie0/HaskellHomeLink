@@ -1,7 +1,14 @@
 module Proxy.Main (main) where
 
 import Control.Concurrent (MVar, forkIO, killThread, modifyMVar_, myThreadId)
-import Control.Exception (bracket, bracket_, finally)
+import Control.Exception (
+  Exception (displayException),
+  SomeException (..),
+  bracket,
+  bracket_,
+  catch,
+  finally,
+ )
 import Control.Monad (forever, void, when)
 import Control.Monad.Trans (liftIO)
 import Data.Aeson (eitherDecodeFileStrict)
@@ -189,8 +196,8 @@ startCheckMemoryPoll = do
     . setInterval (Proxy, ExProxyHandler (defMessage @Proto.CheckMemoryUsage))
     $ 30 * 1000
 
-main :: IO ()
-main = runCommand $ \(opts :: ProxyOptions) _args -> do
+mainImpl :: IO ()
+mainImpl = runCommand $ \(opts :: ProxyOptions) _args -> do
   mConfig <- eitherDecodeFileStrict (opts ^. configPath)
   case mConfig of
     Left errs -> putStrLn $ "Could not parse configuration file: " <> errs
@@ -231,3 +238,10 @@ main = runCommand $ \(opts :: ProxyOptions) _args -> do
         listeningSocketThread loop (env ^. router) params (env ^. serverSocket)
     startCheckMemoryPoll
     start $ uncurry proxyHandler
+
+main :: IO ()
+main =
+  forever $
+    catch mainImpl $
+      \(SomeException e) -> do
+        putStrLn $ "An exception occurred: " <> displayException e

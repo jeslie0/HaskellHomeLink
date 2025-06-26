@@ -3,7 +3,13 @@
 module Home.Main (main) where
 
 import Control.Concurrent (forkIO, myThreadId)
-import Control.Exception (bracket, bracket_)
+import Control.Exception (
+  Exception (displayException),
+  SomeException (..),
+  bracket,
+  bracket_,
+  catch
+ )
 import Control.Monad (forever, void, when)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Aeson (eitherDecodeFileStrict)
@@ -112,8 +118,8 @@ listeningSocketThread loop rtr listenSock =
             _ -> putStrLn "Dropping message for wrong device..."
         runConnection conn
 
-main :: IO ()
-main = runCommand $ \(opts :: HomeOptions) _args -> do
+mainImpl :: IO ()
+mainImpl = runCommand $ \(opts :: HomeOptions) _args -> do
   mConfig <- eitherDecodeFileStrict (opts ^. configPath)
   case mConfig of
     Left errs -> putStrLn $ "Could not parse configuration file: " <> errs
@@ -142,3 +148,10 @@ main = runCommand $ \(opts :: HomeOptions) _args -> do
     when success $ do
       startCheckMemoryPoll
       start $ uncurry homeHandler
+
+main :: IO ()
+main =
+  forever $
+    catch mainImpl $
+      \(SomeException e) -> do
+        putStrLn $ "An exception occurred: " <> displayException e
