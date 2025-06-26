@@ -4,25 +4,18 @@
 
 module Proxy.REST.HomeServer (runApp, mkEnv, router) where
 
-import Proto.Logging qualified as Proto
-import Proto.Logging_Fields qualified as Proto
-import Proto.Radio qualified as Proto
-import Proto.Radio_Fields qualified as Proto
-import Proto.DeviceData qualified as Proto
-import Proto.DeviceData_Fields qualified as Proto
-
-import TLSHelper (loadCAStore, mTLSHooks)
 import Control.Concurrent (MVar, readMVar)
 import Control.Exception (SomeAsyncException, catch, throwIO)
 import Control.Monad (void)
 import Control.Monad.IO.Class (liftIO)
+import Data.ByteString qualified as B
 import Data.Int (Int32)
 import Data.Map.Strict qualified as Map
 import Data.ProtoLens (defMessage)
 import Data.Vector qualified as V
+import Devices qualified as Dev
 import Envelope (wrapHomeMsg)
 import Home.AudioStreamTypes (StationId, StreamStatus)
-import Devices qualified as Dev
 import Lens.Micro ((&), (.~), (^.))
 import Lens.Micro.TH (makeLenses)
 import Logger (Logs, getLogs)
@@ -42,9 +35,15 @@ import Network.Wai.Handler.WarpTLS (
   tlsSettings,
  )
 import Network.WebSockets qualified as WS
+import Proto.DeviceData qualified as Proto
+import Proto.DeviceData_Fields qualified as Proto
+import Proto.Logging qualified as Proto
+import Proto.Logging_Fields qualified as Proto
+import Proto.Radio qualified as Proto
+import Proto.Radio_Fields qualified as Proto
 import ProtoHelper (toMessage)
-import Proxy.WebsocketServer (websocketServer)
 import Proxy.REST.Api (Api)
+import Proxy.WebsocketServer (websocketServer)
 import Router (Router, trySendMessage)
 import Servant (
   Handler,
@@ -59,6 +58,7 @@ import Servant.Server (Application)
 import State (State, StateId, waitForStateUpdate, withState)
 import System (DeviceData)
 import System.Memory (MemoryInformation)
+import TLSHelper (loadCAStore, mTLSHooks)
 import WaiAppStatic.Types (unsafeToPiece)
 
 data Env = Env
@@ -66,6 +66,7 @@ data Env = Env
   , _deviceDataState :: MVar (Map.Map Dev.Device DeviceData)
   , _memoryMap :: MVar (Map.Map Dev.Device (V.Vector MemoryInformation))
   , _wsConns :: MVar (Map.Map Int32 WS.Connection)
+  , _initialStreamChunk :: MVar (Maybe B.ByteString)
   , _router :: Router
   , _logs :: Logs
   }
@@ -77,10 +78,11 @@ mkEnv ::
   -> MVar (Map.Map Dev.Device DeviceData)
   -> MVar (Map.Map Dev.Device (V.Vector MemoryInformation))
   -> MVar (Map.Map Int32 WS.Connection)
+  -> MVar (Maybe B.ByteString)
   -> Logs
   -> Router
   -> IO Env
-mkEnv streamStatus systemState memMap wsConns' logs' rtr = do
+mkEnv streamStatus systemState memMap wsConns' initialStreamChunk logs' rtr = do
   pure $
     Env
       { _streamStatusState = streamStatus
@@ -89,6 +91,7 @@ mkEnv streamStatus systemState memMap wsConns' logs' rtr = do
       , _wsConns = wsConns'
       , _router = rtr
       , _logs = logs'
+      , _initialStreamChunk = initialStreamChunk
       }
 
 -- * Server handlers
@@ -162,7 +165,7 @@ serveDir path = do
 
 app :: Env -> Application
 app env =
-  websocketServer (env ^. wsConns) $
+  websocketServer (env ^. initialStreamChunk) (env ^. wsConns) $
     serve (Proxy @Api) $
       server env
 

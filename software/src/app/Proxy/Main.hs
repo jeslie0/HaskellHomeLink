@@ -53,6 +53,7 @@ import Proxy.Env (
   serverSocket,
   streamStatusState,
   websocketsMap,
+  cameraStreamInitialChunk,
  )
 import Proxy.Handler (ExProxyHandler (..), proxyHandler)
 import Proxy.Options (
@@ -102,11 +103,12 @@ httpServer ::
   -> MVar (Map.Map Device DeviceData)
   -> MVar (Map.Map Device (V.Vector MemoryInformation))
   -> MVar (Map.Map Int32 WS.Connection)
+  -> MVar (Maybe B.ByteString)
   -> Logs
   -> Router
   -> IO ()
-httpServer certPath keyPath caCertPath host port state systemData memoryData wsConns logs' rtr = do
-  env <- HTTP.mkEnv state systemData memoryData wsConns logs' rtr
+httpServer certPath keyPath caCertPath host port state systemData memoryData wsConns initialStreamChunk logs' rtr = do
+  env <- HTTP.mkEnv state systemData memoryData wsConns initialStreamChunk logs' rtr
   HTTP.runApp certPath keyPath caCertPath host port env
 
 -- mkTLSServerSocket ::
@@ -149,6 +151,7 @@ createHttpServerThread certPath keyPath caCertPath host port env =
     (env ^. deviceMap)
     (env ^. memoryMap)
     (env ^. websocketsMap)
+    (env ^. cameraStreamInitialChunk)
     (env ^. logs)
     (env ^. router)
 
