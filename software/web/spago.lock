@@ -27,6 +27,7 @@
             "protobuf",
             "random",
             "st",
+            "web-socket",
             "yoga-json"
           ],
           "build_plan": [
@@ -135,6 +136,7 @@
             "web-file",
             "web-html",
             "web-pointerevents",
+            "web-socket",
             "web-storage",
             "web-streams",
             "web-touchevents",
@@ -2138,6 +2140,15 @@
         "prelude",
         "web-dom",
         "web-uievents"
+      ]
+    },
+    "web-socket": {
+      "type": "registry",
+      "version": "4.0.0",
+      "integrity": "sha256-xz46Q/rdJPNdLhq8QsyfxBoc2CTRXzgbwAj8oqV//C4=",
+      "dependencies": [
+        "arraybuffer-types",
+        "web-file"
       ]
     },
     "web-storage": {

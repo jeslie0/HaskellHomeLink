@@ -22,6 +22,10 @@ type SystemPageState =
       { systemData :: Poll (Maybe DeviceData)
       , chart :: Nut
       }
+  , camera ::
+      { systemData :: Poll (Maybe DeviceData)
+      , chart :: Nut
+      }
   }
 
 -- renderDiskCapacity :: Number -> Number -> String
@@ -60,10 +64,11 @@ makeIslandCardBody systemDataPoll chart =
     ]
 
 systemPage :: SystemPageState -> Nut
-systemPage { home, proxy } = Deku.do
+systemPage { home, proxy, camera } = Deku.do
   DD.div [ DA.klass_ "pf-v5-l-grid pf-m-gutter pf-m-all-6-col-on-lg pf-m-all-12-col-on-md" ]
-    [ dataCard "Home Island" home.systemData home.chart
-    , dataCard "Proxy Island" proxy.systemData proxy.chart
+    [ dataCard "Home" home.systemData home.chart
+    , dataCard "Proxy" proxy.systemData proxy.chart
+    , dataCard "Camera" camera.systemData camera.chart
     ]
   where
   dataCard islandName systemDataPoll chartDataPoll =

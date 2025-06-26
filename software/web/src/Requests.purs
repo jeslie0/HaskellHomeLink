@@ -5,6 +5,8 @@ module Requests
   , mkSystemsDataPoller
   , mkMemoryChartOptionsPoller
   , mkLogsPoller
+  , readyVideoStream
+  , establishCameraConnection
   ) where
 
 import Prelude
@@ -27,6 +29,7 @@ import Effect.Console as Console
 import Effect.Ref as Ref
 import Fetch (fetch)
 import Logs (Log, Logs(..))
+import MediaSource (playVideo)
 import Parsing (fail, runParserT)
 import Poller (Poller, mkPoller)
 import Proto.DeviceData.DeviceData (parseAllDeviceData, parseAllDeviceMemoryData) as Proto
@@ -35,6 +38,13 @@ import Proto.Radio.Radio (GetRadioStatusResponse(..), RadioStation(..), defaultR
 import ProtoHelper (fromMessage, sayError, toMessage)
 import Radio (Stream(..), StreamStatus(..), StreamStatusError, radioStreams)
 import System (AllDeviceData(..), AllDevicesMemoryData(..), Device(..), DeviceData(..))
+import Unsafe.Coerce (unsafeCoerce)
+import Web.DOM.NonElementParentNode (getElementById)
+import Web.HTML (window)
+import Web.HTML.HTMLDocument (toNonElementParentNode)
+import Web.HTML.HTMLVideoElement (HTMLVideoElement)
+import Web.HTML.Window (document)
+import Web.Socket.WebSocket as WS
 
 type AppPollers =
   { streamStatusPoller :: Poller
@@ -116,9 +126,10 @@ modifyStream stateIdRef ({ force }) payload = do
 mkSystemsDataPoller
   :: { setHomeDeviceDataPoll :: Maybe DeviceData -> Effect Unit
      , setProxyDeviceDataPoll :: Maybe DeviceData -> Effect Unit
+     , setCameraDeviceDataPoll :: Maybe DeviceData -> Effect Unit
      }
   -> Effect Poller
-mkSystemsDataPoller { setHomeDeviceDataPoll, setProxyDeviceDataPoll } = do
+mkSystemsDataPoller { setHomeDeviceDataPoll, setProxyDeviceDataPoll, setCameraDeviceDataPoll } = do
   mkPoller "system" 5000 $ \body -> do
     result <- liftEffect $ runParserT body do
       resp <- Proto.parseAllDeviceData (byteLength body)
@@ -134,13 +145,15 @@ mkSystemsDataPoller { setHomeDeviceDataPoll, setProxyDeviceDataPoll } = do
             callback $ (\msg -> DeviceData msg.deviceData) <$> Array.find (\msg -> msg.device == device) allDeviceData
         liftEffect $ updateDevice Home setHomeDeviceDataPoll
         liftEffect $ updateDevice Proxy setProxyDeviceDataPoll
+        liftEffect $ updateDevice Camera setCameraDeviceDataPoll
 
 mkMemoryChartOptionsPoller
   :: { setHomeMemoryChartOptionsPoll :: Options Apexoptions -> Effect Unit
      , setProxyMemoryChartOptionsPoll :: Options Apexoptions -> Effect Unit
+     , setCameraMemoryChartOptionsPoll :: Options Apexoptions -> Effect Unit
      }
   -> Effect Poller
-mkMemoryChartOptionsPoller { setHomeMemoryChartOptionsPoll, setProxyMemoryChartOptionsPoll } = do
+mkMemoryChartOptionsPoller { setHomeMemoryChartOptionsPoll, setProxyMemoryChartOptionsPoll, setCameraMemoryChartOptionsPoll } = do
   mkPoller "memory" (30 * 1000) $ \body -> do
     result <- liftEffect $ runParserT body do
       resp <- Proto.parseAllDeviceMemoryData (byteLength body)
@@ -163,6 +176,7 @@ mkMemoryChartOptionsPoller { setHomeMemoryChartOptionsPoll, setProxyMemoryChartO
               pure $ updatedChartOptions info.timeMem
         liftEffect <<< setHomeMemoryChartOptionsPoll <<< getOptions $ Home
         liftEffect <<< setProxyMemoryChartOptionsPoll <<< getOptions $ Proxy
+        liftEffect <<< setCameraMemoryChartOptionsPoll <<< getOptions $ Camera
 
 mkLogsPoller :: (Array Log -> Effect Unit) -> Effect Poller
 mkLogsPoller setLogsPoll = do
@@ -177,3 +191,13 @@ mkLogsPoller setLogsPoll = do
       Right logs -> do
         liftEffect $ setLogsPoll logs
     pure unit
+
+establishCameraConnection :: Ref.Ref (Maybe WS.WebSocket) -> Effect WS.WebSocket
+establishCameraConnection wsRef = do
+  websocket <- WS.create "/" []
+  Ref.write (Just websocket) wsRef
+  pure websocket
+
+readyVideoStream :: WS.WebSocket -> HTMLVideoElement -> Effect Unit
+readyVideoStream ws el = do
+  playVideo ws el

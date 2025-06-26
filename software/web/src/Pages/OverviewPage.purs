@@ -11,9 +11,15 @@ import Deku.DOM.Attributes as DA
 import Deku.DOM.Listeners as DL
 import Deku.DOM.SVG as DS
 import Deku.DOM.SVG.Attributes as DSA
+import Deku.DOM.Self as Self
 import Deku.Hooks ((<#~>))
+import Effect.Aff (Milliseconds(..), delay, launchAff_)
+import Effect.Class (liftEffect)
+import Effect.Console as Console
 import Radio (StreamStatus(..), radioStreams)
+import Requests (establishCameraConnection, readyVideoStream)
 import Web.Event.Event (preventDefault)
+import Web.HTML.HTMLVideoElement as HTMLVideo
 
 type OverviewPageState = { api :: Api }
 
@@ -54,16 +60,7 @@ overviewPage { api } = do
             ]
         ]
     , DD.div [ DA.klass_ "pf-v5-l-grid__item" ]
-        [ DD.div [ DA.klass_ "pf-v5-c-card pf-m-display-lg pf-m-full-height" ]
-            [ DD.div [ DA.klass_ "pf-v5-c-card__title" ]
-                [ DD.h2 [ DA.klass_ "pf-v5-c-card__title-text" ]
-                    [ DC.text_ "Next" ]
-                ]
-            , DD.div [ DA.klass_ "pf-v5-c-card__body" ]
-                []
-            , DD.div [ DA.klass_ "pf-v5-c-card__footer" ]
-                []
-            ]
+        [ cameraStream
         ]
     ]
   where
@@ -134,5 +131,49 @@ overviewPage { api } = do
               , DL.click_ $ \_ -> api.requests.modifyStream $ Nothing
               ]
               [ DD.text_ "Stop radio" ]
+          ]
+      ]
+
+  cameraStream =
+    DD.div [ DA.klass_ "pf-v5-c-card pf-m-display-lg pf-m-full-height" ]
+      [ DD.div [ DA.klass_ "pf-v5-c-card__title" ]
+          [ DD.h2 [ DA.klass_ "pf-v5-c-card__title-text" ]
+              [ DC.text_ "Next" ]
+          ]
+      , DD.div [ DA.klass_ "pf-v5-c-card__body" ]
+          [ DD.video
+              [ DA.id_ "videoPlayer"
+              , DA.controls_ ""
+              , DA.autoplay_ ""
+              , Self.self_ $ \el -> launchAff_ do
+                  delay (Milliseconds 0.0)
+                  sock <- liftEffect $ establishCameraConnection api.websocket
+                  case HTMLVideo.fromElement el of
+                    Nothing -> liftEffect $ Console.log "Couldn't make video element"
+                    Just videoEl -> liftEffect $ readyVideoStream sock videoEl
+              ]
+              []
+          ]
+      , DD.div [ DA.klass_ "pf-v5-c-card__footer" ]
+          [ DD.button
+              [ DA.klass_ "pf-v5-c-button pf-m-primary"
+              -- , DA.disabled $ api.polls.streamStatusPoll <#> case _ of
+              --     Off -> "false"
+              --     Initiated -> "true"
+              --     Playing -> "true"
+              -- , DL.click $ api.polls.selectedStreamPoll <#> \selectedStream ->
+              --     \_ -> api.requests.startCameraStream
+              ]
+              [ DD.text_ "Start stream"
+              ]
+          , DD.button
+              [ DA.klass_ "pf-v5-c-button pf-m-primary"
+              -- , DA.disabled $ api.polls.streamStatusPoll <#> case _ of
+              --     Off -> "true"
+              --     Initiated -> "true"
+              --     Playing -> "false"
+              -- , DL.click_ $ \_ -> api.requests.stopCameraStream
+              ]
+              [ DD.text_ "Stop stream" ]
           ]
       ]

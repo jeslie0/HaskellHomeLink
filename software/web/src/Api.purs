@@ -16,15 +16,9 @@ import Effect.Ref as Ref
 import FRP.Poll (Poll)
 import Logs (Log)
 import Radio (Stream(..), StreamStatus(..))
-import Requests
-  ( AppPollers
-  , mkLogsPoller
-  , mkMemoryChartOptionsPoller
-  , mkStreamStatusPoller
-  , mkSystemsDataPoller
-  , modifyStream
-  )
+import Requests (AppPollers, mkLogsPoller, mkMemoryChartOptionsPoller, mkStreamStatusPoller, mkSystemsDataPoller, modifyStream)
 import System (DeviceData)
+import Web.Socket.WebSocket as WS
 
 type Api =
   { islandState ::
@@ -38,6 +32,11 @@ type Api =
           , memoryChartOptions :: Poll (Options Apexoptions)
           , chart :: Nut
           }
+      , camera ::
+          { systemData :: Poll (Maybe DeviceData)
+          , memoryChartOptions :: Poll (Options Apexoptions)
+          , chart :: Nut
+          }
       }
   , charters ::
       { home ::
@@ -45,6 +44,10 @@ type Api =
           , unsubscribe :: Effect Unit
           }
       , proxy ::
+          { subscribe :: Poll (Options Apexoptions) -> Effect Unit
+          , unsubscribe :: Effect Unit
+          }
+      , camera ::
           { subscribe :: Poll (Options Apexoptions) -> Effect Unit
           , unsubscribe :: Effect Unit
           }
@@ -64,6 +67,7 @@ type Api =
       , setLogsPoll :: Array Log -> Effect Unit
       }
   , pollers :: AppPollers
+  , websocket :: Ref.Ref (Maybe WS.WebSocket)
   }
 
 mkApi :: Effect Api
@@ -75,8 +79,12 @@ mkApi = do
   setProxyDeviceDataPoll /\ proxyDeviceDataPoll <- DE.useState Nothing
   _ /\ setProxyMemoryChartOptionsPoll /\ proxyMemoryChartOptionsPoll <- DE.useHot (defaultChartOptions 10.0)
 
+  setCameraDeviceDataPoll /\ cameraDeviceDataPoll <- DE.useState Nothing
+  _ /\ setCameraMemoryChartOptionsPoll /\ cameraMemoryChartOptionsPoll <- DE.useHot (defaultChartOptions 10.0)
+
   homeChartStuff <- apexchart [ DA.style_ "display: block;" ]
   proxyChartStuff <- apexchart [ DA.style_ "display: block;" ]
+  cameraChartStuff <- apexchart [ DA.style_ "display: block;" ]
 
   -- Stream Polls
   _ /\ setStreamStatusPoll /\ streamStatusPoll <- DE.useHot Off
@@ -92,9 +100,11 @@ mkApi = do
 
   -- Pollers
   streamStatusPoller <- mkStreamStatusPoller streamStateIdRef selectStream setStreamStatusPoll
-  systemsDataPoller <- mkSystemsDataPoller { setHomeDeviceDataPoll, setProxyDeviceDataPoll }
-  memoryDataPoller <- mkMemoryChartOptionsPoller { setHomeMemoryChartOptionsPoll, setProxyMemoryChartOptionsPoll }
+  systemsDataPoller <- mkSystemsDataPoller { setHomeDeviceDataPoll, setProxyDeviceDataPoll, setCameraDeviceDataPoll }
+  memoryDataPoller <- mkMemoryChartOptionsPoller { setHomeMemoryChartOptionsPoll, setProxyMemoryChartOptionsPoll, setCameraMemoryChartOptionsPoll }
   logsPoller <- mkLogsPoller setLogsPoll
+
+  websocket <- Ref.new Nothing
 
   streamStatusPoller.start
 
@@ -109,6 +119,11 @@ mkApi = do
             { systemData: proxyDeviceDataPoll
             , memoryChartOptions: proxyMemoryChartOptionsPoll
             , chart: proxyChartStuff.chart
+            }
+        , camera:
+            { systemData: cameraDeviceDataPoll
+            , memoryChartOptions: cameraMemoryChartOptionsPoll
+            , chart: cameraChartStuff.chart
             }
         }
     , polls: { streamStatusPoll, selectedStreamPoll }
@@ -130,6 +145,10 @@ mkApi = do
             { subscribe: proxyChartStuff.subscribe
             , unsubscribe: proxyChartStuff.unsubscribe
             }
+        , camera:
+            { subscribe: cameraChartStuff.subscribe
+            , unsubscribe: cameraChartStuff.unsubscribe
+            }
         }
+    , websocket
     }
-

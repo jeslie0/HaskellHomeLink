@@ -7,22 +7,25 @@ module Camera.Env (
   router,
   EnvT,
   cleanupEnv,
-  videostreamRes
+  videostreamRes,
+  initChunk
 ) where
 
+import Camera.VideoStream (VideoStreamResource, cleanupVideoStreamResource)
+import Control.Monad (forM_)
+import Control.Monad.Reader (ReaderT)
+import Data.ByteString qualified as B
+import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Devices (Device (Camera))
 import Lens.Micro ((^.))
 import Lens.Micro.TH (makeLenses)
-import Router (Router, mkRouter, connectionsRegistry)
-import Control.Monad.Reader (ReaderT)
+import Router (Router, connectionsRegistry, mkRouter)
 import RxTx.ConnectionRegistry (killConnections)
-import Camera.VideoStream (VideoStreamResource, cleanupVideoStreamResource)
-import Data.IORef (IORef, newIORef, readIORef, writeIORef)
-import Control.Monad (forM_)
-  
+
 data Env = Env
   { _router :: Router
   , _videostreamRes :: IORef (Maybe VideoStreamResource)
+  , _initChunk :: IORef (Maybe B.ByteString)
   }
 
 $(makeLenses ''Env)
@@ -33,10 +36,12 @@ mkEnv :: IO Env
 mkEnv = do
   _router <- mkRouter Camera
   _videostreamRes <- newIORef Nothing
+  _initChunk <- newIORef Nothing
   pure $
     Env
       { _router
       , _videostreamRes
+      , _initChunk
       }
 
 cleanupEnv :: Env -> IO ()

@@ -138,10 +138,10 @@ mainImpl = runCommand $ \(opts :: HomeOptions) _args -> do
         listeningSocketThread loop (env ^. router) (env ^. cameraServerSocket)
     success <-
       connectToProxyTLS
-        "127.0.0.1"
-        "3000"
-        -- (config ^. proxyURL)
-        -- (show $ config ^. proxyPort)
+        -- "127.0.0.1"
+        -- "3000"
+        (config ^. proxyURL)
+        (show $ config ^. proxyPort)
         (config ^. tlsCertificatePath)
         (config ^. tlsKeyPath)
         (config ^. tlsCACertificatePath)

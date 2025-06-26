@@ -23,6 +23,7 @@ import Devices (Device (Camera))
 import EventLoop (EventLoopT, MonadEventLoop (..), addMsg, runEventLoopT)
 import Options (runCommand)
 import Proto.DeviceData qualified as Proto
+import Proto.Camera qualified as Proto
 import System.IO (IOMode (ReadMode), withFile)
 
 startCheckMemoryPoll ::
@@ -36,7 +37,9 @@ startCheckMemoryPoll = do
 startHomeConnection ::
   EventLoopT Env (Device, ExCameraHandler) IO ()
 startHomeConnection = do
-  addMsg (Camera, ExCameraHandler $ EstablishHomeConnection "127.0.0.1" 9000)
+  addMsg (Camera, ExCameraHandler $ EstablishHomeConnection "192.168.8.128" 9000)
+
+startCameraStream = addMsg (Camera, ExCameraHandler $ defMessage @Proto.StartVideoStreamCmd)
 
 mainImpl :: IO ()
 mainImpl = do
@@ -48,6 +51,7 @@ mainImpl = do
   action = do
     startHomeConnection
     startCheckMemoryPoll
+    startCameraStream
     start $ uncurry cameraHandler
 
 main :: IO ()

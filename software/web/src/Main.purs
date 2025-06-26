@@ -95,6 +95,10 @@ dekuApp = do
                   { systemData: api.islandState.proxy.systemData
                   , chart: api.islandState.proxy.chart
                   }
+              , camera:
+                  { systemData: api.islandState.camera.systemData
+                  , chart: api.islandState.camera.chart
+                  }
               }
           , logsPageState: { logsPoll: api.logging.logsPoll }
           }

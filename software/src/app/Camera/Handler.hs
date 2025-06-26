@@ -3,7 +3,7 @@
 
 module Camera.Handler where
 
-import Camera.Env (Env, router, videostreamRes)
+import Camera.Env (Env, router, videostreamRes, initChunk)
 import Camera.VideoStream (
   cleanupVideoStreamResource,
   createVideoStreamResource,
@@ -26,10 +26,11 @@ import EventLoop (
   MonadEventLoop (addMsg),
   addMsgIO,
   getEnv,
+  getLoop,
   setTimeoutIO,
-  getLoop
  )
 import Lens.Micro ((&), (.~), (^.))
+import Lens.Micro.TH (makeLenses)
 import Logger (LogLevel (..), reportLog)
 import Proto.Camera qualified as Proto
 import Proto.Camera_Fields qualified as Proto
@@ -37,14 +38,13 @@ import Proto.DeviceData qualified as Proto
 import Proto.Envelope qualified as Proto
 import Proto.Envelope_Fields qualified as Proto
 import ProtoHelper (ToMessage (..))
-import Router (handleBytes, trySendMessage, connectionsRegistry)
+import Router (connectionsRegistry, handleBytes, trySendMessage)
 import RxTx.Connection (Connection (..))
 import RxTx.Connection.Socket (createClientConnection)
 import RxTx.ConnectionRegistry (addConnection)
 import RxTx.Socket (SocketRxError (..))
 import System.Memory (getMemoryInformation)
 import TH (makeInstance)
-import Lens.Micro.TH (makeLenses)
 
 class CameraHandler msg where
   cameraHandler ::
@@ -76,6 +76,7 @@ instance CameraHandler SendInitChunk where
       Just stream -> do
         let Just handle = getStreamHandle stream
         bytes <- liftIO $ getInitChunk handle
+        liftIO $ writeIORef (env ^. initChunk) (Just bytes)
         let msg = defMessage @Proto.InitialStreamMetaDataChunk & Proto.metadata .~ bytes
         liftIO . void $ trySendMessage (env ^. router) Proxy (wrapProxyMsg msg)
         addMsg (Camera, ExCameraHandler SendChunk)
@@ -96,7 +97,6 @@ instance CameraHandler SendChunk where
         addMsg (Camera, ExCameraHandler SendChunk)
 
 -- * Message instances
-
 
 -- | Start the video stream
 instance CameraHandler Proto.StartVideoStreamCmd where

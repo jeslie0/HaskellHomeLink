@@ -23,6 +23,7 @@ package:
     - protobuf
     - random
     - st
+    - web-socket
     - yoga-json
   test:
     main: Test.Main

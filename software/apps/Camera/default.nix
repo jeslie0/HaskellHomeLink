@@ -67,7 +67,6 @@ let
       copyToRoot = with pkgs.pkgsCross.raspberryPi; [
         libraspberrypi
         ffmpeg
-        bash
       ];
 
       config = {
