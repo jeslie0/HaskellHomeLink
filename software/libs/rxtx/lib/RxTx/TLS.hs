@@ -16,14 +16,14 @@ data RxError
   | RxTLSError TLSException
   deriving (Show)
 
-data TLSRxError = TLSRxError Context RxError
+data TLSRxError = TLSRxError RxError deriving Show
 
 data TxError
   = TxTLSError TLSException
   | TxIOError CInt
   deriving (Show)
 
-data TLSTxError = TLSTxError Context TxError
+data TLSTxError = TLSTxError TxError
 
 instance Show TLSTxError where
-  show (TLSTxError _ err) = show err
+  show (TLSTxError err) = show err

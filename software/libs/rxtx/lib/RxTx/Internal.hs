@@ -23,13 +23,14 @@ recvNBytes :: Socket -> Int -> IO (Either RxTxSock.RxError B.ByteString)
 recvNBytes sock n = do
   go n B.empty
  where
-  go 0 acc = pure $ Right acc
+  go 0 acc = do
+    pure $ Right acc
   go m acc = do
     bytes <- Socket.recv sock m
     if B.length bytes == 0
       then pure $ Left RxTxSock.ConnectionClosed
       else
-        let bytesToGo = n - B.length bytes
+        let bytesToGo = m - B.length bytes
         in go bytesToGo (acc <> bytes)
 
 -- | We need to read 4 bytes from a socket to get the size of the
@@ -39,11 +40,10 @@ readHeader sock = do
   mHdr <- recvNBytes sock socketHdrSize
   case mHdr of
     Left err -> pure $ Left err
-    Right hdr ->
+    Right hdr -> do
       case Binary.runGet Binary.getWord32le hdr of
         Left str -> pure . Left $ RxTxSock.FailedToParseBody (T.pack str)
         Right n -> do
-          print $ "header size: " <> show n
           pure $ Right n
 
 runRecvUnsafe :: Socket -> IO (Either RxTxSock.RxError B.ByteString)
@@ -72,7 +72,8 @@ recvMsgSock withBytes sock =
     eBytes <- runRecvUnsafe sock
     case eBytes of
       Left err -> pure $ Left . RxTxSock.SocketRxError sock $ err
-      Right bytes -> pure $ withBytes bytes
+      Right bytes -> do
+        pure $ withBytes bytes
 
 sendMsgSock ::
   MonadIO m =>
@@ -99,6 +100,33 @@ sendMsgSock toBytes sock msg =
 
 -- * TLS
 
+recvNBytesTLS :: TLS.Context -> Int -> IO (Either RxTxTLS.RxError B.ByteString)
+recvNBytesTLS ctx n = do
+  go n B.empty
+ where
+  go 0 acc = do
+    pure $ Right acc
+  go m acc = do
+    bytes <- TLS.recvData ctx
+    if B.length bytes == 0
+      then pure $ Left RxTxTLS.ConnectionClosed
+      else
+        let bytesToGo = m - B.length bytes
+        in go bytesToGo (acc <> bytes)
+
+-- | We need to read 4 bytes from a context to get the size of the
+--  incoming header.
+
+-- | We need to read 4 bytes from a socket to get the size of the
+--  incoming header.
+readHeaderTLS :: TLS.Context -> IO (Either RxTxTLS.RxError Word32)
+readHeaderTLS ctx = do
+  hdrBytes <- TLS.recvData ctx
+  case Binary.runGet Binary.getWord32le hdrBytes of
+    Left str -> pure . Left $ RxTxTLS.FailedToParseBody (T.pack str)
+    Right n -> do
+      pure $ Right n
+
 recvMsgTLS ::
   MonadIO m =>
   (B.ByteString -> Either RxTxTLS.TLSRxError b)
@@ -108,17 +136,24 @@ recvMsgTLS withBytes ctx = do
   liftIO $
     runRecv
       `catch` ( \(IOError {ioe_errno} :: IOException) ->
-                  pure . Left . RxTxTLS.TLSRxError ctx . RxTxTLS.IOException $
+                  pure . Left . RxTxTLS.TLSRxError . RxTxTLS.IOException $
                     fromMaybe (-1) ioe_errno
               )
-      `catch` ( \(tlsExc :: TLSException) -> pure . Left . RxTxTLS.TLSRxError ctx . RxTxTLS.RxTLSError $ tlsExc
+      `catch` ( \(tlsExc :: TLSException) -> pure . Left . RxTxTLS.TLSRxError . RxTxTLS.RxTLSError $ tlsExc
               )
  where
   runRecv = do
-    bytes <- TLS.recvData ctx
-    if B.null bytes
-      then pure . Left . RxTxTLS.TLSRxError ctx $ RxTxTLS.ConnectionClosed
-      else pure $ withBytes bytes
+    eHdr <- readHeaderTLS ctx
+    case eHdr of
+      Left err -> pure . Left . RxTxTLS.TLSRxError $ err
+      Right n -> do
+        eBytes <- recvNBytesTLS ctx (fromIntegral n)
+        case eBytes of
+          Left err -> pure . Left . RxTxTLS.TLSRxError $ err
+          Right bytes ->
+            if B.null bytes
+              then pure . Left . RxTxTLS.TLSRxError $ RxTxTLS.ConnectionClosed
+              else pure $ withBytes bytes
 
 sendMsgTLS ::
   MonadIO m =>
@@ -130,12 +165,18 @@ sendMsgTLS toBytes ctx msg =
   liftIO $
     runSend
       `catch` ( \(IOError {ioe_errno} :: IOException) ->
-                  pure . Left . RxTxTLS.TLSTxError ctx . RxTxTLS.TxIOError $
+                  pure . Left . RxTxTLS.TLSTxError . RxTxTLS.TxIOError $
                     fromMaybe (-1) ioe_errno
               )
-      `catch` ( \(tlsExc :: TLSException) -> pure . Left . RxTxTLS.TLSTxError ctx . RxTxTLS.TxTLSError $ tlsExc
+      `catch` ( \(tlsExc :: TLSException) -> pure . Left . RxTxTLS.TLSTxError . RxTxTLS.TxTLSError $ tlsExc
               )
  where
-  runSend = do
-    TLS.sendData ctx (B.fromStrict . toBytes $ msg)
-    pure $ Right ()
+  runSend =
+    let
+      body = toBytes msg
+      len :: Word32 = fromIntegral $ B.length body
+    in
+      do
+        TLS.sendData ctx (B.fromStrict . runPut . putWord32le $ len)
+        TLS.sendData ctx (B.fromStrict . toBytes $ msg)
+        pure $ Right ()

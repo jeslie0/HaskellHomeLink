@@ -12,6 +12,8 @@ data Connection msg rxErr txErr = Connection
   { send :: msg -> IO (Either txErr ())
   , recvAndDispatch :: IO (Either rxErr msg)
   , cleanup :: IO ()
+  , showTxErr :: txErr -> String
+  , showRxErr :: rxErr -> String
   }
 
 mkConnection ::
@@ -26,6 +28,8 @@ mkConnection chan cleanup = do
       { send = sendMsg chan
       , recvAndDispatch = recvMsg chan
       , cleanup = cleanup chan
+      , RxTx.Connection.showTxErr = RxTx.showTxErr @msg @chan
+      , RxTx.Connection.showRxErr = RxTx.showRxErr @msg @chan
       }
 
 data SomeConnection msg
