@@ -4,10 +4,12 @@
 
 module Proxy.REST.Api (Api, Radio, RadioCommand (..), Connection) where
 
+import Proto.Camera qualified as Proto
 import Proto.DeviceData qualified as Proto
 import Proto.Logging qualified as Proto
 import Proto.Radio qualified as Proto
 import Servant (
+  Delete,
   FromHttpApiData (..),
   Get,
   JSON,
@@ -19,7 +21,7 @@ import Servant (
   (:<|>) (..),
   (:>),
  )
-import Servant.API.ContentTypes.Proto ( Proto )
+import Servant.API.ContentTypes.Proto (Proto)
 import State (StateId)
 
 type Api =
@@ -29,6 +31,7 @@ type Api =
           :<|> System
           :<|> Memory
           :<|> Logs
+          :<|> Camera
        )
     :<|> Raw
 
@@ -48,6 +51,12 @@ type System =
 
 type Logs =
   "logs" :> Get '[Proto] Proto.Logs
+
+type Camera =
+  "camera"
+    :> ( (ReqBody '[Proto] Proto.StopVideoStreamCmd :> Delete '[JSON] Bool)
+          :<|> (ReqBody '[Proto] Proto.StartVideoStreamCmd :> PostAccepted '[JSON] Bool)
+       )
 
 data RadioCommand = Start | Stop
 

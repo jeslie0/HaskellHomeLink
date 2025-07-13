@@ -182,7 +182,7 @@ listeningSocketThread loop rtr params listenSock =
   runConnection conn = do
     merror <- recvAndDispatch conn
     case merror of
-      Left (TLSRxError _ err) -> do
+      Left (TLSRxError err) -> do
         print $ "ERROR: " <> show err
         cleanup conn
       Right bytes -> do

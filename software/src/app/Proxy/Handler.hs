@@ -4,18 +4,22 @@
 module Proxy.Handler (
   ProxyHandler (..),
   ExProxyHandler (..),
+  RemoveWSConn(..)
 ) where
 
 import Control.Concurrent (modifyMVar_, withMVar)
+import Control.Exception (IOException, catch, SomeAsyncException)
 import Control.Monad (forM_, void)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Map.Strict qualified as Map
+import Data.Int (Int32)
+import Data.ByteString qualified as B
 import Data.Text qualified as T
 import Data.Vector qualified as V
 import Data.Vector.Mutable qualified as VM
 import Devices (Device (..))
 import Envelope (wrapHomeMsg)
-import EventLoop (EventLoopT, getEnv)
+import EventLoop (EventLoop, EventLoopT, getEnv, addMsgIO, getLoop)
 import Lens.Micro ((^.))
 import Logger (LogLevel (..), addLog, reportLog)
 import Network.WebSockets qualified as WS
@@ -132,15 +136,39 @@ instance ProxyHandler Proto.AddLog where
 
 instance ProxyHandler Proto.InitialStreamMetaDataChunk where
   proxyHandler _ req = do
+    liftIO $ putStrLn "initial stream metadata!"
+    loop <- getLoop
     env <- getEnv
     liftIO $
       modifyMVar_ (env ^. cameraStreamInitialChunk) $
         \_ -> pure . Just $ req ^. Proto.metadata
-    liftIO $ withMVar (env ^. websocketsMap) $ \wsMap -> do
-      forM_ wsMap $ \ws -> WS.sendBinaryData ws (req ^. Proto.metadata)
+    liftIO $ withMVar (env ^. websocketsMap) $ \wsMap -> broadcast loop wsMap (req ^. Proto.metadata)
 
 instance ProxyHandler Proto.StreamChunk where
   proxyHandler _ req = do
+    loop <- getLoop
+    liftIO $ putStrLn "got chunk!"
     env <- getEnv
-    liftIO $ withMVar (env ^. websocketsMap) $ \wsMap -> do
-      forM_ wsMap $ \ws -> WS.sendBinaryData ws (req ^. Proto.chunk)
+    liftIO $ withMVar (env ^. websocketsMap) $ \wsMap -> broadcast loop wsMap (req ^. Proto.chunk)
+
+broadcast ::
+  EventLoop (Device, ExProxyHandler)
+  -> Map.Map Int32 WS.Connection
+  -> B.ByteString
+  -> IO ()
+broadcast loop wsMap bytes =
+  void $ Map.traverseWithKey func wsMap
+ where
+  func key ws = do
+    putStrLn $ "Sending data to " <> show key
+    WS.sendBinaryData ws bytes `catch`
+      \(e :: SomeAsyncException) -> do
+        putStrLn $ "Caught exception in WS send."
+        addMsgIO (Proxy, ExProxyHandler $ RemoveWSConn key) loop
+
+newtype RemoveWSConn = RemoveWSConn Int32 
+
+instance ProxyHandler RemoveWSConn where
+  proxyHandler _ (RemoveWSConn key) = do
+    env <- getEnv
+    liftIO $ modifyMVar_ (env ^. websocketsMap) $ pure . Map.delete key

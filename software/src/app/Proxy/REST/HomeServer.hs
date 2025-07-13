@@ -14,7 +14,7 @@ import Data.Map.Strict qualified as Map
 import Data.ProtoLens (defMessage)
 import Data.Vector qualified as V
 import Devices qualified as Dev
-import Envelope (wrapHomeMsg)
+import Envelope (wrapCameraMsg, wrapHomeMsg)
 import Home.AudioStreamTypes (StationId, StreamStatus)
 import Lens.Micro ((&), (.~), (^.))
 import Lens.Micro.TH (makeLenses)
@@ -35,6 +35,8 @@ import Network.Wai.Handler.WarpTLS (
   tlsSettings,
  )
 import Network.WebSockets qualified as WS
+import Proto.Camera qualified as Proto
+import Proto.Camera_Fields qualified as Proto
 import Proto.DeviceData qualified as Proto
 import Proto.DeviceData_Fields qualified as Proto
 import Proto.Logging qualified as Proto
@@ -138,6 +140,16 @@ handleGetLogs env = do
       & Proto.logs
       .~ V.toList logsVec
 
+handleStartVideoStreamCmd :: Env -> Proto.StartVideoStreamCmd -> Handler Bool
+handleStartVideoStreamCmd env msg = do
+  liftIO $ trySendMessage (env ^. router) Dev.Camera (wrapCameraMsg msg)
+  pure True
+
+handleStopVideoStreamCmd :: Env -> Proto.StopVideoStreamCmd -> Handler Bool
+handleStopVideoStreamCmd env msg = do
+  liftIO $ trySendMessage (env ^. router) Dev.Camera (wrapCameraMsg msg)
+  pure True
+
 -- * Server
 
 server :: Env -> Server Api
@@ -148,6 +160,8 @@ server env =
       :<|> handleGetDeviceDataRequest env
       :<|> handleGetAllDevicesMemoryDataRequest env
       :<|> handleGetLogs env
+      :<|> handleStopVideoStreamCmd env
+      :<|> handleStartVideoStreamCmd env
   )
     :<|> serveDir "/usr/local/haskell-home-link"
 

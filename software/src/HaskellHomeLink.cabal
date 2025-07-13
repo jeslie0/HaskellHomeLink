@@ -52,6 +52,25 @@ custom-setup
                    Cabal,
                    proto-lens-setup
 
+
+test-suite tests
+    type:             exitcode-stdio-1.0
+
+    hs-source-dirs:   test
+
+    main-is:          Test.hs
+
+    build-depends:    base,
+                      containers,
+                      random,
+                      text,
+                      websockets
+                     
+    default-language: GHC2021
+
+    ghc-options:      -main-is Test
+
+
 executable Home
     -- Import common warning flags.
     import:           warnings
