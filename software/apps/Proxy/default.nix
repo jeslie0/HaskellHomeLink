@@ -13,7 +13,7 @@ let
       };
 
     ProxyAArch64 =
-      ((haskellNix.legacyPackages.${system}.pkgsCross.aarch64-multiplatform.haskell-nix.project' {
+      ((pkgs.pkgsCross.aarch64-multiplatform.haskell-nix.project' {
         compiler-nix-name =
           ghcVersion;
 

@@ -26,4 +26,4 @@ foreign import appendBuffer :: SourceBuffer -> ArrayBuffer -> Effect Unit
 toEventTarget :: MediaSource -> EventTarget
 toEventTarget = unsafeCoerce
 
-foreign import playVideo :: WS.WebSocket -> HTMLVideoElement -> Effect Unit
+foreign import playVideo :: HTMLVideoElement -> WS.WebSocket -> Effect Unit

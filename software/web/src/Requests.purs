@@ -7,6 +7,8 @@ module Requests
   , mkLogsPoller
   , readyVideoStream
   , establishCameraConnection
+  , sendStartVideoStreamReq
+  , sendStopVideoStreamReq
   ) where
 
 import Prelude
@@ -32,18 +34,17 @@ import Logs (Log, Logs(..))
 import MediaSource (playVideo)
 import Parsing (fail, runParserT)
 import Poller (Poller, mkPoller)
+import Proto.Camera.Camera (StartVideoStreamCmd(..), StopVideoStreamCmd(..), defaultStartVideoStreamCmd, defaultStopVideoStreamCmd, putStartVideoStreamCmd, putStopVideoStreamCmd) as Proto
 import Proto.DeviceData.DeviceData (parseAllDeviceData, parseAllDeviceMemoryData) as Proto
 import Proto.Logging.Logging (parseLogs) as Proto
 import Proto.Radio.Radio (GetRadioStatusResponse(..), RadioStation(..), defaultRadioStation, mkModifyRadioRequest, parseGetRadioStatusResponse, putModifyRadioRequest) as Proto
 import ProtoHelper (fromMessage, sayError, toMessage)
 import Radio (Stream(..), StreamStatus(..), StreamStatusError, radioStreams)
 import System (AllDeviceData(..), AllDevicesMemoryData(..), Device(..), DeviceData(..))
-import Unsafe.Coerce (unsafeCoerce)
-import Web.DOM.NonElementParentNode (getElementById)
 import Web.HTML (window)
-import Web.HTML.HTMLDocument (toNonElementParentNode)
 import Web.HTML.HTMLVideoElement (HTMLVideoElement)
-import Web.HTML.Window (document)
+import Web.HTML.Location (host, origin)
+import Web.HTML.Window (location)
 import Web.Socket.WebSocket as WS
 
 type AppPollers =
@@ -194,10 +195,76 @@ mkLogsPoller setLogsPoll = do
 
 establishCameraConnection :: Ref.Ref (Maybe WS.WebSocket) -> Effect WS.WebSocket
 establishCameraConnection wsRef = do
-  websocket <- WS.create "/" []
+  win <- window
+  loc <- location win
+  orgn <- host loc
+  websocket <- WS.create ("wss://" <> orgn) []
   Ref.write (Just websocket) wsRef
   pure websocket
 
-readyVideoStream :: WS.WebSocket -> HTMLVideoElement -> Effect Unit
-readyVideoStream ws el = do
-  playVideo ws el
+readyVideoStream :: HTMLVideoElement -> WS.WebSocket -> Effect Unit
+readyVideoStream el ws = do
+  playVideo el ws
+
+sendStartVideoStreamReq :: Effect Unit
+sendStartVideoStreamReq = do
+  apiUrl <- getApiUrl
+  let
+    requestUrl = apiUrl <> "camera"
+    body = Proto.StartVideoStreamCmd $ Proto.defaultStartVideoStreamCmd { raspividOpts = raspividOpts, ffmpegOpts = ffmpegOpts }
+  bodyBuff <- execPutM $ Proto.putStartVideoStreamCmd body
+  launchAff_ do
+    _ <- fetch requestUrl
+      { method: POST
+      , body: bodyBuff
+      , headers: { "content-type": "application/protobuf" }
+      }
+    pure unit
+
+  where
+  fps = 30
+    
+  raspividOpts =
+    Array.concat
+      [ [ "-t", "0" ]
+      , [ "-o", "-" ]
+      , [ "-ih" ]
+      , [ "-pf", "high" ]
+      , [ "-fps", show fps ]
+      , [ "-g", show fps ]
+      , [ "--vflip" ]
+      , [ "--hflip" ]
+      , [ "-a", "12" ]
+      , [ "-w", "640" ]
+      , [ "-h", "480" ]
+      , [ "-b", "2000000" ]
+      ]
+
+  ffmpegOpts =
+    Array.concat
+      [ [ "-r", show fps ]
+      , [ "-f", "h264" ]
+      , [ "-i", "pipe:0" ]
+      , [ "-c:v", "copy" ]
+      , [ "-movflags", "+frag_keyframe+empty_moov+default_base_moof" ]
+      -- , ["-min_frag_duration", show @Int $ 5 * floor @Double (10 ** 5)]
+      , [ "-f", "mp4" ]
+      , [ "pipe:1" ]
+      , [ "-loglevel", "error" ]
+      , [ "-nostats" ]
+      ]
+
+sendStopVideoStreamReq :: Effect Unit
+sendStopVideoStreamReq = do
+  apiUrl <- getApiUrl
+  let
+    requestUrl = apiUrl <> "camera"
+    body = Proto.StopVideoStreamCmd $ Proto.defaultStopVideoStreamCmd
+  bodyBuff <- execPutM $ Proto.putStopVideoStreamCmd body
+  launchAff_ do
+    _ <- fetch requestUrl
+      { method: DELETE
+      , body: bodyBuff
+      , headers: { "content-type": "application/protobuf" }
+      }
+    pure unit

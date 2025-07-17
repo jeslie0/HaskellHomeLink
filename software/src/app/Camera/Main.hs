@@ -39,8 +39,6 @@ startHomeConnection ::
 startHomeConnection = do
   addMsg (Camera, ExCameraHandler $ EstablishHomeConnection "192.168.8.128" 9000)
 
-startCameraStream = addMsg (Camera, ExCameraHandler $ defMessage @Proto.StartVideoStreamCmd)
-
 mainImpl :: IO ()
 mainImpl = do
   -- runCommand $ \(opts :: CameraOptions) _args -> do
@@ -51,7 +49,7 @@ mainImpl = do
   action = do
     startHomeConnection
     startCheckMemoryPoll
-    startCameraStream
+    -- startCameraStream
     start $ uncurry cameraHandler
 
 main :: IO ()

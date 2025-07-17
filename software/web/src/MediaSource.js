@@ -27,8 +27,8 @@ export function appendBuffer(sourceBuffer) {
 export function playVideo(videoElement) {
     return function(websocket) {
         return function() {
-            console.log("CALLED")
-            const mimeCodec = 'video/mp4; codecs="avc1.640028, mp4a.40.2"';
+            websocket.binaryType = 'arraybuffer';
+            const mimeCodec = 'video/mp4; codecs="avc1.640028"';
 
             if (!window.MediaSource || !MediaSource.isTypeSupported(mimeCodec)) {
                 console.error("MSE not supported or codec mismatch");
@@ -36,38 +36,62 @@ export function playVideo(videoElement) {
             }
 
             const mediaSource = new MediaSource();
-            videoElement.src = URL.createObjectURL(mediaSource);
+            const segmentQueue = [];
+            let isBuffering = true;
 
-            websocket.binaryType = 'arraybuffer';
+            videoElement.src = URL.createObjectURL(mediaSource);
 
             mediaSource.addEventListener('sourceopen', () => {
                 const sourceBuffer = mediaSource.addSourceBuffer(mimeCodec);
-                const queue = [];
 
                 sourceBuffer.addEventListener('updateend', () => {
-                    if (queue.length > 0 && !sourceBuffer.updating) {
-                        sourceBuffer.appendBuffer(queue.shift());
+                    feedBuffer(sourceBuffer);
+                    if (isBuffering && getBufferedSeconds() >= 1) {
+                        videoElement.play()
+                        isBuffering = false;
                     }
                 });
 
                 websocket.onmessage = (event) => {
+                    console.log("ON MESSAGE")
                     const chunk = new Uint8Array(event.data);
-
-                    if (sourceBuffer.updating) {
-                        queue.push(chunk);
-                    } else {
-                        sourceBuffer.appendBuffer(chunk);
-                    }
-                };
-
-                websocket.onclose = () => {
-                    console.log("WebSocket closed");
-                };
-
-                websocket.onerror = (err) => {
-                    console.error("WebSocket error:", err);
+                    segmentQueue.push(chunk);
+                    feedBuffer(sourceBuffer);
                 };
             });
+
+            function feedBuffer(sourceBuffer) {
+                console.log("FEED BUFFER segment queue has size", segmentQueue.length)
+                if (!sourceBuffer || sourceBuffer.updating || segmentQueue.length <= 0) {
+                    return;
+                }
+
+                const nextSegment = segmentQueue.shift();
+                console.log("segment queue has size", segmentQueue.length)
+                sourceBuffer.appendBuffer(nextSegment);
+            }
+
+            function getBufferedSeconds() {
+                const buffered = videoElement.buffered;
+                const currentTime = videoElement.currentTime;
+                console.log("GETBUFFEREDSECONDS, currentTime", currentTime)
+                for (let i = 0; i < buffered.length; i++) {
+                    console.log("BUFFERED I start, end", i, buffered.start(i), buffered.end(i))
+                    if (buffered.start(i) <= currentTime && buffered.end(i) >= currentTime) {
+                        console.log("buffered seconds: ", buffered.end(i) - currentTime)
+                        return buffered.end(i) - currentTime;
+                    }
+                }
+                return 0;
+            }
+
+            websocket.onclose = () => {
+                console.log("WebSocket closed");
+            };
+
+            websocket.onerror = (err) => {
+                console.error("WebSocket error:", err);
+            };
         }
     }
 }

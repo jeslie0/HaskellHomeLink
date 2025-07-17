@@ -76,7 +76,7 @@ let
 
   armv7 = rec {
     home =
-      mkHome haskellNix.legacyPackages.${system}.pkgsCross.armv7l-hf-multiplatform.haskell-nix;
+      mkHome pkgs.pkgsCross.armv7l-hf-multiplatform.haskell-nix;
 
     strippedHome =
       mkStripped {

@@ -3,22 +3,27 @@
 
 module Camera.Handler where
 
-import Camera.Env (Env, router, videostreamRes, initChunk)
+import Camera.Env (Env, initChunk, router, videoStreamThread)
 import Camera.VideoStream (
+  VideoMessage (..),
   cleanupVideoStreamResource,
   createVideoStreamResource,
   getChunk,
   getInitChunk,
   getStreamHandle,
+  startVideoStream,
  )
-import Control.Concurrent (forkIO)
+import Control.Concurrent (forkIO, killThread)
 import Control.Exception (bracketOnError)
 import Control.Monad (forM_, void)
 import Control.Monad.IO.Class (MonadIO (..))
+import Data.ByteString qualified as B
 import Data.Foldable (traverse_)
 import Data.IORef (readIORef, writeIORef)
 import Data.ProtoLens (defMessage)
 import Data.Text qualified as T
+import Data.Time.Clock
+import Data.Time.Format
 import Devices (Device (..), proxies)
 import Envelope
 import EventLoop (
@@ -65,59 +70,49 @@ $( makeInstance
 
 -- * Local messages
 
-data SendInitChunk = SendInitChunk
-
-instance CameraHandler SendInitChunk where
-  cameraHandler _ _ = do
+instance CameraHandler VideoMessage where
+  cameraHandler _ (InitMsg bytes) = do
     env <- getEnv
-    videoStream <- liftIO $ readIORef (env ^. videostreamRes)
-    case videoStream of
-      Nothing -> pure ()
-      Just stream -> do
-        let Just handle = getStreamHandle stream
-        bytes <- liftIO $ getInitChunk handle
-        liftIO $ writeIORef (env ^. initChunk) (Just bytes)
-        let msg = defMessage @Proto.InitialStreamMetaDataChunk & Proto.metadata .~ bytes
-        liftIO . void $ trySendMessage (env ^. router) Proxy (wrapProxyMsg msg)
-        addMsg (Camera, ExCameraHandler SendChunk)
-
-data SendChunk = SendChunk
-
-instance CameraHandler SendChunk where
-  cameraHandler _ _ = do
+    let msg = defMessage @Proto.InitialStreamMetaDataChunk & Proto.metadata .~ bytes
+    liftIO . void $ trySendMessage (env ^. router) Proxy (wrapProxyMsg msg)
+    liftIO . putStrLn $
+      "Sent init chunk of size " <> show (B.length bytes) <> " to Proxy"
+  cameraHandler _ (ChunkMsg bytes) = do
     env <- getEnv
-    videoStream <- liftIO $ readIORef (env ^. videostreamRes)
-    case videoStream of
-      Nothing -> pure ()
-      Just stream -> do
-        let Just handle = getStreamHandle stream
-        bytes <- liftIO $ getChunk handle
-        let msg = defMessage @Proto.StreamChunk & Proto.chunk .~ bytes
-        liftIO . void $ trySendMessage (env ^. router) Proxy (wrapProxyMsg msg)
-        addMsg (Camera, ExCameraHandler SendChunk)
+    let msg = defMessage @Proto.StreamChunk & Proto.chunk .~ bytes
+    liftIO . void $ trySendMessage (env ^. router) Proxy (wrapProxyMsg msg)
+    now <- liftIO getCurrentTime
+    liftIO $
+      print $
+        formatTime defaultTimeLocale "%H:%M:%S" now <> " Sending chunk to Proxy"
 
 -- * Message instances
 
 -- | Start the video stream
 instance CameraHandler Proto.StartVideoStreamCmd where
-  cameraHandler _ _ = do
+  cameraHandler _ msg = do
     env <- getEnv
-    videoStream <- liftIO $ readIORef (env ^. videostreamRes)
-    case videoStream of
+    loop <- getLoop
+    mThread <- liftIO $ readIORef (env ^. videoStreamThread)
+    case mThread of
       Just _ -> pure () -- Do nothing if stream in progress
       Nothing -> do
-        liftIO $ bracketOnError createVideoStreamResource cleanupVideoStreamResource $ \stream -> do
-          writeIORef (env ^. videostreamRes) (Just stream)
-        addMsg (Camera, ExCameraHandler SendInitChunk)
+        thread <-
+          liftIO . forkIO $
+            startVideoStream
+              (\msg -> void $ addMsgIO (Camera, ExCameraHandler msg) loop)
+              (msg ^. Proto.raspividOpts)
+              (msg ^. Proto.ffmpegOpts)
+        liftIO $ writeIORef (env ^. videoStreamThread) (Just thread)
 
 -- | Stop the video stream
 instance CameraHandler Proto.StopVideoStreamCmd where
   cameraHandler _ _ = do
     env <- getEnv
     liftIO $ do
-      videoStream <- readIORef (env ^. videostreamRes)
-      forM_ videoStream cleanupVideoStreamResource
-      writeIORef (env ^. videostreamRes) Nothing
+      videoStream <- readIORef (env ^. videoStreamThread)
+      forM_ videoStream killThread
+      writeIORef (env ^. videoStreamThread) Nothing
 
 instance CameraHandler Proto.CheckMemoryUsage where
   cameraHandler _ _ = do

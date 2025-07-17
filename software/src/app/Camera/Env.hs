@@ -7,10 +7,11 @@ module Camera.Env (
   router,
   EnvT,
   cleanupEnv,
-  videostreamRes,
-  initChunk
+  videoStreamThread,
+  initChunk,
 ) where
 
+import Control.Concurrent (ThreadId, killThread)
 import Camera.VideoStream (VideoStreamResource, cleanupVideoStreamResource)
 import Control.Monad (forM_)
 import Control.Monad.Reader (ReaderT)
@@ -24,7 +25,7 @@ import RxTx.ConnectionRegistry (killConnections)
 
 data Env = Env
   { _router :: Router
-  , _videostreamRes :: IORef (Maybe VideoStreamResource)
+  , _videoStreamThread :: IORef (Maybe ThreadId)
   , _initChunk :: IORef (Maybe B.ByteString)
   }
 
@@ -35,18 +36,18 @@ type EnvT = ReaderT Env IO
 mkEnv :: IO Env
 mkEnv = do
   _router <- mkRouter Camera
-  _videostreamRes <- newIORef Nothing
+  _videoStreamThread <- newIORef Nothing
   _initChunk <- newIORef Nothing
   pure $
     Env
       { _router
-      , _videostreamRes
+      , _videoStreamThread
       , _initChunk
       }
 
 cleanupEnv :: Env -> IO ()
 cleanupEnv env = do
   killConnections (env ^. (router . connectionsRegistry))
-  videoRes <- readIORef $ env ^. videostreamRes
-  forM_ videoRes cleanupVideoStreamResource
-  writeIORef (env ^. videostreamRes) Nothing
+  mThread <- readIORef $ env ^. videoStreamThread
+  forM_ mThread killThread 
+  writeIORef (env ^. videoStreamThread) Nothing

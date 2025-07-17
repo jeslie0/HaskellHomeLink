@@ -156,7 +156,8 @@ broadcast ::
   -> Map.Map Int32 WS.Connection
   -> B.ByteString
   -> IO ()
-broadcast loop wsMap bytes =
+broadcast loop wsMap bytes = do
+  now <- getCurrentTime
   void $ Map.traverseWithKey func wsMap
  where
   func key ws = do
@@ -166,7 +167,7 @@ broadcast loop wsMap bytes =
         putStrLn $ "Caught exception in WS send."
         addMsgIO (Proxy, ExProxyHandler $ RemoveWSConn key) loop
 
-newtype RemoveWSConn = RemoveWSConn Int32 
+newtype RemoveWSConn = RemoveWSConn Int32
 
 instance ProxyHandler RemoveWSConn where
   proxyHandler _ (RemoveWSConn key) = do

@@ -30,7 +30,7 @@
       nixpkgsFor = forAllSystems (system:
         import nixpkgs {
           inherit system;
-          overlays = [ # haskellNix.overlay 
+          overlays = [ haskellNix.overlay 
                        ps-overlay.overlays.default
                        mkSpagoDerivation.overlays.default
                        (self: super: {
@@ -47,13 +47,6 @@
                        })
                      ];
         });
-
-      haskellNixFor = forAllSystems (system:
-        import haskellNix {
-          inherit system;
-          overlays = [ (prev: self: self) ];
-        }
-      );
 
       ghcVersion =
         "ghc966";

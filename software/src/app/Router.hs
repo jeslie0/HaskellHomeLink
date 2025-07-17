@@ -13,19 +13,27 @@ module Router (
 ) where
 
 import Control.Concurrent (withMVar)
-import Control.Monad (void)
+import Control.Monad (void, when)
 import Data.ByteString qualified as B
 import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
-import Data.Serialize (Serialize (..), encode, decode)
+import Data.Serialize (Serialize (..), decode, encode)
 import Devices (Device (..))
 import Lens.Micro ((^.))
 import Lens.Micro.TH (makeLenses)
-import RxTx.Connection (AsyncSomeConnection (..), SomeConnection (..), send)
+import Data.Time.Clock
+import Data.Time.Format
+import RxTx.Connection (
+  AsyncSomeConnection (..),
+  SomeConnection (..),
+  send,
+  showTxErr,
+ )
 import RxTx.ConnectionRegistry (
   AsyncConnectionRegistry (..),
   mkConnectionRegistry,
  )
+import RxTx.Tx (showTxErr)
 
 data Router = Router
   { _thisDevice :: Device
@@ -34,6 +42,8 @@ data Router = Router
 
 $(makeLenses ''Router)
 
+-- | Determine the next island to hop to. Returns Nothing if we are on
+-- the final island
 nextHop ::
   Device
   -- ^ Source
@@ -70,7 +80,7 @@ instance Serialize msg => Serialize (MessagePackage msg) where
 
 trySendMsg ::
   forall msg.
-  (Serialize msg) =>
+  Serialize msg =>
   AsyncConnectionRegistry Device B.ByteString
   -> Device
   -- ^ Source of msg
@@ -85,12 +95,16 @@ trySendMsg (AsyncConnectionRegistry mvar) src finalDest nextDest msg = do
     Just (AsyncSomeConnection _ (SomeConnection conn)) -> do
       eErr <- send conn $ encode $ MessagePackage src finalDest msg
       case eErr of
-        Left _ -> pure False
+        Left eErr -> do
+          putStrLn $ "Error sending message: " <> RxTx.Connection.showTxErr conn eErr
+          pure False
         Right _ -> pure True
-    _ -> pure False
+    _ -> do
+      putStrLn $ "Failed to send message: " <> show src <> ", " <> show finalDest
+      pure False
 
 trySendMessage ::
-  (Serialize msg) => Router -> Device -> msg -> IO Bool
+  Serialize msg => Router -> Device -> msg -> IO Bool
 trySendMessage (Router island connMgr) dest msg =
   let hop = fromMaybe dest $ nextHop island dest
   in trySendMsg connMgr island dest hop msg
@@ -104,19 +118,25 @@ tryForwardMessage ::
   -> IO Bool
 tryForwardMessage (Router island connMgr) src dest msg =
   let hop = fromMaybe dest $ nextHop island dest
-  in trySendMsg connMgr src dest hop msg
+  in do
+    now <- getCurrentTime
+    -- print $ formatTime defaultTimeLocale "%H:%M:%S" now <> " Forwarding message"
+    trySendMsg connMgr src dest hop msg
 
 handleBytes ::
   forall msg.
-  (Serialize msg) =>
-   B.ByteString
+  Serialize msg =>
+  B.ByteString
   -> Router
   -> (Device -> msg -> IO ())
   -> IO ()
 handleBytes bytes rtr handleMsg = do
+  print $ "got " <> show (B.length bytes) <> " bytes"
   case decode bytes of
     Left errStr -> putStrLn $ "Error extracting bytes: " <> errStr
     Right (MessagePackage src dest msg) ->
       if dest == rtr ^. thisDevice
         then handleMsg src msg
-        else void $ tryForwardMessage rtr src dest msg
+        else do
+          print $ "Forwarding " <> show (B.length bytes) <> "bytes to " <> show dest
+          void $ tryForwardMessage rtr src dest msg

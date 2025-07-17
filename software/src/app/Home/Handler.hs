@@ -121,7 +121,7 @@ instance HomeHandler EstablishTLSConnection where
     runConnection loop rtr conn = do
       merror <- recvAndDispatch conn
       case merror of
-        Left (TLSRxError _ err) -> do
+        Left (TLSRxError err) -> do
           print $ "ERROR: " <> show err
           cleanup conn
           void $ setTimeoutIO (Home, ExHomeHandler msg) 2000 loop

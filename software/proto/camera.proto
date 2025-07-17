@@ -5,7 +5,8 @@ package proto.Camera;
 // * Camera msgs
 
 message StartVideoStreamCmd {
-
+  repeated string raspividOpts = 1;
+  repeated string ffmpegOpts = 2;
 }
 
 message StopVideoStreamCmd {

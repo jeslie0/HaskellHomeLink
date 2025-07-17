@@ -17,7 +17,7 @@ import Effect.Aff (Milliseconds(..), delay, launchAff_)
 import Effect.Class (liftEffect)
 import Effect.Console as Console
 import Radio (StreamStatus(..), radioStreams)
-import Requests (establishCameraConnection, readyVideoStream)
+import Requests (establishCameraConnection, readyVideoStream, sendStartVideoStreamReq, sendStopVideoStreamReq)
 import Web.Event.Event (preventDefault)
 import Web.HTML.HTMLVideoElement as HTMLVideo
 
@@ -150,7 +150,7 @@ overviewPage { api } = do
                   sock <- liftEffect $ establishCameraConnection api.websocket
                   case HTMLVideo.fromElement el of
                     Nothing -> liftEffect $ Console.log "Couldn't make video element"
-                    Just videoEl -> liftEffect $ readyVideoStream sock videoEl
+                    Just videoEl -> liftEffect $ readyVideoStream videoEl sock
               ]
               []
           ]
@@ -161,8 +161,7 @@ overviewPage { api } = do
               --     Off -> "false"
               --     Initiated -> "true"
               --     Playing -> "true"
-              -- , DL.click $ api.polls.selectedStreamPoll <#> \selectedStream ->
-              --     \_ -> api.requests.startCameraStream
+              , DL.click_ $ \_ -> sendStartVideoStreamReq
               ]
               [ DD.text_ "Start stream"
               ]
@@ -172,7 +171,7 @@ overviewPage { api } = do
               --     Off -> "true"
               --     Initiated -> "true"
               --     Playing -> "false"
-              -- , DL.click_ $ \_ -> api.requests.stopCameraStream
+              , DL.click_ $ \_ -> sendStopVideoStreamReq
               ]
               [ DD.text_ "Stop stream" ]
           ]

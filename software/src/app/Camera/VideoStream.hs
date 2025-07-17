@@ -10,14 +10,22 @@ module Camera.VideoStream (
   getInitChunk,
   getChunk,
   getStreamHandle,
+  VideoMessage(..),
+  startVideoStream,
 ) where
 
-import Control.Exception
-import Control.Exception (throw)
+import Control.Exception (bracket)
 import Data.ByteString qualified as B
 import Data.Serialize (getWord32be, runGet)
+import Data.Text qualified as T
+import Lens.Micro ((^.), _2)
 import Lens.Micro.TH (makeLenses)
-import System.IO (Handle, hSetBinaryMode)
+import System.IO (
+  BufferMode (NoBuffering),
+  Handle,
+  hSetBinaryMode,
+  hSetBuffering,
+ )
 import System.Process (
   CreateProcess (std_in, std_out),
   ProcessHandle,
@@ -26,48 +34,45 @@ import System.Process (
   createProcess_,
   proc,
  )
-import Lens.Micro ((^.), _2)
 
-raspividProc :: CreateProcess
-raspividProc =
-  (proc "raspivid" args) {std_out = CreatePipe}
- where
-  args = duration <> useStdOut <> inlineHeaders <> quality <> fps <> dunno <> vflip
+raspividProc :: [T.Text] -> CreateProcess
+raspividProc args =
+  (proc "raspivid" $ T.unpack <$> args) {std_out = CreatePipe}
 
-  duration = ["-t", "0"]
+-- where
 
-  useStdOut = ["-o", "-"]
+-- args = duration <> useStdOut <> inlineHeaders <> quality <> fps <> dunno <> vflip
 
-  inlineHeaders = ["-ih"]
+-- duration = ["-t", "0"]
 
-  quality = ["-pf", "high"]
+-- useStdOut = ["-o", "-"]
 
-  fps = ["-fps", "30"]
+-- inlineHeaders = ["-ih"]
 
-  dunno = ["-g", "60"]
+-- quality = ["-pf", "high"]
 
-  vflip = ["-vflip"]
+-- fps = ["-fps", "24"]
 
-ffmpegProc :: Handle -> CreateProcess
-ffmpegProc input =
-  (proc "ffmpeg" args) {std_in = UseHandle input}
- where
-  args =
-    [ "-f"
-    , "h264"
-    , "-i"
-    , "pipe:0"
-    , "-c"
-    , "copy"
-    , "-movflags"
-    , "+frag_keyframe+empty_moov+default_base_moof"
-    , "-f"
-    , "mp4"
-    , "pipe:1"
-    , "-loglevel"
-    , "error"
-    , "-nostats"
-    ]
+-- dunno = ["-g", "60"]
+
+-- vflip = ["--vflip"]
+
+ffmpegProc :: Handle -> [T.Text] -> CreateProcess
+ffmpegProc input args =
+  (proc "ffmpeg" $ T.unpack <$> args) {std_in = UseHandle input, std_out = CreatePipe}
+ -- where
+  -- args =
+  --   concat
+  --     [ ["-f", "h264"]
+  --     , ["-i", "pipe:0"]
+  --     , ["-c:v", "copy"]
+  --     , ["-movflags", "+frag_keyframe+empty_moov+default_base_moof"]
+  --     -- , ["-min_frag_duration", show @Int $ 5 * floor @Double (10 ** 5)]
+  --     , ["-f", "mp4"]
+  --     , ["pipe:1"]
+  --     , ["-loglevel", "error"]
+  --     , ["-nostats"]
+  --     ]
 
 data VideoStreamResource = VideoStreamResource
   { _raspividProcess :: (Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle)
@@ -84,14 +89,16 @@ cleanupVideoStreamResource (VideoStreamResource {_raspividProcess, _ffmpegProces
   cleanupProcess _ffmpegProcess
   cleanupProcess _raspividProcess
 
-createVideoStreamResource :: IO VideoStreamResource
-createVideoStreamResource = do
+createVideoStreamResource :: [T.Text] -> [T.Text] -> IO VideoStreamResource
+createVideoStreamResource raspiArgs ffmpegOpts= do
   _raspividProcess@(_, Just _raspividOut, _, _) <-
-    createProcess_ "Oops! Raspivid failed." raspividProc
+    createProcess_ "Oops! Raspivid failed." $ raspividProc raspiArgs
   hSetBinaryMode _raspividOut True
+  hSetBuffering _raspividOut NoBuffering
   _ffmpegProcess@(_, Just _ffmpegOut, _, _) <-
-    createProcess_ "Oops! FFMPEG failed." $ ffmpegProc _raspividOut
+    createProcess_ "Oops! FFMPEG failed." $ ffmpegProc _raspividOut ffmpegOpts
   hSetBinaryMode _ffmpegOut True
+  hSetBuffering _ffmpegOut NoBuffering
   pure $
     VideoStreamResource {_raspividProcess, _ffmpegProcess}
 
@@ -144,3 +151,21 @@ getChunk handle = do
       Moof -> do
         helper $ acc <> boxBytes
       Mdat -> pure $ acc <> boxBytes
+
+data VideoMessage = InitMsg B.ByteString | ChunkMsg B.ByteString
+
+startVideoStream :: (VideoMessage -> IO ()) -> [T.Text] -> [T.Text] -> IO ()
+startVideoStream addMsg raspiArgs ffmpegOpts =
+  bracket (createVideoStreamResource raspiArgs ffmpegOpts) cleanupVideoStreamResource $ \res -> do
+  let Just handle = getStreamHandle res
+  sendInitChunk handle
+  sendVidData handle
+ where
+  sendInitChunk handle = do
+    bytes <- getInitChunk handle
+    addMsg $ InitMsg bytes
+
+  sendVidData handle = do
+    bytes <- getChunk handle
+    addMsg $ ChunkMsg bytes
+    sendVidData handle

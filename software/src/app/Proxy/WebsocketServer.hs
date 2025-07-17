@@ -11,6 +11,8 @@ import Network.WebSockets qualified as WS
 import Proxy.Handler (RemoveWSConn (..))
 import Servant (Application)
 import System.Random (randomIO)
+import Data.Time.Clock
+import Data.Time.Format
 
 handleProxyWS ::
   MVar (Maybe B.ByteString) -> MVar (Map.Map Int32 WS.Connection) -> WS.ServerApp
@@ -18,6 +20,8 @@ handleProxyWS initialChunk conns pconn = do
   iden :: Int32 <- randomIO
   putStrLn $ "HANDLE PROXY WS " <> show iden
   conn <- WS.acceptRequest pconn
+  now <- getCurrentTime
+  print $ formatTime defaultTimeLocale "%H:%M:%S" now <> " broadcasting message to ws"
   withMVar initialChunk $ \mChunk -> forM_ mChunk $ \chunk -> do
     sendInitialChunk conn chunk iden
       `catch` \(e :: SomeException) -> do

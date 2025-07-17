@@ -77,7 +77,7 @@ let
 
   armv6 = rec {
     camera =
-      mkCamera haskellNix.legacyPackages.${system}.pkgsCross.raspberryPi.haskell-nix;
+      mkCamera pkgs.pkgsCross.raspberryPi.haskell-nix;
 
     strippedCamera =
       mkStripped {
@@ -93,7 +93,7 @@ let
 
   x86_64-linux = rec {
     camera =
-      mkCamera haskellNix.legacyPackages.${system}.haskell-nix;
+      mkCamera pkgs.haskell-nix;
 
     strippedCamera =
       mkStripped {
