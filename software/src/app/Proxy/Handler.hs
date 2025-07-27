@@ -136,7 +136,6 @@ instance ProxyHandler Proto.AddLog where
 
 instance ProxyHandler Proto.InitialStreamMetaDataChunk where
   proxyHandler _ req = do
-    liftIO $ putStrLn "initial stream metadata!"
     loop <- getLoop
     env <- getEnv
     liftIO $
@@ -147,7 +146,6 @@ instance ProxyHandler Proto.InitialStreamMetaDataChunk where
 instance ProxyHandler Proto.StreamChunk where
   proxyHandler _ req = do
     loop <- getLoop
-    liftIO $ putStrLn "got chunk!"
     env <- getEnv
     liftIO $ withMVar (env ^. websocketsMap) $ \wsMap -> broadcast loop wsMap (req ^. Proto.chunk)
 
@@ -157,11 +155,9 @@ broadcast ::
   -> B.ByteString
   -> IO ()
 broadcast loop wsMap bytes = do
-  now <- getCurrentTime
   void $ Map.traverseWithKey func wsMap
  where
   func key ws = do
-    putStrLn $ "Sending data to " <> show key
     WS.sendBinaryData ws bytes `catch`
       \(e :: SomeAsyncException) -> do
         putStrLn $ "Caught exception in WS send."

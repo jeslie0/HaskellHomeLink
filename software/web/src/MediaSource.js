@@ -30,9 +30,15 @@ export function playVideo(videoElement) {
             websocket.binaryType = 'arraybuffer';
             const mimeCodec = 'video/mp4; codecs="avc1.640028"';
 
-            if (!window.MediaSource || !MediaSource.isTypeSupported(mimeCodec)) {
-                console.error("MSE not supported or codec mismatch");
+            if (!window.MediaSource) {
+                console.error("MSE not supported");
+                window.alert("MSE not supported")
                 return;
+            }
+
+            if (!MediaSource.isTypeSupported(mimeCodec)) {
+                console.error("Codec not supported");
+                window.alert("Codec not supported")
             }
 
             const mediaSource = new MediaSource();
