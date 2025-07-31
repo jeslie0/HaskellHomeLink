@@ -59,7 +59,8 @@ library
     import:           warnings
 
     -- Modules exported by the library.
-    exposed-modules:  System.Epoll.Internal
+    exposed-modules:  System.Epoll,
+                      System.Epoll.Internal
 
     -- Modules included in this library but not exported.
     -- other-modules:
@@ -76,6 +77,23 @@ library
     -- Base language which the package is written in.
     default-language: GHC2021
 
-    c-sources:        cbits/epoll_hs.c
+    -- c-sources:        cbits/epoll_hs.c
 
-    include-dirs:     cbits
+    -- include-dirs:     cbits
+
+
+test-suite test-epoll
+    type:             exitcode-stdio-1.0
+
+    main-is:          Test.hs
+
+    build-depends:    base,
+                      epoll-hs
+
+    -- other-modules:    Test.Certs
+
+    hs-source-dirs:   test
+
+    default-language: GHC2021
+
+    ghc-options: -main-is Test
