@@ -60,7 +60,9 @@ library
 
     -- Modules exported by the library.
     exposed-modules:  System.Epoll,
-                      System.Epoll.Internal
+                      System.Epoll.Internal,
+                      System.EventFd,
+                      System.EventFd.Internal
 
     -- Modules included in this library but not exported.
     -- other-modules:
