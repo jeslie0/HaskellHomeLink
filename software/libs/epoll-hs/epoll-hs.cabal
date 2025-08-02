@@ -62,7 +62,9 @@ library
     exposed-modules:  System.Epoll,
                       System.Epoll.Internal,
                       System.EventFd,
-                      System.EventFd.Internal
+                      System.EventFd.Internal,
+                      System.TimerFd,
+                      System.TimerFd.Internal
 
     -- Modules included in this library but not exported.
     -- other-modules:
@@ -71,7 +73,8 @@ library
     -- other-extensions:
 
     -- Other library packages from which modules are imported.
-    build-depends:    base
+    build-depends:    base,
+                      clock
 
     -- Directories containing source files.
     hs-source-dirs:   lib
@@ -90,6 +93,7 @@ test-suite test-epoll
     main-is:          Test.hs
 
     build-depends:    base,
+                      clock,
                       epoll-hs
 
     -- other-modules:    Test.Certs
