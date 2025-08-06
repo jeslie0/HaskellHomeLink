@@ -7,7 +7,7 @@
 module System.Epoll.Internal where
 
 import Data.Word (Word32, Word64)
-import Foreign (Storable (..), (.|.))
+import Foreign (Storable (..), (.&.), (.|.))
 import Foreign.C (CInt (..), CUInt (..))
 import Foreign.Ptr (FunPtr, Ptr)
 import System.Posix.Types (Fd)
@@ -26,45 +26,69 @@ data EpollEvent = EpollEvent
   , dataRaw :: {-# UNPACK #-} !Word64 -- just stores the union raw
   }
 
-data EpollEventCode
+data Event
   = EpollIn
-  | EpollPri
   | EpollOut
-  | EpollRdNorm
-  | EpollRdBand
-  | EpollWrNorm
-  | EpollWrBand
-  | EpollMsg
+  | EpollRdHup
+  | EpollPri
   | EpollErr
   | EpollHup
-  | EpollRdHup
-  | EpollExclusive
-  | EpollWakeUp
-  | EpollOneshot
-  | EpollEt
+  deriving (Enum)
 
-epollEventCodeToWord :: EpollEventCode -> Word32
-epollEventCodeToWord code =
+eventToWord32 :: Event -> Word32
+eventToWord32 code =
   fromIntegral $ case code of
     EpollIn -> c_EPOLLIN
-    EpollPri -> c_EPOLLPRI
     EpollOut -> c_EPOLLOUT
-    EpollRdNorm -> c_EPOLLRDNORM
-    EpollRdBand -> c_EPOLLRDBAND
-    EpollWrNorm -> c_EPOLLWRNORM
-    EpollWrBand -> c_EPOLLWRBAND
-    EpollMsg -> c_EPOLLMSG
+    EpollPri -> c_EPOLLPRI
+    EpollRdHup -> c_EPOLLRDHUP
     EpollErr -> c_EPOLLERR
     EpollHup -> c_EPOLLHUP
-    EpollRdHup -> c_EPOLLRDHUP
-    EpollExclusive -> c_EPOLLEXCLUSIVE
-    EpollWakeUp -> c_EPOLLWAKEUP
-    EpollOneshot -> c_EPOLLONESHOT
-    EpollEt -> c_EPOLLET
 
-combineEpollEventCodes :: Foldable f => f EpollEventCode -> Word32
-combineEpollEventCodes =
-  foldl (\cur prev -> cur .|. epollEventCodeToWord prev) 0
+word32ToEvents :: Word32 -> [Event]
+word32ToEvents word =
+  foldr
+    ( \ev acc ->
+        if eventToWord32 ev .&. word == eventToWord32 ev
+          then ev : acc
+          else acc
+    )
+    []
+    [EpollIn .. EpollHup]
+
+data Flag
+  = EpollET
+  | EpollOneshot
+  | EpollWakeUp
+  | EpollExclusive
+
+-- \| EpollRdNorm
+-- \| EpollRdBand
+-- \| EpollWrNorm
+-- \| EpollWrBand
+-- \| EpollMsg
+
+flagToWord32 :: Flag -> Word32
+flagToWord32 flag =
+  fromIntegral $ case flag of
+    EpollET -> c_EPOLLET
+    EpollOneshot -> c_EPOLLONESHOT
+    EpollWakeUp -> c_EPOLLWAKEUP
+    EpollExclusive -> c_EPOLLEXCLUSIVE
+
+-- EpollRdNorm -> c_EPOLLRDNORM
+-- EpollRdBand -> c_EPOLLRDBAND
+-- EpollWrNorm -> c_EPOLLWRNORM
+-- EpollWrBand -> c_EPOLLWRBAND
+-- EpollMsg -> c_EPOLLMSG
+
+combineEvents :: Foldable f => f Event -> Word32
+combineEvents =
+  foldl (\cur prev -> cur .|. eventToWord32 prev) 0
+
+combineFlags :: Foldable f => f Flag -> Word32
+combineFlags =
+  foldl (\cur prev -> cur .|. flagToWord32 prev) 0
 
 instance Storable EpollEvent where
   sizeOf _ = 12 -- 4 (events) + 8 (data)
@@ -87,7 +111,7 @@ foreign import capi safe "sys/epoll.h epoll_wait"
     -> CInt
     -> IO CInt
 
-foreign import capi safe "sys/epoll.h epoll_wait"
+foreign import capi unsafe "sys/epoll.h epoll_wait"
   c_epoll_wait_unsafe ::
     CInt
     -> Ptr EpollEvent

@@ -74,6 +74,7 @@ library
 
     -- Other library packages from which modules are imported.
     build-depends:    base,
+                      mtl,
                       clock
 
     -- Directories containing source files.
@@ -94,7 +95,9 @@ test-suite test-epoll
 
     build-depends:    base,
                       clock,
-                      epoll-hs
+                      epoll-hs,
+                      unix
+
 
     -- other-modules:    Test.Certs
 
