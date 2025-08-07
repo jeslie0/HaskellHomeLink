@@ -59,7 +59,8 @@ library
     import:           warnings
 
     -- Modules exported by the library.
-    exposed-modules: EventLoop
+    exposed-modules: EventLoop,
+                     Control.IOContext
 
     -- Modules included in this library but not exported.
     -- other-modules:
@@ -70,10 +71,12 @@ library
     -- Other library packages from which modules are imported.
     build-depends:    base,
                       containers,
+                      epoll-hs,
                       microlens,
                       microlens-th,
                       mtl,
                       monad-control,
+                      mutable-containers,
                       transformers-base
 
     -- Directories containing source files.

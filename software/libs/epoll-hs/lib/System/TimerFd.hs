@@ -1,19 +1,39 @@
-module System.TimerFd (TimerFd, ClockId (..), createTimerFd, timerFdToFd, setTime, getTime, SetTimerFdFlags(..), ClockFlags(..)) where
+module System.TimerFd (
+  TimerFd,
+  timerFdToFd,
+  ClockId (..),
+  createTimerFd,
+  createTimerFd',
+  createTimerFd_,
+  setTime,
+  setTime',
+  setTime_,
+  getTime,
+  getTime',
+  getTime_,
+  SetTimerFdFlags (..),
+  ClockFlags (..),
+) where
 
+import Control.Exception (IOException, throwIO)
+import Control.Monad ((<=<))
+import Control.Monad.Except (ExceptT (..))
 import Data.Foldable (Foldable (foldl'))
 import Foreign (
   ForeignPtr,
   IntPtr (IntPtr),
+  Storable (..),
+  alloca,
   intPtrToPtr,
   newForeignPtr,
   nullPtr,
   ptrToIntPtr,
   withForeignPtr,
-  (.|.), alloca, Storable (..),
+  (.|.),
  )
-import Foreign.C (CInt, getErrno)
-import Foreign.C.Error (Errno)
+import Foreign.C (CInt, errnoToIOError, getErrno)
 import Foreign.Marshal.Utils (with)
+import System.IO.Unsafe (unsafePerformIO)
 import System.Posix.Types (Fd (Fd))
 import System.TimerFd.Internal (
   ITimerSpec,
@@ -28,14 +48,15 @@ import System.TimerFd.Internal (
   c_TFD_TIMER_CANCEL_ON_SET,
   c_timerfd_close,
   c_timerfd_create,
-  c_timerfd_settime, c_timerfd_gettime,
+  c_timerfd_gettime,
+  c_timerfd_settime,
  )
 
 newtype TimerFd = TimerFd (ForeignPtr Fd)
 
-timerFdToFd :: TimerFd -> IO Fd
+timerFdToFd :: TimerFd -> Fd
 timerFdToFd (TimerFd frnPtr) =
-  withForeignPtr frnPtr $ pure . fromIntegral . ptrToIntPtr
+  unsafePerformIO . withForeignPtr frnPtr $ pure . fromIntegral . ptrToIntPtr
 
 data ClockId
   = Realtime
@@ -63,17 +84,29 @@ clockFlagsToCInt flags =
     CloseOnExec -> c_TFD_CLOEXEC
 
 createTimerFd ::
-  Foldable f => ClockId -> f ClockFlags -> IO (Either Errno TimerFd)
+  Foldable f => ClockId -> f ClockFlags -> IO (Either IOException TimerFd)
 createTimerFd clockId flags = do
   tfd <-
     c_timerfd_create
       (clockIdToCInt clockId)
       (foldl' (\acc prev -> clockFlagsToCInt prev .|. acc) 0 flags)
   if tfd < 0
-    then Left <$> getErrno
+    then do
+      n <- getErrno
+      pure . Left $ errnoToIOError "createTimerFd" n Nothing Nothing
     else do
       Right . TimerFd
         <$> newForeignPtr c_timerfd_close (intPtrToPtr . IntPtr . fromIntegral $ tfd)
+
+createTimerFd' ::
+  Foldable f => ClockId -> f ClockFlags -> ExceptT IOException IO TimerFd
+createTimerFd' clockId =
+  ExceptT . createTimerFd clockId
+
+createTimerFd_ ::
+  Foldable f => ClockId -> f ClockFlags -> IO TimerFd
+createTimerFd_ clockId =
+  either throwIO pure <=< createTimerFd clockId
 
 data SetTimerFdFlags
   = AbsoluteTime
@@ -88,9 +121,13 @@ setTimerFdFlagsToCInt flags =
     CancelOnSet -> c_TFD_TIMER_CANCEL_ON_SET
 
 setTime ::
-  Foldable f => TimerFd -> f SetTimerFdFlags -> ITimerSpec -> IO (Either Errno ())
+  Foldable f =>
+  TimerFd
+  -> f SetTimerFdFlags
+  -> ITimerSpec
+  -> IO (Either IOException ())
 setTime timerFd flags itimerspec = do
-  Fd tfd <- timerFdToFd timerFd
+  let Fd tfd = timerFdToFd timerFd
   with itimerspec $ \itimerPtr -> do
     val <-
       c_timerfd_settime
@@ -98,11 +135,46 @@ setTime timerFd flags itimerspec = do
         (foldl' (\acc cur -> setTimerFdFlagsToCInt cur .|. acc) 0 flags)
         itimerPtr
         nullPtr
-    if val < 0 then Left <$> getErrno else pure $ Right ()
+    if val < 0
+      then do
+        n <- getErrno
+        pure . Left $ errnoToIOError "TimerFd.setTime" n Nothing Nothing
+      else pure $ Right ()
 
-getTime :: TimerFd -> IO ITimerSpec
+setTime' ::
+  Foldable f =>
+  TimerFd
+  -> f SetTimerFdFlags
+  -> ITimerSpec
+  -> ExceptT IOException IO ()
+setTime' timerfd flags =
+  ExceptT . setTime timerfd flags
+
+setTime_ ::
+  Foldable f =>
+  TimerFd
+  -> f SetTimerFdFlags
+  -> ITimerSpec
+  -> IO ()
+setTime_ timerfd flags =
+  either throwIO pure <=< setTime timerfd flags
+
+getTime :: TimerFd -> IO (Either IOException ITimerSpec)
 getTime timerFd = do
-  Fd tfd <- timerFdToFd timerFd
+  let Fd tfd = timerFdToFd timerFd
   alloca $ \ptr -> do
-    n <- c_timerfd_gettime tfd ptr
-    peek ptr
+    val <- c_timerfd_gettime tfd ptr
+    if val < 0
+      then do
+        n <- getErrno
+        pure . Left $ errnoToIOError "TimerFd.getTime" n Nothing Nothing
+      else
+        Right <$> peek ptr
+
+getTime' :: TimerFd -> ExceptT IOException IO ITimerSpec
+getTime' =
+  ExceptT . getTime
+
+getTime_ :: TimerFd -> IO ITimerSpec
+getTime_ =
+  either throwIO pure <=< getTime
