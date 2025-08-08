@@ -98,7 +98,6 @@ test-suite test-epoll
                       epoll-hs,
                       unix
 
-
     -- other-modules:    Test.Certs
 
     hs-source-dirs:   test

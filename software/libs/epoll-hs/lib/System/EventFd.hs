@@ -43,15 +43,14 @@ import System.EventFd.Internal (
   c_eventfd,
   c_eventfd_close,
  )
-import System.IO.Unsafe (unsafePerformIO)
 import System.Posix.Internals (c_read, c_write)
 import System.Posix.Types (Fd (Fd))
 
 newtype EventFd = EventFd (ForeignPtr Fd)
 
-eventFdToFd :: EventFd -> Fd
+eventFdToFd :: EventFd -> IO Fd
 eventFdToFd (EventFd frnPtr) =
-  unsafePerformIO . withForeignPtr frnPtr $ pure . fromIntegral . ptrToIntPtr
+  withForeignPtr frnPtr $ pure . fromIntegral . ptrToIntPtr
 
 data EventFdFlags = CloseOnExec | NonBlocking | Semaphore
 
@@ -89,7 +88,7 @@ eventFd_ initVal =
 
 write :: EventFd -> Int64 -> IO (Either IOException ())
 write eventfd word = do
-  let Fd evfd = eventFdToFd eventfd
+  Fd evfd <- eventFdToFd eventfd
   with word $ \ptr -> do
     val <- c_write evfd (castPtr ptr) 8
     if val < 0
@@ -109,7 +108,7 @@ write_ eventfd =
 
 read :: EventFd -> IO (Either IOException Int64)
 read eventfd = do
-  let Fd evfd = eventFdToFd eventfd
+  Fd evfd <- eventFdToFd eventfd
   allocaArray 8 $ \ptr -> do
     val <- c_read evfd ptr 8
     if val < 0

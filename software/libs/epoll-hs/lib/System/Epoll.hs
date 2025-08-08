@@ -53,7 +53,6 @@ import System.Epoll.Internal (
   combineFlags,
   word32ToEvents,
  )
-import System.IO.Unsafe (unsafePerformIO)
 import System.Posix.Types (Fd (..))
 
 newtype Epoll = Epoll (ForeignPtr Fd)
@@ -61,9 +60,9 @@ newtype Epoll = Epoll (ForeignPtr Fd)
 -- | Extract the underlying file descriptor for the epoll
 -- instance. Make sure that the epoll instance hasn't been GC's when
 -- using the returned file descriptor.
-epollToFd :: Epoll -> Fd
+epollToFd :: Epoll -> IO Fd
 epollToFd (Epoll frnPtr) = do
-  unsafePerformIO . withForeignPtr frnPtr $ pure . fromIntegral . ptrToIntPtr
+  withForeignPtr frnPtr $ pure . fromIntegral . ptrToIntPtr
 
 -- | Creates an epoll instance. The size parameter is a hint
 -- specifying the number of file descriptors to be associated with the
@@ -148,8 +147,8 @@ epollCtl ::
   -> System.Epoll.EpollEvent
   -> IO (Either IOException ())
 epollCtl epoll epollOp (Fd fd) event = do
+  Fd epfd <- epollToFd epoll
   let
-    Fd epfd = epollToFd epoll
     op = case epollOp of
       EpollCtlAdd -> c_EPOLL_CTL_ADD
       EpollCtlDelete -> c_EPOLL_CTL_DEL
@@ -195,7 +194,7 @@ epollWait ::
   -- ^ Timeout before returning
   -> IO (Either IOException [System.Epoll.EpollEvent])
 epollWait epoll maxEvents timeout = do
-  let Fd epfd = epollToFd epoll
+  Fd epfd <- epollToFd epoll
   allocaArray maxEvents $ \eventsPtr -> do
     n <-
       c_epoll_wait epfd eventsPtr (fromIntegral maxEvents) (fromIntegral timeout)

@@ -33,7 +33,6 @@ import Foreign (
  )
 import Foreign.C (CInt, errnoToIOError, getErrno)
 import Foreign.Marshal.Utils (with)
-import System.IO.Unsafe (unsafePerformIO)
 import System.Posix.Types (Fd (Fd))
 import System.TimerFd.Internal (
   ITimerSpec,
@@ -54,9 +53,9 @@ import System.TimerFd.Internal (
 
 newtype TimerFd = TimerFd (ForeignPtr Fd)
 
-timerFdToFd :: TimerFd -> Fd
+timerFdToFd :: TimerFd -> IO Fd
 timerFdToFd (TimerFd frnPtr) =
-  unsafePerformIO . withForeignPtr frnPtr $ pure . fromIntegral . ptrToIntPtr
+  withForeignPtr frnPtr $ pure . fromIntegral . ptrToIntPtr
 
 data ClockId
   = Realtime
@@ -127,7 +126,7 @@ setTime ::
   -> ITimerSpec
   -> IO (Either IOException ())
 setTime timerFd flags itimerspec = do
-  let Fd tfd = timerFdToFd timerFd
+  Fd tfd <- timerFdToFd timerFd
   with itimerspec $ \itimerPtr -> do
     val <-
       c_timerfd_settime
@@ -161,7 +160,7 @@ setTime_ timerfd flags =
 
 getTime :: TimerFd -> IO (Either IOException ITimerSpec)
 getTime timerFd = do
-  let Fd tfd = timerFdToFd timerFd
+  Fd tfd <- timerFdToFd timerFd
   alloca $ \ptr -> do
     val <- c_timerfd_gettime tfd ptr
     if val < 0

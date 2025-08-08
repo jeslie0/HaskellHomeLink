@@ -33,7 +33,7 @@ data Event
   | EpollPri
   | EpollErr
   | EpollHup
-  deriving (Enum)
+  deriving (Enum, Eq, Show)
 
 eventToWord32 :: Event -> Word32
 eventToWord32 code =
