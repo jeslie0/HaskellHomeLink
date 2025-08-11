@@ -1,5 +1,7 @@
 module HIO.Fd.TimerFd (
   TimerFd (..),
+  TimeSpec (..),
+  ITimerSpec (..),
   timerFdToFd,
   ClockId (..),
   createTimerFd,
@@ -27,8 +29,10 @@ import Foreign (
  )
 import Foreign.C (CInt)
 import Foreign.Marshal.Utils (with)
+import HIO.Error.ErrorStack (ErrorStack, pushErrno)
+import HIO.Error.Syscall qualified as ESys
 import HIO.Fd.TimerFd.Internal (
-  ITimerSpec,
+  ITimerSpec(..),
   c_CLOCK_BOOTTIME,
   c_CLOCK_BOOTTIME_ALARM,
   c_CLOCK_MONOTONIC,
@@ -42,9 +46,8 @@ import HIO.Fd.TimerFd.Internal (
   c_timerfd_gettime,
   c_timerfd_settime,
  )
+import System.Clock (TimeSpec (..))
 import System.Posix.Types (Fd (Fd))
-import HIO.Error.ErrorStack (ErrorStack, pushErrno)
-import qualified HIO.Error.Syscall as ESys
 
 newtype TimerFd = TimerFd Fd
 
@@ -86,7 +89,7 @@ createTimerFd clockId flags = do
       (foldl' (\acc prev -> clockFlagsToCInt prev .|. acc) 0 flags)
   if tfd < 0
     then do
-    Left <$> pushErrno ESys.TimerFdCreate
+      Left <$> pushErrno ESys.TimerFdCreate
     else do
       pure . Right . TimerFd $ fromIntegral tfd
 
@@ -129,7 +132,7 @@ setTime timerFd flags itimerspec = do
         nullPtr
     if val < 0
       then do
-      Left <$> pushErrno ESys.TimerFdSetTime
+        Left <$> pushErrno ESys.TimerFdSetTime
       else pure $ Right ()
 
 setTime' ::

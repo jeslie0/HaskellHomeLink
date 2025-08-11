@@ -12,7 +12,7 @@ cabal-version:      3.0
 --
 -- The name of the package.
 name:               HIO 
-
+                    
 -- The package version.
 -- See the Haskell package versioning policy (PVP) for standards
 -- guiding when and how versions should be incremented.
@@ -100,14 +100,14 @@ library
     -- include-dirs:     cbits
 
 
-test-suite test-epoll
+test-suite test-hio
     type:             exitcode-stdio-1.0
 
     main-is:          Test.hs
 
     build-depends:    base,
                       clock,
-                      epoll-hs,
+                      HIO,
                       unix
 
     -- other-modules:    Test.Certs
