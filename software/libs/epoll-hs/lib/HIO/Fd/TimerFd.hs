@@ -1,5 +1,5 @@
-module System.TimerFd (
-  TimerFd,
+module HIO.Fd.TimerFd (
+  TimerFd (..),
   timerFdToFd,
   ClockId (..),
   createTimerFd,
@@ -15,26 +15,19 @@ module System.TimerFd (
   ClockFlags (..),
 ) where
 
-import Control.Exception (IOException, throwIO)
+import Control.Exception (throwIO)
 import Control.Monad ((<=<))
 import Control.Monad.Except (ExceptT (..))
 import Data.Foldable (Foldable (foldl'))
 import Foreign (
-  ForeignPtr,
-  IntPtr (IntPtr),
   Storable (..),
   alloca,
-  intPtrToPtr,
-  newForeignPtr,
   nullPtr,
-  ptrToIntPtr,
-  withForeignPtr,
   (.|.),
  )
-import Foreign.C (CInt, errnoToIOError, getErrno)
+import Foreign.C (CInt)
 import Foreign.Marshal.Utils (with)
-import System.Posix.Types (Fd (Fd))
-import System.TimerFd.Internal (
+import HIO.Fd.TimerFd.Internal (
   ITimerSpec,
   c_CLOCK_BOOTTIME,
   c_CLOCK_BOOTTIME_ALARM,
@@ -45,17 +38,19 @@ import System.TimerFd.Internal (
   c_TFD_NONBLOCK,
   c_TFD_TIMER_ABSTIME,
   c_TFD_TIMER_CANCEL_ON_SET,
-  c_timerfd_close,
   c_timerfd_create,
   c_timerfd_gettime,
   c_timerfd_settime,
  )
+import System.Posix.Types (Fd (Fd))
+import HIO.Error.ErrorStack (ErrorStack, pushErrno)
+import qualified HIO.Error.Syscall as ESys
 
-newtype TimerFd = TimerFd (ForeignPtr Fd)
+newtype TimerFd = TimerFd Fd
 
-timerFdToFd :: TimerFd -> IO Fd
-timerFdToFd (TimerFd frnPtr) =
-  withForeignPtr frnPtr $ pure . fromIntegral . ptrToIntPtr
+timerFdToFd :: TimerFd -> Fd
+timerFdToFd (TimerFd fd) =
+  fd
 
 data ClockId
   = Realtime
@@ -83,7 +78,7 @@ clockFlagsToCInt flags =
     CloseOnExec -> c_TFD_CLOEXEC
 
 createTimerFd ::
-  Foldable f => ClockId -> f ClockFlags -> IO (Either IOException TimerFd)
+  Foldable f => ClockId -> f ClockFlags -> IO (Either ErrorStack TimerFd)
 createTimerFd clockId flags = do
   tfd <-
     c_timerfd_create
@@ -91,14 +86,12 @@ createTimerFd clockId flags = do
       (foldl' (\acc prev -> clockFlagsToCInt prev .|. acc) 0 flags)
   if tfd < 0
     then do
-      n <- getErrno
-      pure . Left $ errnoToIOError "createTimerFd" n Nothing Nothing
+    Left <$> pushErrno ESys.TimerFdCreate
     else do
-      Right . TimerFd
-        <$> newForeignPtr c_timerfd_close (intPtrToPtr . IntPtr . fromIntegral $ tfd)
+      pure . Right . TimerFd $ fromIntegral tfd
 
 createTimerFd' ::
-  Foldable f => ClockId -> f ClockFlags -> ExceptT IOException IO TimerFd
+  Foldable f => ClockId -> f ClockFlags -> ExceptT ErrorStack IO TimerFd
 createTimerFd' clockId =
   ExceptT . createTimerFd clockId
 
@@ -124,9 +117,9 @@ setTime ::
   TimerFd
   -> f SetTimerFdFlags
   -> ITimerSpec
-  -> IO (Either IOException ())
+  -> IO (Either ErrorStack ())
 setTime timerFd flags itimerspec = do
-  Fd tfd <- timerFdToFd timerFd
+  let Fd tfd = timerFdToFd timerFd
   with itimerspec $ \itimerPtr -> do
     val <-
       c_timerfd_settime
@@ -136,8 +129,7 @@ setTime timerFd flags itimerspec = do
         nullPtr
     if val < 0
       then do
-        n <- getErrno
-        pure . Left $ errnoToIOError "TimerFd.setTime" n Nothing Nothing
+      Left <$> pushErrno ESys.TimerFdSetTime
       else pure $ Right ()
 
 setTime' ::
@@ -145,7 +137,7 @@ setTime' ::
   TimerFd
   -> f SetTimerFdFlags
   -> ITimerSpec
-  -> ExceptT IOException IO ()
+  -> ExceptT ErrorStack IO ()
 setTime' timerfd flags =
   ExceptT . setTime timerfd flags
 
@@ -158,19 +150,18 @@ setTime_ ::
 setTime_ timerfd flags =
   either throwIO pure <=< setTime timerfd flags
 
-getTime :: TimerFd -> IO (Either IOException ITimerSpec)
+getTime :: TimerFd -> IO (Either ErrorStack ITimerSpec)
 getTime timerFd = do
-  Fd tfd <- timerFdToFd timerFd
+  let Fd tfd = timerFdToFd timerFd
   alloca $ \ptr -> do
     val <- c_timerfd_gettime tfd ptr
     if val < 0
       then do
-        n <- getErrno
-        pure . Left $ errnoToIOError "TimerFd.getTime" n Nothing Nothing
+        Left <$> pushErrno ESys.TimerFdGetTime
       else
         Right <$> peek ptr
 
-getTime' :: TimerFd -> ExceptT IOException IO ITimerSpec
+getTime' :: TimerFd -> ExceptT ErrorStack IO ITimerSpec
 getTime' =
   ExceptT . getTime
 

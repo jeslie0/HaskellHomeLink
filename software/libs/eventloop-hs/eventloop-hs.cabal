@@ -71,7 +71,7 @@ library
     -- Other library packages from which modules are imported.
     build-depends:    base,
                       containers,
-                      epoll-hs,
+                      HIO,
                       microlens,
                       microlens-th,
                       mtl,
@@ -96,7 +96,7 @@ test-suite test-rxtx
                       base,
                       bytestring,
                       eventloop-hs,
-                      epoll-hs,
+                      HIO,
                       unix
 
     hs-source-dirs:   test

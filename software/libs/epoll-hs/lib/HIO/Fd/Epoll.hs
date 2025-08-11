@@ -1,8 +1,8 @@
-module System.Epoll (
-  Epoll,
+module HIO.Fd.Epoll (
+  Epoll (..),
   Event (..),
   Flag (..),
-  System.Epoll.EpollEvent (..),
+  HIO.Fd.Epoll.EpollEvent (..),
   EpollCtlOp (..),
   epollToFd,
   epollCreate,
@@ -19,32 +19,26 @@ module System.Epoll (
   epollCtl_,
 ) where
 
-import Control.Exception (IOException, throwIO)
+import Control.Exception (throwIO)
 import Control.Monad ((<=<))
 import Control.Monad.Except (ExceptT (ExceptT))
-import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Word (Word64)
 import Foreign (
-  ForeignPtr,
-  IntPtr (IntPtr),
   allocaArray,
-  intPtrToPtr,
-  newForeignPtr,
   peekArray,
-  ptrToIntPtr,
-  withForeignPtr,
   (.|.),
  )
-import Foreign.C (Errno (Errno), errnoToIOError, getErrno)
+import Foreign.C (Errno (Errno))
 import Foreign.Marshal.Utils (with)
-import System.Epoll.Internal (
+import HIO.Error.ErrorStack (ErrorStack, push, pushErrno)
+import HIO.Error.Syscall qualified as ESys
+import HIO.Fd.Epoll.Internal (
   EpollEvent (..),
   Event (..),
   Flag (..),
   c_EPOLL_CTL_ADD,
   c_EPOLL_CTL_DEL,
   c_EPOLL_CTL_MOD,
-  c_epoll_close,
   c_epoll_create,
   c_epoll_create1,
   c_epoll_ctl,
@@ -55,61 +49,62 @@ import System.Epoll.Internal (
  )
 import System.Posix.Types (Fd (..))
 
-newtype Epoll = Epoll (ForeignPtr Fd)
+newtype Epoll = Epoll Fd
 
 -- | Extract the underlying file descriptor for the epoll
 -- instance. Make sure that the epoll instance hasn't been GC's when
 -- using the returned file descriptor.
-epollToFd :: Epoll -> IO Fd
-epollToFd (Epoll frnPtr) = do
-  withForeignPtr frnPtr $ pure . fromIntegral . ptrToIntPtr
+epollToFd :: Epoll -> Fd
+epollToFd (Epoll fd) = do
+  fd
 
 -- | Creates an epoll instance. The size parameter is a hint
 -- specifying the number of file descriptors to be associated with the
 -- new instance.
-epollCreate :: Int -> IO (Either IOException Epoll)
+epollCreate :: Int -> IO (Either ErrorStack Epoll)
 epollCreate size = do
   epfd <- c_epoll_create (fromIntegral size)
-  if epfd < 0
-    then
-      pure . Left $
-        errnoToIOError "epollCreate" (Errno epfd) Nothing Nothing
-    else do
-      frnPtr <-
-        liftIO $
-          newForeignPtr c_epoll_close (intPtrToPtr . IntPtr . fromIntegral $ epfd)
-      pure . Right $ Epoll frnPtr
+  pure $
+    if epfd < 0
+      then
+        Left $ ESys.EpollCreate `push` (Errno epfd `push` mempty)
+      else do
+        Right $ Epoll (Fd epfd)
 
-epollCreate' :: Int -> ExceptT IOException IO Epoll
-epollCreate' = ExceptT . epollCreate
+epollCreate' :: Int -> ExceptT ErrorStack IO Epoll
+epollCreate' =
+  ExceptT . epollCreate
 
 -- | The same as 'epollCreate' by can throw an 'IOException'.
 epollCreate_ :: Int -> IO Epoll
 epollCreate_ =
-  either throwIO pure <=< epollCreate
+  either
+    throwIO
+    pure
+    <=< epollCreate
 
 -- | Same as 'epollCreate' but with an FLAGS parameter.
-epollCreate1 :: Int -> IO (Either IOException Epoll)
+epollCreate1 :: Int -> IO (Either ErrorStack Epoll)
 epollCreate1 flags = do
   epfd <- c_epoll_create1 (fromIntegral flags)
-  if epfd < 0
-    then
-      pure . Left $
-        errnoToIOError "epollCreate1" (Errno epfd) Nothing Nothing
-    else do
-      frnPtr <-
-        liftIO $
-          newForeignPtr c_epoll_close (intPtrToPtr . IntPtr . fromIntegral $ epfd)
-      pure . Right $ Epoll frnPtr
+  pure $
+    if epfd < 0
+      then
+        Left $ ESys.EpollCreate1 `push` (Errno epfd `push` mempty)
+      else do
+        Right $ Epoll (Fd epfd)
 
-epollCreate1' :: Int -> ExceptT IOException IO Epoll
+epollCreate1' :: Int -> ExceptT ErrorStack IO Epoll
 epollCreate1' =
   ExceptT . epollCreate1
 
 -- | The same as 'epollCreate1' but can throw an 'IOException'.
 epollCreate1_ :: Int -> IO Epoll
 epollCreate1_ =
-  either throwIO pure <=< epollCreate1
+  either
+    throwIO
+    pure
+    <=< epollCreate1
 
 data EpollCtlOp
   = EpollCtlAdd
@@ -123,15 +118,15 @@ data EpollEvent = EpollEvent
   , dataRaw :: !Word64 -- just stores the union raw
   }
 
-toInternalEvent :: System.Epoll.EpollEvent -> System.Epoll.Internal.EpollEvent
-toInternalEvent (System.Epoll.EpollEvent events flags dataRaw) =
-  System.Epoll.Internal.EpollEvent
+toInternalEvent :: HIO.Fd.Epoll.EpollEvent -> HIO.Fd.Epoll.Internal.EpollEvent
+toInternalEvent (HIO.Fd.Epoll.EpollEvent events flags dataRaw) =
+  HIO.Fd.Epoll.Internal.EpollEvent
     (combineEvents events .|. combineFlags flags)
     dataRaw
 
-fromInternalEvent :: System.Epoll.Internal.EpollEvent -> System.Epoll.EpollEvent
-fromInternalEvent (System.Epoll.Internal.EpollEvent events dataRaw) =
-  System.Epoll.EpollEvent
+fromInternalEvent :: HIO.Fd.Epoll.Internal.EpollEvent -> HIO.Fd.Epoll.EpollEvent
+fromInternalEvent (HIO.Fd.Epoll.Internal.EpollEvent events dataRaw) =
+  HIO.Fd.Epoll.EpollEvent
     (word32ToEvents events)
     []
     dataRaw
@@ -144,30 +139,28 @@ epollCtl ::
   Epoll
   -> EpollCtlOp
   -> Fd
-  -> System.Epoll.EpollEvent
-  -> IO (Either IOException ())
+  -> HIO.Fd.Epoll.EpollEvent
+  -> IO (Either ErrorStack ())
 epollCtl epoll epollOp (Fd fd) event = do
-  Fd epfd <- epollToFd epoll
-  let
-    op = case epollOp of
-      EpollCtlAdd -> c_EPOLL_CTL_ADD
-      EpollCtlDelete -> c_EPOLL_CTL_DEL
-      EpollCtlModify -> c_EPOLL_CTL_MOD
+  let Fd epfd = epollToFd epoll
+  let op = case epollOp of
+        EpollCtlAdd -> c_EPOLL_CTL_ADD
+        EpollCtlDelete -> c_EPOLL_CTL_DEL
+        EpollCtlModify -> c_EPOLL_CTL_MOD
 
   with (toInternalEvent event) $ \evPtr -> do
     n <- c_epoll_ctl epfd op fd evPtr
     if n == 0
       then pure $ Right ()
       else do
-        er <- getErrno
-        pure . Left $ errnoToIOError "epollCtl" er Nothing Nothing
+        Left <$> pushErrno ESys.EpollCtl
 
 epollCtl' ::
   Epoll
   -> EpollCtlOp
   -> Fd
-  -> System.Epoll.EpollEvent
-  -> ExceptT IOException IO ()
+  -> HIO.Fd.Epoll.EpollEvent
+  -> ExceptT ErrorStack IO ()
 epollCtl' epoll epollOp fd =
   ExceptT . epollCtl epoll epollOp fd
 
@@ -176,10 +169,13 @@ epollCtl_ ::
   Epoll
   -> EpollCtlOp
   -> Fd
-  -> System.Epoll.EpollEvent
+  -> HIO.Fd.Epoll.EpollEvent
   -> IO ()
 epollCtl_ epoll epollOp fd =
-  either throwIO pure <=< epollCtl epoll epollOp fd
+  either
+    throwIO
+    pure
+    <=< epollCtl epoll epollOp fd
 
 -- | Wait for events on an epoll instance "epoll". Returns a list of
 -- triggered events. The size of the list is capped by maxEvents. The
@@ -192,16 +188,15 @@ epollWait ::
   -- ^ Maximum number of events to return
   -> Int
   -- ^ Timeout before returning
-  -> IO (Either IOException [System.Epoll.EpollEvent])
+  -> IO (Either ErrorStack [HIO.Fd.Epoll.EpollEvent])
 epollWait epoll maxEvents timeout = do
-  Fd epfd <- epollToFd epoll
+  let Fd epfd = epollToFd epoll
   allocaArray maxEvents $ \eventsPtr -> do
     n <-
       c_epoll_wait epfd eventsPtr (fromIntegral maxEvents) (fromIntegral timeout)
     if n < 0
       then do
-        er <- getErrno
-        pure . Left $ errnoToIOError "epollWait" er Nothing Nothing
+        Left <$> pushErrno ESys.EpollWait
       else do
         arr <- peekArray (fromIntegral n) eventsPtr
         pure . Right $ (fromInternalEvent <$> arr)
@@ -213,7 +208,7 @@ epollWait' ::
   -- ^ Maximum number of events to return
   -> Int
   -- ^ Timeout before returning
-  -> ExceptT IOException IO [System.Epoll.EpollEvent]
+  -> ExceptT ErrorStack IO [HIO.Fd.Epoll.EpollEvent]
 epollWait' epoll maxEvents =
   ExceptT . epollWait epoll maxEvents
 
@@ -225,6 +220,9 @@ epollWait_ ::
   -- ^ Maximum number of events to return
   -> Int
   -- ^ Timeout before returning
-  -> IO [System.Epoll.EpollEvent]
+  -> IO [HIO.Fd.Epoll.EpollEvent]
 epollWait_ epoll maxEvents = do
-  either throwIO pure <=< epollWait epoll maxEvents
+  either
+    throwIO
+    pure
+    <=< epollWait epoll maxEvents

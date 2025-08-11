@@ -11,7 +11,7 @@ cabal-version:      3.0
 --   http://haskell.org/cabal/users-guide/
 --
 -- The name of the package.
-name:               epoll-hs
+name:               HIO 
 
 -- The package version.
 -- See the Haskell package versioning policy (PVP) for standards
@@ -59,12 +59,20 @@ library
     import:           warnings
 
     -- Modules exported by the library.
-    exposed-modules:  System.Epoll,
-                      System.Epoll.Internal,
-                      System.EventFd,
-                      System.EventFd.Internal,
-                      System.TimerFd,
-                      System.TimerFd.Internal
+    exposed-modules:  HIO.Error.ErrorCategory,
+                      HIO.Error.Error,
+                      HIO.Error.ErrorStack,
+                      HIO.Error.Foreign,
+                      HIO.Error.Syscall,
+                      HIO.Foreign,
+                      HIO.Fd,
+                      HIO.Async.IOContext,
+                      HIO.Fd.Epoll,
+                      HIO.Fd.Epoll.Internal,
+                      HIO.Fd.EventFd,
+                      HIO.Fd.EventFd.Internal,
+                      HIO.Fd.TimerFd,
+                      HIO.Fd.TimerFd.Internal
 
     -- Modules included in this library but not exported.
     -- other-modules:
@@ -74,8 +82,12 @@ library
 
     -- Other library packages from which modules are imported.
     build-depends:    base,
+                      bytestring,
+                      clock,
                       mtl,
-                      clock
+                      text,
+                      unix,
+                      vector
 
     -- Directories containing source files.
     hs-source-dirs:   lib
