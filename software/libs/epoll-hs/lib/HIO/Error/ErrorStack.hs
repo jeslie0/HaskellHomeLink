@@ -1,12 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module HIO.Error.ErrorStack (SomeError (..), ErrorStack (..), push, toText, singleton, pushErrno) where
+module HIO.Error.ErrorStack (SomeError (..), ErrorStack (..), push, toText, singleton, pushErrno, makeErrorStack) where
 
 import Data.Functor ((<&>))
 import Data.Text qualified as T
 import Foreign.C (getErrno)
 import HIO.Error.Error (Error (..), getErrorCategoryNameFromError)
 import Control.Exception (Exception)
+import Control.Monad.Except (ExceptT (..))
 
 data SomeError = forall err. Error err => SomeError err
 
@@ -42,3 +43,6 @@ toText (ErrorStack errs) =
     "\n"
     ( errs <&> \(SomeError err) -> "[" <> getErrorCategoryNameFromError err <> "] " <> getErrorMessage err
     )
+
+makeErrorStack :: (Error err, Applicative m) => err -> ExceptT ErrorStack m ()
+makeErrorStack = ExceptT . pure . Left . singleton

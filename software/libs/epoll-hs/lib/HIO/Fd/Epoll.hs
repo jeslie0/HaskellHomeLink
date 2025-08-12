@@ -4,7 +4,6 @@ module HIO.Fd.Epoll (
   Flag (..),
   HIO.Fd.Epoll.EpollEvent (..),
   EpollCtlOp (..),
-  epollToFd,
   epollCreate,
   epollCreate',
   epollCreate_,
@@ -31,7 +30,7 @@ import Foreign (
 import Foreign.C (Errno (Errno))
 import Foreign.Marshal.Utils (with)
 import HIO.Error.ErrorStack (ErrorStack, push, pushErrno)
-import HIO.Error.Syscall qualified as ESys
+import HIO.Error.Syscalls qualified as ESys
 import HIO.Fd.Epoll.Internal (
   EpollEvent (..),
   Event (..),
@@ -47,16 +46,15 @@ import HIO.Fd.Epoll.Internal (
   combineFlags,
   word32ToEvents,
  )
+import HIO.Fd.IsFd (IsFd (..))
 import System.Posix.Types (Fd (..))
 
 newtype Epoll = Epoll Fd
 
--- | Extract the underlying file descriptor for the epoll
--- instance. Make sure that the epoll instance hasn't been GC's when
--- using the returned file descriptor.
-epollToFd :: Epoll -> Fd
-epollToFd (Epoll fd) = do
-  fd
+instance IsFd Epoll where
+  toFd (Epoll fd) = fd
+
+  fromFd = Epoll
 
 -- | Creates an epoll instance. The size parameter is a hint
 -- specifying the number of file descriptors to be associated with the
@@ -136,29 +134,31 @@ fromInternalEvent (HIO.Fd.Epoll.Internal.EpollEvent events dataRaw) =
 -- operation. The "event" parameter describes which events the caller
 -- is interested in and any associated user data.
 epollCtl ::
+  IsFd fd =>
   Epoll
   -> EpollCtlOp
-  -> Fd
+  -> fd
   -> HIO.Fd.Epoll.EpollEvent
   -> IO (Either ErrorStack ())
-epollCtl epoll epollOp (Fd fd) event = do
-  let Fd epfd = epollToFd epoll
+epollCtl epoll epollOp fd event = do
+  let Fd epfd = toFd epoll
   let op = case epollOp of
         EpollCtlAdd -> c_EPOLL_CTL_ADD
         EpollCtlDelete -> c_EPOLL_CTL_DEL
         EpollCtlModify -> c_EPOLL_CTL_MOD
 
   with (toInternalEvent event) $ \evPtr -> do
-    n <- c_epoll_ctl epfd op fd evPtr
+    n <- c_epoll_ctl epfd op (fromIntegral . toFd $ fd) evPtr
     if n == 0
       then pure $ Right ()
       else do
         Left <$> pushErrno ESys.EpollCtl
 
 epollCtl' ::
+  IsFd fd =>
   Epoll
   -> EpollCtlOp
-  -> Fd
+  -> fd
   -> HIO.Fd.Epoll.EpollEvent
   -> ExceptT ErrorStack IO ()
 epollCtl' epoll epollOp fd =
@@ -166,9 +166,10 @@ epollCtl' epoll epollOp fd =
 
 -- | Same as 'epollCtl' but can throw an 'IOException'.
 epollCtl_ ::
+  IsFd fd =>
   Epoll
   -> EpollCtlOp
-  -> Fd
+  -> fd
   -> HIO.Fd.Epoll.EpollEvent
   -> IO ()
 epollCtl_ epoll epollOp fd =
@@ -190,7 +191,7 @@ epollWait ::
   -- ^ Timeout before returning
   -> IO (Either ErrorStack [HIO.Fd.Epoll.EpollEvent])
 epollWait epoll maxEvents timeout = do
-  let Fd epfd = epollToFd epoll
+  let Fd epfd = toFd epoll
   allocaArray maxEvents $ \eventsPtr -> do
     n <-
       c_epoll_wait epfd eventsPtr (fromIntegral maxEvents) (fromIntegral timeout)

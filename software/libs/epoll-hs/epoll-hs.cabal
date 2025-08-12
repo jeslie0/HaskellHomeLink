@@ -59,20 +59,23 @@ library
     import:           warnings
 
     -- Modules exported by the library.
-    exposed-modules:  HIO.Error.ErrorCategory,
+    exposed-modules:  HIO.Async.IOContext,
+                      HIO.Async.Error,
+                      HIO.Error.ErrorCategory,
                       HIO.Error.Error,
                       HIO.Error.ErrorStack,
                       HIO.Error.Foreign,
-                      HIO.Error.Syscall,
+                      HIO.Error.Syscalls,
                       HIO.Foreign,
                       HIO.Fd,
-                      HIO.Async.IOContext,
                       HIO.Fd.Epoll,
                       HIO.Fd.Epoll.Internal,
                       HIO.Fd.EventFd,
                       HIO.Fd.EventFd.Internal,
+                      HIO.Fd.IsFd,
                       HIO.Fd.TimerFd,
-                      HIO.Fd.TimerFd.Internal
+                      HIO.Fd.TimerFd.Internal,
+                      HIO.Fd.Syscalls
 
     -- Modules included in this library but not exported.
     -- other-modules:
@@ -84,6 +87,7 @@ library
     build-depends:    base,
                       bytestring,
                       clock,
+                      containers,
                       mtl,
                       text,
                       unix,
@@ -108,6 +112,7 @@ test-suite test-hio
     build-depends:    base,
                       clock,
                       HIO,
+                      mtl,
                       unix
 
     -- other-modules:    Test.Certs

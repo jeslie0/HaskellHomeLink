@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module HIO.Error.Syscall (SyscallError (..)) where
+module HIO.Error.Syscalls (SyscallError (..)) where
 
 import HIO.Error.Error (Error (..))
 import HIO.Error.ErrorCategory (ErrorCategory (..))
@@ -25,7 +25,7 @@ data SyscallError
 data SystemCategory
 
 instance ErrorCategory SystemCategory where
-  getErrorCategoryName = "system"
+  getErrorCategoryName = "syscall"
 
 instance Error SyscallError where
   type ECat SyscallError = SystemCategory

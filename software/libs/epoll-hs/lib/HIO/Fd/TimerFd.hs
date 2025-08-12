@@ -2,7 +2,6 @@ module HIO.Fd.TimerFd (
   TimerFd (..),
   TimeSpec (..),
   ITimerSpec (..),
-  timerFdToFd,
   ClockId (..),
   createTimerFd,
   createTimerFd',
@@ -30,9 +29,10 @@ import Foreign (
 import Foreign.C (CInt)
 import Foreign.Marshal.Utils (with)
 import HIO.Error.ErrorStack (ErrorStack, pushErrno)
-import HIO.Error.Syscall qualified as ESys
+import HIO.Error.Syscalls qualified as ESys
+import HIO.Fd.IsFd (IsFd (..))
 import HIO.Fd.TimerFd.Internal (
-  ITimerSpec(..),
+  ITimerSpec (..),
   c_CLOCK_BOOTTIME,
   c_CLOCK_BOOTTIME_ALARM,
   c_CLOCK_MONOTONIC,
@@ -51,9 +51,10 @@ import System.Posix.Types (Fd (Fd))
 
 newtype TimerFd = TimerFd Fd
 
-timerFdToFd :: TimerFd -> Fd
-timerFdToFd (TimerFd fd) =
-  fd
+instance IsFd TimerFd where
+  toFd (TimerFd fd) = fd
+
+  fromFd = TimerFd
 
 data ClockId
   = Realtime
@@ -122,7 +123,7 @@ setTime ::
   -> ITimerSpec
   -> IO (Either ErrorStack ())
 setTime timerFd flags itimerspec = do
-  let Fd tfd = timerFdToFd timerFd
+  let Fd tfd = toFd timerFd
   with itimerspec $ \itimerPtr -> do
     val <-
       c_timerfd_settime
@@ -155,7 +156,7 @@ setTime_ timerfd flags =
 
 getTime :: TimerFd -> IO (Either ErrorStack ITimerSpec)
 getTime timerFd = do
-  let Fd tfd = timerFdToFd timerFd
+  let Fd tfd = toFd timerFd
   alloca $ \ptr -> do
     val <- c_timerfd_gettime tfd ptr
     if val < 0

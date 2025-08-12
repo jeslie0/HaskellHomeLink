@@ -1,7 +1,6 @@
 module HIO.Fd.EventFd (
   EventFd (..),
   EventFdFlags (..),
-  eventFdToFd,
   eventFd,
   eventFd',
   eventFd_,
@@ -28,21 +27,23 @@ import Foreign (
 import Foreign.C.Types (CInt)
 import Foreign.Marshal.Utils (with)
 import HIO.Error.ErrorStack (ErrorStack, pushErrno)
-import HIO.Error.Syscall qualified as ESys
+import HIO.Error.Syscalls qualified as ESys
 import HIO.Fd.EventFd.Internal (
   c_EFD_CLOEXEC,
   c_EFD_NONBLOCK,
   c_EFD_SEMAPHORE,
   c_eventfd,
  )
-import System.Posix.Internals (c_read, c_write)
+import HIO.Fd.IsFd (IsFd (..))
+import HIO.Fd.Syscalls (readUnsafe, writeUnsafe)
 import System.Posix.Types (Fd (Fd))
 
 newtype EventFd = EventFd Fd
 
-eventFdToFd :: EventFd -> Fd
-eventFdToFd (EventFd fd) =
-  fd
+instance IsFd EventFd where
+  toFd (EventFd fd) = fd
+
+  fromFd = EventFd
 
 data EventFdFlags = CloseOnExec | NonBlocking | Semaphore
 
@@ -81,13 +82,12 @@ eventFd_ initVal =
 
 write :: EventFd -> Int64 -> IO (Either ErrorStack ())
 write eventfd word = do
-  let Fd evfd = eventFdToFd eventfd
   with word $ \ptr -> do
-    val <- c_write evfd (castPtr ptr) 8
-    if val < 0
-      then do
-        Left <$> pushErrno ESys.Write
-      else pure $ Right ()
+    eVal <- writeUnsafe eventfd (castPtr ptr) (8 :: Int)
+    case eVal of
+      Left errs -> pure $ Left errs
+      Right _ ->
+        pure $ Right ()
 
 write' :: EventFd -> Int64 -> ExceptT ErrorStack IO ()
 write' eventfd =
@@ -103,14 +103,11 @@ write_ eventfd =
 
 read :: EventFd -> IO (Either ErrorStack Int64)
 read eventfd = do
-  let Fd evfd = eventFdToFd eventfd
   allocaArray 8 $ \ptr -> do
-    val <- c_read evfd ptr 8
-    if val < 0
-      then do
-        Left <$> pushErrno ESys.Read
-      else do
-        Right <$> peek (castPtr ptr :: Ptr Int64)
+    eVal <- readUnsafe eventfd ptr (8 :: Int)
+    case eVal of
+      Left errs -> pure $ Left errs
+      Right _ -> Right <$> peek (castPtr ptr :: Ptr Int64)
 
 read' :: EventFd -> ExceptT ErrorStack IO Int64
 read' =
