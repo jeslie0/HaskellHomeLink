@@ -1,4 +1,4 @@
-# Revision history for epoll-hs
+# Revision history for hasio
 
 ## 0.1.0.0 -- YYYY-mm-dd
 

@@ -3,7 +3,7 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 {-# HLINT ignore "Use camelCase" #-}
-module HIO.Fd.EventFd.Internal where
+module HAsio.Fd.EventFd.Internal where
 
 import Foreign.C (CInt (..), CUInt (..))
 

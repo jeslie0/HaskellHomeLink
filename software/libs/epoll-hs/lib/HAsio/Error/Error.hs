@@ -1,13 +1,13 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module HIO.Error.Error (Error (..), getErrorCategoryNameFromError) where
+module HAsio.Error.Error (Error (..), getErrorCategoryNameFromError) where
 
 import Data.Kind (Type)
 import Data.Text qualified as T
 import Foreign.C (Errno (..))
-import HIO.Error.ErrorCategory (ErrorCategory (..), GenericCategory)
-import HIO.Error.Foreign (strError)
+import HAsio.Error.ErrorCategory (ErrorCategory (..), GenericCategory)
+import HAsio.Error.Foreign (strError)
 
 class ErrorCategory (ECat err) => Error err where
   type ECat err :: Type

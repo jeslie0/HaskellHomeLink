@@ -1,4 +1,4 @@
-module HIO.Fd.Epoll (
+module HAsio.Fd.Epoll (
   Epoll (..),
   Event (..),
   Flag (..),
@@ -29,9 +29,9 @@ import Foreign (
  )
 import Foreign.C (Errno (Errno))
 import Foreign.Marshal.Utils (with)
-import HIO.Error.ErrorStack (ErrorStack, push, pushErrno)
-import HIO.Error.Syscalls qualified as ESys
-import HIO.Fd.Epoll.Internal (
+import HAsio.Error.ErrorStack (ErrorStack, push, pushErrno, singleton)
+import HAsio.Error.Syscalls qualified as ESys
+import HAsio.Fd.Epoll.Internal (
   EpollEvent (..),
   Event (..),
   Flag (..),
@@ -46,7 +46,7 @@ import HIO.Fd.Epoll.Internal (
   combineFlags,
   word32ToEvents,
  )
-import HIO.Fd.IsFd (IsFd (..))
+import HAsio.Fd.IsFd (IsFd (..))
 import System.Posix.Types (Fd (..))
 
 newtype Epoll = Epoll Fd
@@ -65,7 +65,7 @@ epollCreate size = do
   pure $
     if epfd < 0
       then
-        Left $ ESys.EpollCreate `push` (Errno epfd `push` mempty)
+        Left $ ESys.EpollCreate `push` singleton (Errno epfd)
       else do
         Right $ Epoll (Fd epfd)
 
@@ -88,7 +88,7 @@ epollCreate1 flags = do
   pure $
     if epfd < 0
       then
-        Left $ ESys.EpollCreate1 `push` (Errno epfd `push` mempty)
+        Left $ ESys.EpollCreate1 `push` singleton (Errno epfd)
       else do
         Right $ Epoll (Fd epfd)
 

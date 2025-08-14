@@ -1,21 +1,23 @@
-module HIO.Data.ByteString where
+module HAsio.Data.ByteString where
 
 import Control.Monad.Except (ExceptT (..))
 import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Except (throwE)
 import Data.ByteString qualified as B
 import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.Typeable (cast)
-import Foreign (castPtr, mallocArray, plusPtr)
+import Foreign (castPtr, mallocArray, plusPtr, free)
 import Foreign.C (Errno, eAGAIN)
-import HIO.Error.ErrorStack (ErrorStack, getBaseErr)
-import HIO.Fd (IsFd)
-import HIO.Fd.Syscalls (readUnsafe)
+import HAsio.Error.ErrorStack (ErrorStack, getBaseErr)
+import HAsio.Fd (IsFd)
+import HAsio.Fd.Syscalls (readUnsafe)
 
 -- We need a way to read data from a FD. Since we are generally using non-blocking IO,
 -- we also need to be able to resume the extraction of data at a later
 -- stage. We can use an IORef for this.
 
--- TODO Add more errors for when returning an error stack
+-- TODO Add more errors for when returning an error stack.
+-- TODO Use resourceT to make allocation safe.
 getBytes ::
   forall fd.
   IsFd fd =>
@@ -30,7 +32,10 @@ getBytes len = do
         case eRead of
           Right bytesRead ->
             if (bytesRead + pos) == len
-              then liftIO $ Just <$> B.packCStringLen (ptr, len)
+              then do
+              bytes <- liftIO $ B.packCStringLen (ptr, len)
+              liftIO $ free ptr
+              pure $ Just bytes
               else do
                 liftIO (writeIORef posRef (pos + bytesRead))
                 func fd
@@ -38,11 +43,11 @@ getBytes len = do
             let baseErr = getBaseErr errs
             case (cast baseErr :: Maybe Errno) of
               -- Base err is not an errno.
-              Nothing -> ExceptT . pure $ Left errs
+              Nothing -> throwE errs
               Just err ->
                 if err == eAGAIN
                   then pure Nothing
                   -- Base err is wrong errno
-                  else ExceptT . pure $ Left errs
+                  else throwE errs
 
   pure func

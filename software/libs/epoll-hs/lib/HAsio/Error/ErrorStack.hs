@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module HIO.Error.ErrorStack (
+module HAsio.Error.ErrorStack (
   SomeError (..),
   ErrorStack (..),
   push,
@@ -17,7 +17,7 @@ import Data.Functor ((<&>))
 import Data.List.NonEmpty (NonEmpty (..), last, singleton, toList, (<|))
 import Data.Text qualified as T
 import Foreign.C (getErrno)
-import HIO.Error.Error (Error (..), getErrorCategoryNameFromError)
+import HAsio.Error.Error (Error (..), getErrorCategoryNameFromError)
 import Data.Typeable (Typeable)
 
 data SomeError = forall err. Error err => SomeError err deriving (Typeable)

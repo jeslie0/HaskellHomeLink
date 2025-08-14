@@ -1,4 +1,4 @@
-module HIO.Async.IOContext (IOContext (..), mkIOContext, mkIOContext_) where
+module HAsio.Async.IOContext (IOContext (..), mkIOContext, mkIOContext_) where
 
 import Control.Exception (throwIO)
 import Control.Monad (forM_, void, when)
@@ -6,10 +6,10 @@ import Control.Monad.Except (ExceptT, runExceptT)
 import Control.Monad.IO.Class (liftIO)
 import Data.IORef (modifyIORef', newIORef, readIORef, writeIORef)
 import Data.Map.Strict qualified as Map
-import HIO.Async.Error qualified as AsyncErr
-import HIO.Error.ErrorStack (ErrorStack, makeErrorStack)
-import HIO.Fd (IsFd (..))
-import HIO.Fd.Epoll (
+import HAsio.Async.Error qualified as AsyncErr
+import HAsio.Error.ErrorStack (ErrorStack, makeErrorStack)
+import HAsio.Fd (IsFd (..))
+import HAsio.Fd.Epoll (
   EpollCtlOp (..),
   EpollEvent (..),
   Event (..),
@@ -18,7 +18,7 @@ import HIO.Fd.Epoll (
   epollCtl',
   epollWait',
  )
-import HIO.Fd.EventFd (EventFdFlags (NonBlocking), eventFd', read', write')
+import HAsio.Fd.EventFd (EventFdFlags (NonBlocking), eventFd', read', write')
 import System.Posix (Fd (..))
 
 data IOContext = IOContext

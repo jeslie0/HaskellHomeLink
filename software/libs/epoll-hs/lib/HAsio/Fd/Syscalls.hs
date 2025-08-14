@@ -1,4 +1,4 @@
-module HIO.Fd.Syscalls where
+module HAsio.Fd.Syscalls where
 
 import Control.Exception (throwIO)
 import Control.Monad ((<=<))
@@ -9,10 +9,10 @@ import Foreign.C (
   Errno (..),
   withCString,
  )
-import HIO.Error.ErrorStack (ErrorStack, push, pushErrno)
-import HIO.Error.Syscalls qualified as ESys
-import HIO.Fd.IsFd (IsFd (..))
-import HIO.Foreign (
+import HAsio.Error.ErrorStack (ErrorStack, push, pushErrno, singleton)
+import HAsio.Error.Syscalls qualified as ESys
+import HAsio.Fd.IsFd (IsFd (..))
+import HAsio.Foreign (
   Flag,
   c_close,
   c_close_unsafe,
@@ -44,7 +44,7 @@ openUnsafe path flags mode =
     n <- c_open_unsafe cPath (flagsToCInt flags) (fromIntegral mode)
     pure $
       if n < 0
-        then Left $ ESys.Open `push` (Errno n `push` mempty)
+        then Left $ ESys.Open `push` singleton (Errno n)
         else Right $ Fd n
 
 openUnsafe' ::
@@ -65,7 +65,7 @@ open path flags mode =
     n <- c_open cPath (flagsToCInt flags) (fromIntegral mode)
     pure $
       if n < 0
-        then Left $ ESys.Open `push` (Errno n `push` mempty)
+        then Left $ ESys.Open `push` singleton (Errno n)
         else Right $ Fd n
 
 open' :: Foldable f => FilePath -> f Flag -> Mode -> ExceptT ErrorStack IO Fd

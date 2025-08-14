@@ -1,4 +1,4 @@
-module HIO.Fd.IsFd where
+module HAsio.Fd.IsFd where
 
 import System.Posix (Fd)
 

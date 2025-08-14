@@ -1,11 +1,11 @@
 {-# LANGUAGE UndecidableInstances #-}
 
-module HIO.Fd (
+module HAsio.Fd (
   Fd,
   IsFd (..),
 ) where
 
-import HIO.Fd.IsFd (IsFd(..))
+import HAsio.Fd.IsFd (IsFd(..))
 import System.Posix (Fd (..))
 import Prelude hiding (read)
 

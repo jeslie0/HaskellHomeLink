@@ -8,11 +8,11 @@ import Control.Monad (forever, void)
 import Control.Monad.Except (ExceptT, runExceptT)
 import Control.Monad.IO.Class (liftIO)
 import Foreign (Int64, Ptr, Storable (..), alloca, castPtr)
-import HIO.Async.Error (AsyncError (FailedToMakeIOContext))
-import HIO.Async.IOContext (IOContext (..), mkIOContext)
-import HIO.Error.ErrorStack (push)
-import HIO.Fd (IsFd (..))
-import HIO.Fd.Epoll (
+import HAsio.Async.Error (AsyncError (FailedToMakeIOContext))
+import HAsio.Async.IOContext (IOContext (..), mkIOContext)
+import HAsio.Error.ErrorStack (push)
+import HAsio.Fd (IsFd (..))
+import HAsio.Fd.Epoll (
   EpollCtlOp (EpollCtlAdd),
   EpollEvent (..),
   Event (..),
@@ -21,8 +21,8 @@ import HIO.Fd.Epoll (
   epollCtl',
   epollWait',
  )
-import HIO.Fd.Syscalls (readUnsafe)
-import HIO.Fd.TimerFd qualified as TFD
+import HAsio.Fd.Syscalls (readUnsafe)
+import HAsio.Fd.TimerFd qualified as TFD
 import System.Posix (getFdStatus)
 import System.Posix.Internals (c_read)
 import System.Posix.Types (Fd (..))

@@ -11,7 +11,7 @@ cabal-version:      3.0
 --   http://haskell.org/cabal/users-guide/
 --
 -- The name of the package.
-name:               HIO 
+name:               hasio
                     
 -- The package version.
 -- See the Haskell package versioning policy (PVP) for standards
@@ -59,24 +59,24 @@ library
     import:           warnings
 
     -- Modules exported by the library.
-    exposed-modules:  HIO.Async.IOContext,
-                      HIO.Async.Error,
-                      HIO.Data.ByteString,
-                      HIO.Error.ErrorCategory,
-                      HIO.Error.Error,
-                      HIO.Error.ErrorStack,
-                      HIO.Error.Foreign,
-                      HIO.Error.Syscalls,
-                      HIO.Foreign,
-                      HIO.Fd,
-                      HIO.Fd.Epoll,
-                      HIO.Fd.Epoll.Internal,
-                      HIO.Fd.EventFd,
-                      HIO.Fd.EventFd.Internal,
-                      HIO.Fd.IsFd,
-                      HIO.Fd.TimerFd,
-                      HIO.Fd.TimerFd.Internal,
-                      HIO.Fd.Syscalls
+    exposed-modules:  HAsio.Async.IOContext,
+                      HAsio.Async.Error,
+                      HAsio.Data.ByteString,
+                      HAsio.Error.ErrorCategory,
+                      HAsio.Error.Error,
+                      HAsio.Error.ErrorStack,
+                      HAsio.Error.Foreign,
+                      HAsio.Error.Syscalls,
+                      HAsio.Foreign,
+                      HAsio.Fd,
+                      HAsio.Fd.Epoll,
+                      HAsio.Fd.Epoll.Internal,
+                      HAsio.Fd.EventFd,
+                      HAsio.Fd.EventFd.Internal,
+                      HAsio.Fd.IsFd,
+                      HAsio.Fd.TimerFd,
+                      HAsio.Fd.TimerFd.Internal,
+                      HAsio.Fd.Syscalls
 
     -- Modules included in this library but not exported.
     -- other-modules:
@@ -90,7 +90,9 @@ library
                       clock,
                       containers,
                       mtl,
+                      resourcet,
                       text,
+                      transformers,
                       unix,
                       vector
 
@@ -105,14 +107,14 @@ library
     -- include-dirs:     cbits
 
 
-test-suite test-hio
+test-suite test-hasio
     type:             exitcode-stdio-1.0
 
     main-is:          Test.hs
 
     build-depends:    base,
                       clock,
-                      HIO,
+                      HAsio,
                       mtl,
                       unix
 

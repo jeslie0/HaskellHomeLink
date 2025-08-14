@@ -4,7 +4,7 @@
 
 {-# HLINT ignore "Use camelCase" #-}
 
-module HIO.Foreign where
+module HAsio.Foreign where
 
 import Data.Bits ((.|.))
 import Data.Foldable (foldl')

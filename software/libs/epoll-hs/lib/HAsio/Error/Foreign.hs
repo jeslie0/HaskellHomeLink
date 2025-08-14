@@ -4,7 +4,7 @@
 
 {-# HLINT ignore "Use camelCase" #-}
 
-module HIO.Error.Foreign (c_strerror, strError) where
+module HAsio.Error.Foreign (c_strerror, strError) where
 
 import Data.Text qualified as T
 import Foreign.C (CInt (..), Errno (..))

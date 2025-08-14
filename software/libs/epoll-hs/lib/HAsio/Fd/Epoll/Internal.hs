@@ -4,7 +4,7 @@
 
 {-# HLINT ignore "Use camelCase" #-}
 
-module HIO.Fd.Epoll.Internal where
+module HAsio.Fd.Epoll.Internal where
 
 import Data.Word (Word32, Word64)
 import Foreign (Storable (..), (.&.), (.|.))

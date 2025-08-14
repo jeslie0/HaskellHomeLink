@@ -3,7 +3,7 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 {-# HLINT ignore "Use camelCase" #-}
-module HIO.Fd.TimerFd.Internal where
+module HAsio.Fd.TimerFd.Internal where
 
 import Foreign (Storable (..))
 import Foreign.C (CInt (..))

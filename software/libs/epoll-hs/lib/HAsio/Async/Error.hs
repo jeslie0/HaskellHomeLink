@@ -1,10 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module HIO.Async.Error where
+module HAsio.Async.Error where
 
-import HIO.Error.Error (Error (..))
-import HIO.Error.ErrorCategory (ErrorCategory (..))
+import HAsio.Error.Error (Error (..))
+import HAsio.Error.ErrorCategory (ErrorCategory (..))
 
 data AsyncError
   = MissingCallback

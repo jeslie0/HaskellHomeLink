@@ -1,4 +1,4 @@
-module HIO.Fd.EventFd (
+module HAsio.Fd.EventFd (
   EventFd (..),
   EventFdFlags (..),
   eventFd,
@@ -26,16 +26,16 @@ import Foreign (
  )
 import Foreign.C.Types (CInt)
 import Foreign.Marshal.Utils (with)
-import HIO.Error.ErrorStack (ErrorStack, pushErrno)
-import HIO.Error.Syscalls qualified as ESys
-import HIO.Fd.EventFd.Internal (
+import HAsio.Error.ErrorStack (ErrorStack, pushErrno)
+import HAsio.Error.Syscalls qualified as ESys
+import HAsio.Fd.EventFd.Internal (
   c_EFD_CLOEXEC,
   c_EFD_NONBLOCK,
   c_EFD_SEMAPHORE,
   c_eventfd,
  )
-import HIO.Fd.IsFd (IsFd (..))
-import HIO.Fd.Syscalls (readUnsafe, writeUnsafe)
+import HAsio.Fd.IsFd (IsFd (..))
+import HAsio.Fd.Syscalls (readUnsafe, writeUnsafe)
 import System.Posix.Types (Fd (Fd))
 
 newtype EventFd = EventFd Fd

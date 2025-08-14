@@ -1,10 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module HIO.Error.Syscalls (SyscallError (..)) where
+module HAsio.Error.Syscalls (SyscallError (..)) where
 
-import HIO.Error.Error (Error (..))
-import HIO.Error.ErrorCategory (ErrorCategory (..))
+import HAsio.Error.Error (Error (..))
+import HAsio.Error.ErrorCategory (ErrorCategory (..))
 
 data SyscallError
   = Read

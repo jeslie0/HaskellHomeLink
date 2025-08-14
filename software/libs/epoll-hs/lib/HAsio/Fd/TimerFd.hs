@@ -1,4 +1,4 @@
-module HIO.Fd.TimerFd (
+module HAsio.Fd.TimerFd (
   TimerFd (..),
   TimeSpec (..),
   ITimerSpec (..),
@@ -28,10 +28,10 @@ import Foreign (
  )
 import Foreign.C (CInt)
 import Foreign.Marshal.Utils (with)
-import HIO.Error.ErrorStack (ErrorStack, pushErrno)
-import HIO.Error.Syscalls qualified as ESys
-import HIO.Fd.IsFd (IsFd (..))
-import HIO.Fd.TimerFd.Internal (
+import HAsio.Error.ErrorStack (ErrorStack, pushErrno)
+import HAsio.Error.Syscalls qualified as ESys
+import HAsio.Fd.IsFd (IsFd (..))
+import HAsio.Fd.TimerFd.Internal (
   ITimerSpec (..),
   c_CLOCK_BOOTTIME,
   c_CLOCK_BOOTTIME_ALARM,
