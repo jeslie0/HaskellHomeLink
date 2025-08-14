@@ -61,6 +61,7 @@ library
     -- Modules exported by the library.
     exposed-modules:  HIO.Async.IOContext,
                       HIO.Async.Error,
+                      HIO.Data.ByteString,
                       HIO.Error.ErrorCategory,
                       HIO.Error.Error,
                       HIO.Error.ErrorStack,
