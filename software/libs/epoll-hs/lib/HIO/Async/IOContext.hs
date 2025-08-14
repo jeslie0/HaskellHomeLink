@@ -1,7 +1,8 @@
-module HIO.Async.IOContext (IOContext (..), mkIOContext) where
+module HIO.Async.IOContext (IOContext (..), mkIOContext, mkIOContext_) where
 
+import Control.Exception (throwIO)
 import Control.Monad (forM_, void, when)
-import Control.Monad.Except (ExceptT)
+import Control.Monad.Except (ExceptT, runExceptT)
 import Control.Monad.IO.Class (liftIO)
 import Data.IORef (modifyIORef', newIORef, readIORef, writeIORef)
 import Data.Map.Strict qualified as Map
@@ -32,10 +33,14 @@ data IOContext = IOContext
   , deregister :: forall fd. IsFd fd => fd -> ExceptT ErrorStack IO ()
   , run :: ExceptT ErrorStack IO ()
   , cancel :: ExceptT ErrorStack IO ()
+  , cleanup :: ExceptT ErrorStack IO ()
   }
 
-mkIOContext :: ExceptT ErrorStack IO IOContext
-mkIOContext = do
+mkIOContext :: IO (Either ErrorStack IOContext)
+mkIOContext = runExceptT mkIOContext'
+
+mkIOContext' :: ExceptT ErrorStack IO IOContext
+mkIOContext' = do
   epoll <- epollCreate1' 0
   keepLoopingEvFd <- eventFd' 0 (Just NonBlocking)
   keepLoopingRef <- liftIO $ newIORef False
@@ -75,6 +80,11 @@ mkIOContext = do
       liftIO $ writeIORef keepLoopingRef False
       write' keepLoopingEvFd 1
 
+    cleanup = do
+      cbMap <- liftIO $ readIORef callbackMapRef
+      void $ Map.traverseWithKey (\k _ -> deregister (Fd k)) cbMap
+      liftIO $ writeIORef callbackMapRef Map.empty
+
     run = do
       liftIO $ writeIORef keepLoopingRef True
       go
@@ -93,4 +103,8 @@ mkIOContext = do
                 callback (events ev)
           go
 
-  pure $ IOContext {register, deregister, run, cancel}
+  pure $ IOContext {register, deregister, run, cancel, cleanup}
+
+mkIOContext_ :: IO IOContext
+mkIOContext_ =
+  mkIOContext >>= either throwIO pure
