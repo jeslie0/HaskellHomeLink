@@ -1,17 +1,28 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module HIO.Error.ErrorStack (SomeError (..), ErrorStack (..), push, toText, singleton, pushErrno, makeErrorStack) where
+module HIO.Error.ErrorStack (
+  SomeError (..),
+  ErrorStack (..),
+  push,
+  toText,
+  HIO.Error.ErrorStack.singleton,
+  pushErrno,
+  makeErrorStack,
+  getBaseErr,
+) where
 
+import Control.Exception (Exception)
+import Control.Monad.Except (ExceptT (..))
 import Data.Functor ((<&>))
+import Data.List.NonEmpty (NonEmpty (..), last, singleton, toList, (<|))
 import Data.Text qualified as T
 import Foreign.C (getErrno)
 import HIO.Error.Error (Error (..), getErrorCategoryNameFromError)
-import Control.Exception (Exception)
-import Control.Monad.Except (ExceptT (..))
+import Data.Typeable (Typeable)
 
-data SomeError = forall err. Error err => SomeError err
+data SomeError = forall err. Error err => SomeError err deriving (Typeable)
 
-newtype ErrorStack = ErrorStack {getStack :: [SomeError]}
+newtype ErrorStack = ErrorStack {getStack :: NonEmpty SomeError}
 
 instance Show ErrorStack where
   show = T.unpack . toText
@@ -22,27 +33,27 @@ instance Semigroup ErrorStack where
   (ErrorStack errs1) <> (ErrorStack errs2) =
     ErrorStack (errs1 <> errs2)
 
-instance Monoid ErrorStack where
-  mempty = ErrorStack []
-
 push :: Error err => err -> ErrorStack -> ErrorStack
 push err (ErrorStack errs) =
-  ErrorStack (SomeError err : errs)
+  ErrorStack (SomeError err <| errs)
 
 singleton :: Error err => err -> ErrorStack
-singleton err = ErrorStack [SomeError err]
+singleton err = ErrorStack . Data.List.NonEmpty.singleton $ SomeError err
 
 pushErrno :: Error err => err -> IO ErrorStack
 pushErrno err = do
   errno <- getErrno
-  pure $ err `push` (errno `push` mempty)
+  pure $ err `push` HIO.Error.ErrorStack.singleton errno
 
 toText :: ErrorStack -> T.Text
 toText (ErrorStack errs) =
   T.intercalate
     "\n"
-    ( errs <&> \(SomeError err) -> "[" <> getErrorCategoryNameFromError err <> "] " <> getErrorMessage err
+    ( toList errs <&> \(SomeError err) -> "[" <> getErrorCategoryNameFromError err <> "] " <> getErrorMessage err
     )
 
 makeErrorStack :: (Error err, Applicative m) => err -> ExceptT ErrorStack m ()
-makeErrorStack = ExceptT . pure . Left . singleton
+makeErrorStack = ExceptT . pure . Left . HIO.Error.ErrorStack.singleton
+
+getBaseErr :: ErrorStack -> SomeError
+getBaseErr (ErrorStack errs) = Data.List.NonEmpty.last errs

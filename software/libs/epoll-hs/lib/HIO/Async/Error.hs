@@ -8,6 +8,7 @@ import HIO.Error.ErrorCategory (ErrorCategory (..))
 
 data AsyncError
   = MissingCallback
+  | FailedToMakeIOContext
 
 data AsyncErrorCategory
 
@@ -20,3 +21,4 @@ instance Error AsyncError where
   getErrorMessage err =
     case err of
       MissingCallback -> "Missing callback in callback table"
+      FailedToMakeIOContext -> "Failed to create IO Context"
