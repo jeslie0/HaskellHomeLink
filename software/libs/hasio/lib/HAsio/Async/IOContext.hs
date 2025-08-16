@@ -49,7 +49,7 @@ mkIOContext' = do
     liftIO . newIORef $
       Map.singleton
         (fromIntegral $ toFd keepLoopingEvFd)
-        (\_ -> void $ HIO.Fd.EventFd.read' keepLoopingEvFd)
+        (\_ -> void $ HAsio.Fd.EventFd.read' keepLoopingEvFd)
 
   epollCtl'
     epoll

@@ -9,6 +9,7 @@ import HAsio.Error.ErrorCategory (ErrorCategory (..))
 data AsyncError
   = MissingCallback
   | FailedToMakeIOContext
+  | EventNotRegistered
 
 data AsyncErrorCategory
 
@@ -22,3 +23,4 @@ instance Error AsyncError where
     case err of
       MissingCallback -> "Missing callback in callback table"
       FailedToMakeIOContext -> "Failed to create IO Context"
+      EventNotRegistered -> "Event not registered"

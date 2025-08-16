@@ -61,6 +61,7 @@ library
     -- Modules exported by the library.
     exposed-modules:  HAsio.Async.IOContext,
                       HAsio.Async.Error,
+                      HAsio.Async.Reactor,
                       HAsio.Data.ByteString,
                       HAsio.Error.ErrorCategory,
                       HAsio.Error.Error,
@@ -114,7 +115,7 @@ test-suite test-hasio
 
     build-depends:    base,
                       clock,
-                      HAsio,
+                      hasio,
                       mtl,
                       unix
 

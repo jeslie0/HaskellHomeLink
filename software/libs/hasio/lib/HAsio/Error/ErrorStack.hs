@@ -5,7 +5,7 @@ module HAsio.Error.ErrorStack (
   ErrorStack (..),
   push,
   toText,
-  HIO.Error.ErrorStack.singleton,
+  HAsio.Error.ErrorStack.singleton,
   pushErrno,
   makeErrorStack,
   getBaseErr,
@@ -43,7 +43,7 @@ singleton err = ErrorStack . Data.List.NonEmpty.singleton $ SomeError err
 pushErrno :: Error err => err -> IO ErrorStack
 pushErrno err = do
   errno <- getErrno
-  pure $ err `push` HIO.Error.ErrorStack.singleton errno
+  pure $ err `push` HAsio.Error.ErrorStack.singleton errno
 
 toText :: ErrorStack -> T.Text
 toText (ErrorStack errs) =
@@ -53,7 +53,7 @@ toText (ErrorStack errs) =
     )
 
 makeErrorStack :: (Error err, Applicative m) => err -> ExceptT ErrorStack m ()
-makeErrorStack = ExceptT . pure . Left . HIO.Error.ErrorStack.singleton
+makeErrorStack = ExceptT . pure . Left . HAsio.Error.ErrorStack.singleton
 
 getBaseErr :: ErrorStack -> SomeError
 getBaseErr (ErrorStack errs) = Data.List.NonEmpty.last errs

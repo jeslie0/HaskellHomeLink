@@ -2,7 +2,7 @@ module HAsio.Fd.Epoll (
   Epoll (..),
   Event (..),
   Flag (..),
-  HIO.Fd.Epoll.EpollEvent (..),
+  HAsio.Fd.Epoll.EpollEvent (..),
   EpollCtlOp (..),
   epollCreate,
   epollCreate',
@@ -116,15 +116,15 @@ data EpollEvent = EpollEvent
   , dataRaw :: !Word64 -- just stores the union raw
   }
 
-toInternalEvent :: HIO.Fd.Epoll.EpollEvent -> HIO.Fd.Epoll.Internal.EpollEvent
-toInternalEvent (HIO.Fd.Epoll.EpollEvent events flags dataRaw) =
-  HIO.Fd.Epoll.Internal.EpollEvent
+toInternalEvent :: HAsio.Fd.Epoll.EpollEvent -> HAsio.Fd.Epoll.Internal.EpollEvent
+toInternalEvent (HAsio.Fd.Epoll.EpollEvent events flags dataRaw) =
+  HAsio.Fd.Epoll.Internal.EpollEvent
     (combineEvents events .|. combineFlags flags)
     dataRaw
 
-fromInternalEvent :: HIO.Fd.Epoll.Internal.EpollEvent -> HIO.Fd.Epoll.EpollEvent
-fromInternalEvent (HIO.Fd.Epoll.Internal.EpollEvent events dataRaw) =
-  HIO.Fd.Epoll.EpollEvent
+fromInternalEvent :: HAsio.Fd.Epoll.Internal.EpollEvent -> HAsio.Fd.Epoll.EpollEvent
+fromInternalEvent (HAsio.Fd.Epoll.Internal.EpollEvent events dataRaw) =
+  HAsio.Fd.Epoll.EpollEvent
     (word32ToEvents events)
     []
     dataRaw
@@ -138,7 +138,7 @@ epollCtl ::
   Epoll
   -> EpollCtlOp
   -> fd
-  -> HIO.Fd.Epoll.EpollEvent
+  -> HAsio.Fd.Epoll.EpollEvent
   -> IO (Either ErrorStack ())
 epollCtl epoll epollOp fd event = do
   let Fd epfd = toFd epoll
@@ -159,7 +159,7 @@ epollCtl' ::
   Epoll
   -> EpollCtlOp
   -> fd
-  -> HIO.Fd.Epoll.EpollEvent
+  -> HAsio.Fd.Epoll.EpollEvent
   -> ExceptT ErrorStack IO ()
 epollCtl' epoll epollOp fd =
   ExceptT . epollCtl epoll epollOp fd
@@ -170,7 +170,7 @@ epollCtl_ ::
   Epoll
   -> EpollCtlOp
   -> fd
-  -> HIO.Fd.Epoll.EpollEvent
+  -> HAsio.Fd.Epoll.EpollEvent
   -> IO ()
 epollCtl_ epoll epollOp fd =
   either
@@ -189,7 +189,7 @@ epollWait ::
   -- ^ Maximum number of events to return
   -> Int
   -- ^ Timeout before returning
-  -> IO (Either ErrorStack [HIO.Fd.Epoll.EpollEvent])
+  -> IO (Either ErrorStack [HAsio.Fd.Epoll.EpollEvent])
 epollWait epoll maxEvents timeout = do
   let Fd epfd = toFd epoll
   allocaArray maxEvents $ \eventsPtr -> do
@@ -209,7 +209,7 @@ epollWait' ::
   -- ^ Maximum number of events to return
   -> Int
   -- ^ Timeout before returning
-  -> ExceptT ErrorStack IO [HIO.Fd.Epoll.EpollEvent]
+  -> ExceptT ErrorStack IO [HAsio.Fd.Epoll.EpollEvent]
 epollWait' epoll maxEvents =
   ExceptT . epollWait epoll maxEvents
 
@@ -221,7 +221,7 @@ epollWait_ ::
   -- ^ Maximum number of events to return
   -> Int
   -- ^ Timeout before returning
-  -> IO [HIO.Fd.Epoll.EpollEvent]
+  -> IO [HAsio.Fd.Epoll.EpollEvent]
 epollWait_ epoll maxEvents = do
   either
     throwIO

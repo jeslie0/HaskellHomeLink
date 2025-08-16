@@ -59,8 +59,7 @@ library
     import:           warnings
 
     -- Modules exported by the library.
-    exposed-modules: EventLoop,
-                     Control.IOContext
+    exposed-modules: EventLoop
 
     -- Modules included in this library but not exported.
     -- other-modules:
@@ -71,7 +70,6 @@ library
     -- Other library packages from which modules are imported.
     build-depends:    base,
                       containers,
-                      HIO,
                       microlens,
                       microlens-th,
                       mtl,
@@ -96,7 +94,6 @@ test-suite test-rxtx
                       base,
                       bytestring,
                       eventloop-hs,
-                      HIO,
                       unix
 
     hs-source-dirs:   test

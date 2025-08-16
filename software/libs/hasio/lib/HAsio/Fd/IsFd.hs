@@ -1,6 +1,7 @@
 module HAsio.Fd.IsFd where
 
-import System.Posix (Fd)
+import Foreign.C.Types (CInt)
+import System.Posix (Fd (Fd))
 
 -- | Represents types that use a file descriptor under the hood.
 class IsFd fd where
@@ -14,3 +15,8 @@ instance IsFd Fd where
   toFd = id
 
   fromFd = id
+
+instance IsFd CInt where
+  toFd = Fd
+
+  fromFd (Fd n) = n

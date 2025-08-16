@@ -15,7 +15,7 @@ class ErrorCategory (ECat err) => Error err where
   getErrorMessage :: err -> T.Text
 
 getErrorCategoryNameFromError :: forall err. Error err => err -> T.Text
-getErrorCategoryNameFromError _ = HIO.Error.ErrorCategory.getErrorCategoryName @(ECat err)
+getErrorCategoryNameFromError _ = HAsio.Error.ErrorCategory.getErrorCategoryName @(ECat err)
 
 instance Error Errno where
   type ECat Errno = GenericCategory

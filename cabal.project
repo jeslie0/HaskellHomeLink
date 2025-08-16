@@ -1,6 +1,6 @@
 packages:
           ./software/libs/alsa-hs/alsa-hs.cabal
-          ./software/libs/epoll-hs/epoll-hs.cabal
+          ./software/libs/hasio/hasio.cabal
           ./software/libs/minimp3-hs/minimp3-hs.cabal
           ./software/libs/rxtx/rxtx.cabal
           ./software/libs/eventloop-hs/eventloop-hs.cabal

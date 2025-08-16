@@ -4,7 +4,7 @@ module HAsio.Fd.EventFd (
   eventFd,
   eventFd',
   eventFd_,
-  HIO.Fd.EventFd.read,
+  HAsio.Fd.EventFd.read,
   read',
   read_,
   write,
@@ -91,15 +91,15 @@ write eventfd word = do
 
 write' :: EventFd -> Int64 -> ExceptT ErrorStack IO ()
 write' eventfd =
-  ExceptT . HIO.Fd.EventFd.write eventfd
+  ExceptT . HAsio.Fd.EventFd.write eventfd
 
--- | The same as 'HIO.Fd.EventFd' but can throw an IOException.
+-- | The same as 'HAsio.Fd.EventFd' but can throw an IOException.
 write_ :: EventFd -> Int64 -> IO ()
 write_ eventfd =
   either
     throwIO
     pure
-    <=< HIO.Fd.EventFd.write eventfd
+    <=< HAsio.Fd.EventFd.write eventfd
 
 read :: EventFd -> IO (Either ErrorStack Int64)
 read eventfd = do
@@ -111,11 +111,11 @@ read eventfd = do
 
 read' :: EventFd -> ExceptT ErrorStack IO Int64
 read' =
-  ExceptT . HIO.Fd.EventFd.read
+  ExceptT . HAsio.Fd.EventFd.read
 
 read_ :: EventFd -> IO Int64
 read_ =
   either
     throwIO
     pure
-    <=< HIO.Fd.EventFd.read
+    <=< HAsio.Fd.EventFd.read
