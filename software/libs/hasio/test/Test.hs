@@ -2,58 +2,61 @@
 
 module Test where
 
-import Control.Concurrent (forkIO, threadDelay)
-import Control.Exception (bracket)
+import Control.Exception (bracket, bracketOnError)
 import Control.Monad (forever, void)
-import Control.Monad.Except (ExceptT, runExceptT)
+import Control.Monad.Except (runExceptT)
 import Control.Monad.IO.Class (liftIO)
-import Foreign (Int64, Ptr, Storable (..), alloca, castPtr)
-import HAsio.Async.Error (AsyncError (FailedToMakeIOContext))
-import HAsio.Async.IOContext (IOContext (..), mkIOContext)
-import HAsio.Error.ErrorStack (push)
+import Data.ByteString qualified as B
+import HAsio.Async.IO (asyncSendAll)
+import HAsio.Async.Reactor ( Reactor, withReactor, cancel, run )
 import HAsio.Fd (IsFd (..))
-import HAsio.Fd.Epoll (
-  EpollCtlOp (EpollCtlAdd),
-  EpollEvent (..),
-  Event (..),
-  Flag (EpollET),
-  epollCreate1',
-  epollCtl',
-  epollWait',
+import Network.Socket (
+  AddrInfo (..),
+  SocketType (Stream),
+  close,
+  defaultHints,
+  getAddrInfo,
+  openSocket,
+  unsafeFdSocket, socketToFd,
  )
-import HAsio.Fd.Syscalls (readUnsafe)
-import HAsio.Fd.TimerFd qualified as TFD
-import System.Posix (getFdStatus)
-import System.Posix.Internals (c_read)
-import System.Posix.Types (Fd (..))
+import Network.Socket.Address (connect)
+import System.Posix (Fd (..), setFdOption, FdOption (NonBlockingRead))
+import System.Posix.Internals (setNonBlockingFD)
 
-main :: IO Int
+main :: IO ()
 main = do
-  bracket
-    mkIOContext
-    ( \case
-        Left errs -> print (push FailedToMakeIOContext errs)
-        Right ctx -> void . runExceptT $ cleanup ctx
-    )
-    $ \case
-      Left errs -> print (push FailedToMakeIOContext errs) >> pure (1 :: Int)
-      Right ctx -> do
-        result <- go ctx
-        case result of
-          Left errs -> print errs >> pure (-1)
-          Right _ -> pure 0
+  val <- runExceptT go
+  case val of
+    Left errs -> print errs
+    Right val -> pure ()
  where
-  go ctx = runExceptT $ do
-    timerfd <- TFD.createTimerFd' TFD.Realtime [TFD.NonBlocking]
-    TFD.setTime' timerfd [] (TFD.ITimerSpec (TFD.TimeSpec 5 0) (TFD.TimeSpec 5 0))
-    let event = EpollEvent [EpollIn] [EpollET] 78
-    register ctx timerfd [EpollIn] [EpollET] $ \ev -> do
-      val <- liftIO $ alloca $ \(ptr :: Ptr Int64) -> do
-        print "Event occurred!"
-        readUnsafe timerfd (castPtr ptr) 8 >> peek ptr
-      liftIO . putStrLn $ "Read " <> show val <> " from timerfd"
-      deregister ctx timerfd
-      cancel ctx
+  resolve = do
+    let hints = defaultHints {addrSocketType = Stream}
+    head <$> getAddrInfo (Just hints) (Just "127.0.0.1") (Just "9000")
 
-    liftIO $ putStrLn "Waiting for input on event fd..."
-    run ctx
+  open addr = bracketOnError (openSocket addr) close $ \sock -> do
+    connect sock $ addrAddress addr
+    return sock
+
+  go = withReactor @Reactor $ \reactor -> do
+    addr <- liftIO resolve
+    liftIO $ bracket (open addr) close $ \netSock -> do
+      cint <- socketToFd netSock
+      setFdOption (Fd cint) NonBlockingRead True
+      result <- runExceptT . forever $ woof reactor (fromFd $ Fd cint)
+      case result of
+        Left errs -> print errs
+        Right _ -> pure ()
+
+  woof reactor sock = do
+    liftIO $ print "woof"
+    str <- liftIO B.getLine
+    asyncSendAll
+      reactor
+      sock
+      str
+      ( \case
+          Left errs -> liftIO (print errs) >> cancel reactor
+          Right _ -> liftIO (putStrLn "Done!") >> cancel reactor
+      )
+    run reactor

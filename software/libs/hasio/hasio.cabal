@@ -59,7 +59,8 @@ library
     import:           warnings
 
     -- Modules exported by the library.
-    exposed-modules:  HAsio.Async.IOContext,
+    exposed-modules:  HAsio.Async,
+                      HAsio.Async.IO,
                       HAsio.Async.Error,
                       HAsio.Async.Reactor,
                       HAsio.Data.ByteString,
@@ -75,6 +76,8 @@ library
                       HAsio.Fd.EventFd,
                       HAsio.Fd.EventFd.Internal,
                       HAsio.Fd.IsFd,
+                      HAsio.Fd.Socket,
+                      HAsio.Fd.Socket.Internal,
                       HAsio.Fd.TimerFd,
                       HAsio.Fd.TimerFd.Internal,
                       HAsio.Fd.Syscalls
@@ -114,8 +117,10 @@ test-suite test-hasio
     main-is:          Test.hs
 
     build-depends:    base,
+                      bytestring,
                       clock,
                       hasio,
+                      network,
                       mtl,
                       unix
 

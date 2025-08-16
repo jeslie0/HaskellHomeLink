@@ -4,6 +4,7 @@
 module HAsio.Async.Reactor (
   ReactorCore (..),
   Reactor (..),
+  EventHandler,
   withReactor,
   cancel,
   run,
@@ -201,6 +202,7 @@ run ::
   forall reactor. ReactorCore reactor => reactor -> ExceptT ErrorStack IO ()
 run reactor = do
   liftIO $ setKeepRunningRef @reactor (getKeepRunningRef reactor) True
+  liftIO $ print "RUNNING"
   go
  where
   go :: ExceptT ErrorStack IO ()

@@ -9,6 +9,7 @@ module HAsio.Error.ErrorStack (
   pushErrno,
   makeErrorStack,
   getBaseErr,
+  useErrorStack,
 ) where
 
 import Control.Exception (Exception)
@@ -57,3 +58,6 @@ makeErrorStack = ExceptT . pure . Left . HAsio.Error.ErrorStack.singleton
 
 getBaseErr :: ErrorStack -> SomeError
 getBaseErr (ErrorStack errs) = Data.List.NonEmpty.last errs
+
+useErrorStack :: Applicative m => ErrorStack -> ExceptT ErrorStack m ()
+useErrorStack = ExceptT . pure . Left
