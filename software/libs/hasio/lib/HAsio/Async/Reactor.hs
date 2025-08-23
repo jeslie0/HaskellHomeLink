@@ -1,4 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module HAsio.Async.Reactor (
@@ -43,9 +44,9 @@ import HAsio.Fd.EventFd as EventFd (
  )
 import HAsio.Fd.Syscalls (close')
 
-type EventHandler = [Event] -> ExceptT ErrorStack IO ()
+type EventHandler = ExceptT ErrorStack IO ()
 
-type CallbackMap = Map.Map CInt EventHandler
+type CallbackMap = Map.Map CInt (Map.Map Event EventHandler, [Flag])
 
 -- * Class
 
@@ -57,20 +58,19 @@ class ReactorCore reactor where
   getEventPoller :: reactor -> Epoll
   createEventPoller :: ExceptT ErrorStack IO Epoll
 
-  getCallbackTableRef ::
-    reactor
-    -> CallbackTableRef reactor
-  createCallbackTable ::
-    IO (CallbackTableRef reactor)
+  getCallbackTableRef :: reactor -> CallbackTableRef reactor
+  createCallbackTable :: IO (CallbackTableRef reactor)
   addCallback ::
     IsFd fd =>
     fd
+    -> Event
+    -> [Flag]
     -> EventHandler
     -> CallbackTableRef reactor
     -> IO ()
-  deleteCallback :: IsFd fd => fd -> CallbackTableRef reactor -> IO ()
+  deleteCallback :: IsFd fd => fd -> Event -> CallbackTableRef reactor -> IO ()
   findCallback ::
-    IsFd fd => fd -> CallbackTableRef reactor -> IO (Maybe EventHandler)
+    IsFd fd => fd -> Event -> CallbackTableRef reactor -> IO (Maybe EventHandler)
 
   getKeepRunningRef :: reactor -> KeepRunningRef reactor
   createKeepRunningRef :: IO (KeepRunningRef reactor)
@@ -87,6 +87,8 @@ class ReactorCore reactor where
     -> KeepRunningRef reactor
     -> reactor
 
+  getRegisteredEvents :: IsFd fd => fd -> CallbackTableRef reactor -> IO ([Event], [Flag])
+
   cleanupReactor :: reactor -> ExceptT ErrorStack IO ()
 
 -- * Types and instances
@@ -99,9 +101,7 @@ data Reactor = Reactor
   }
 
 instance ReactorCore Reactor where
-  type
-    CallbackTableRef Reactor =
-      IORef (Map.Map CInt EventHandler)
+  type CallbackTableRef Reactor = IORef CallbackMap
   type KeepRunningRef Reactor = IORef Bool
 
   getEventPoller = epoll
@@ -113,19 +113,43 @@ instance ReactorCore Reactor where
   createCallbackTable =
     newIORef Map.empty
 
-  addCallback fd cb tableRef = do
+  addCallback fd event flags cb tableRef = do
     table <- readIORef tableRef
-    writeIORef tableRef $ Map.insert (fromIntegral . toFd $ fd) cb table
+    writeIORef tableRef $
+      Map.alter
+        ( \case
+            Nothing -> Just (Map.singleton event cb, flags)
+            Just (eventMap, _) -> Just (Map.insert event cb eventMap, flags)
+        )
+        (fromIntegral . toFd $ fd)
+        table
 
-  deleteCallback fd tableRef = do
+  deleteCallback fd event tableRef = do
     table <- readIORef tableRef
-    writeIORef tableRef $ Map.delete (fromIntegral . toFd $ fd) table
+    writeIORef tableRef $
+      Map.alter
+        ( \case
+            Nothing -> Nothing
+            Just (eventMap, flags) ->
+              let newMap = Map.alter (const Nothing) event eventMap
+              in if null newMap then Nothing else Just (newMap, flags)
+        )
+        (fromIntegral . toFd $ fd)
+        table
 
-  findCallback fd tableRef = do
+  findCallback fd event tableRef = do
     table <- readIORef tableRef
     case Map.lookup (fromIntegral . toFd $ fd) table of
       Nothing -> pure Nothing
-      Just cb -> pure $ Just cb
+      Just (eventMap, _) -> case Map.lookup event eventMap of
+        Nothing -> pure Nothing
+        Just cb -> pure $ Just cb
+
+  getRegisteredEvents fd tableRef = do
+    table <- readIORef tableRef
+    case Map.lookup (fromIntegral . toFd $ fd) table of
+      Nothing -> pure ([], [])
+      Just (eventMap, flags) -> pure (Map.keys eventMap, flags)
 
   getNotifyStop = notifyStopFd
   createNotifyStop = eventFd' 0 (Just EventFd.NonBlocking)
@@ -158,13 +182,11 @@ mkReactor = do
   notifyStopFd <- createNotifyStop @reactor
   keepRunningRef <- liftIO $ createKeepRunningRef @reactor
 
-  let notifyStopCB events =
-        case events of
-          [EpollIn] -> do
-            liftIO $ setKeepRunningRef @reactor keepRunningRef False
-            void $ EventFd.read' notifyStopFd
-          _ -> makeErrorStack AsyncErr.EventNotRegistered
-  liftIO $ addCallback @reactor notifyStopFd notifyStopCB cbTableRef
+  let notifyStopCB = do
+        liftIO $ setKeepRunningRef @reactor keepRunningRef False
+        void $ EventFd.read' notifyStopFd
+  liftIO $
+    addCallback @reactor notifyStopFd EpollIn [EpollET] notifyStopCB cbTableRef
   pure $ makeReactor eventPoller cbTableRef notifyStopFd keepRunningRef
 
 registerFd ::
@@ -172,37 +194,59 @@ registerFd ::
   (ReactorCore reactor, IsFd fd) =>
   reactor
   -> fd
-  -> [Event]
+  -> Event
   -> [Flag]
   -> EventHandler
   -> ExceptT ErrorStack IO ()
-registerFd reactor fd events flags cb = do
-  liftIO $ addCallback @reactor fd cb (getCallbackTableRef reactor)
-  epollCtl'
-    (getEventPoller reactor)
-    EpollCtlAdd
-    fd
-    (EpollEvent events flags (fromIntegral . toFd $ fd))
+registerFd reactor fd event flags cb = do
+  registeredEvents <-
+    liftIO $ getRegisteredEvents @reactor fd (getCallbackTableRef reactor)
+  case registeredEvents of
+    ([], _) -> do
+      liftIO $ print "epoll ctl add"
+      epollCtl'
+        (getEventPoller reactor)
+        EpollCtlAdd
+        fd
+        (EpollEvent [event] flags (fromIntegral . toFd $ fd))
+    (events,_) -> do
+      liftIO $ print $ "epoll ctl modify: " <> (show (length events))
+      epollCtl'
+        (getEventPoller reactor)
+        EpollCtlModify
+        fd
+        (EpollEvent (event : events) flags (fromIntegral . toFd $ fd))
+  liftIO $ addCallback @reactor fd event flags cb (getCallbackTableRef reactor)
 
 deregisterFd ::
   forall reactor fd.
   (ReactorCore reactor, IsFd fd) =>
   reactor
   -> fd
+  -> Event
   -> ExceptT ErrorStack IO ()
-deregisterFd reactor fd = do
-  liftIO $ deleteCallback @reactor fd (getCallbackTableRef reactor)
-  epollCtl'
-    (getEventPoller reactor)
-    EpollCtlDelete
-    fd
-    (EpollEvent [] [] (fromIntegral . toFd $ fd))
+deregisterFd reactor fd event = do
+  liftIO $ deleteCallback @reactor fd event (getCallbackTableRef reactor)
+  registeredEvents <-
+    liftIO $ getRegisteredEvents @reactor fd (getCallbackTableRef reactor)
+  case registeredEvents of
+    ([], _) ->
+      epollCtl'
+        (getEventPoller reactor)
+        EpollCtlDelete
+        fd
+        (EpollEvent [] [] (fromIntegral . toFd $ fd))
+    (events, flags) ->
+      epollCtl'
+        (getEventPoller reactor)
+        EpollCtlModify
+        fd
+        (EpollEvent events flags (fromIntegral . toFd $ fd))
 
 run ::
   forall reactor. ReactorCore reactor => reactor -> ExceptT ErrorStack IO ()
 run reactor = do
   liftIO $ setKeepRunningRef @reactor (getKeepRunningRef reactor) True
-  liftIO $ print "RUNNING"
   go
  where
   go :: ExceptT ErrorStack IO ()
@@ -212,12 +256,15 @@ run reactor = do
     when keepLooping $ do
       evs <- epollWait' (getEventPoller reactor) 64 (-1)
       forM_ evs $ \ev -> do
-        let fd :: CInt = fromIntegral . dataRaw $ ev
-        mCb <- liftIO $ findCallback @reactor fd (getCallbackTableRef reactor)
-        case mCb of
-          Nothing -> makeErrorStack AsyncErr.MissingCallback
-          Just callback ->
-            callback (events ev)
+        let
+          fd :: CInt = fromIntegral . dataRaw $ ev
+          evss = events ev
+        forM_ evss $ \e -> do
+          mCb <- liftIO $ findCallback @reactor fd e (getCallbackTableRef reactor)
+          case mCb of
+            Nothing -> makeErrorStack AsyncErr.MissingCallback
+            Just callback ->
+              callback
       go
 
 cancel ::

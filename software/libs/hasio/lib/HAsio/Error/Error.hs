@@ -1,4 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module HAsio.Error.Error (Error (..), getErrorCategoryNameFromError) where
@@ -20,4 +21,4 @@ getErrorCategoryNameFromError _ = HAsio.Error.ErrorCategory.getErrorCategoryName
 instance Error Errno where
   type ECat Errno = GenericCategory
 
-  getErrorMessage = strError
+  getErrorMessage (Errno n) = "(" <> (T.pack . show $ n) <> ") " <> strError (Errno n)

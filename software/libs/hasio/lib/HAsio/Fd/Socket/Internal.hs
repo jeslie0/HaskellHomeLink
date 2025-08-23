@@ -40,3 +40,18 @@ foreign import capi "sys/socket.h value MSG_OOB"
 
 foreign import capi "sys/socket.h value MSG_FASTOPEN"
   c_MSG_FASTOPEN :: CInt
+
+foreign import capi unsafe "sys/socket.h recv"
+  c_recv_unsafe :: CInt -> Ptr Void -> CSize -> CInt -> IO CSsize
+
+foreign import capi safe "sys/socket.h recv"
+  c_recv :: CInt -> Ptr Void -> CSize -> CInt -> IO CSsize
+
+foreign import capi unsafe "sys/socket.h accept4"
+  c_accept4_unsafe :: CInt -> Ptr Void -> Ptr Void -> CInt -> IO CInt
+
+foreign import capi "sys/socket.h value SOCK_NONBLOCK"
+  c_SOCK_NONBLOCK :: CInt
+
+foreign import capi "sys/socket.h value SOCK_CLOEXEC"
+  c_SOCK_CLOEXEC :: CInt

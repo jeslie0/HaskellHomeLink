@@ -1,25 +1,22 @@
 module Proxy.Main (main) where
 
-import Control.Concurrent (MVar, forkIO, killThread, modifyMVar_, myThreadId)
+import Control.Concurrent (MVar, forkIO, killThread, myThreadId)
 import Control.Exception (
   Exception (displayException),
   SomeException (..),
   bracket,
   bracket_,
   catch,
-  finally,
  )
-import Control.Monad (forever, void, when)
+import Control.Monad (forever, void)
 import Control.Monad.Trans (liftIO)
 import Data.Aeson (eitherDecodeFileStrict)
 import Data.ByteString qualified as B
 import Data.Int (Int32)
 import Data.Map.Strict qualified as Map
 import Data.ProtoLens (defMessage)
-import Data.Serialize (decode)
 import Data.Vector qualified as V
 import Devices (Device (..))
-import Envelope (wrapProxyMsg)
 import EventLoop (
   EventLoop,
   EventLoopT,
@@ -38,10 +35,8 @@ import Network.TLS (ServerParams)
 import Network.WebSockets qualified as WS
 import Options (runCommand)
 import Proto.DeviceData qualified as Proto
-import Proto.DeviceData_Fields qualified as Proto
 import Proto.Envelope qualified as Proto
 import Proto.Envelope_Fields qualified as Proto
-import ProtoHelper (toMessage)
 import Proxy.Env (
   Env,
   cleanupEnv,
@@ -57,7 +52,6 @@ import Proxy.Env (
  )
 import Proxy.Handler (ExProxyHandler (..), proxyHandler)
 import Proxy.Options (
-  ProxyConfiguration,
   ProxyOptions,
   configPath,
   httpHostname,
@@ -73,17 +67,13 @@ import Proxy.Options (
  )
 import Proxy.REST.HomeServer qualified as HTTP
 import Router (
-  MessagePackage,
   Router,
   connectionsRegistry,
   handleBytes,
-  trySendMessage,
  )
 import RxTx.Connection (cleanup, recvAndDispatch)
-import RxTx.Connection.Socket (aquireBoundListeningServerSocket)
 import RxTx.Connection.TLS (upgradeSocket)
 import RxTx.ConnectionRegistry (
-  AsyncConnectionRegistry,
   addConnection,
   removeConnection,
  )

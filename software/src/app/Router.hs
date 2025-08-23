@@ -119,8 +119,6 @@ tryForwardMessage ::
 tryForwardMessage (Router island connMgr) src dest msg =
   let hop = fromMaybe dest $ nextHop island dest
   in do
-    now <- getCurrentTime
-    -- print $ formatTime defaultTimeLocale "%H:%M:%S" now <> " Forwarding message"
     trySendMsg connMgr src dest hop msg
 
 handleBytes ::

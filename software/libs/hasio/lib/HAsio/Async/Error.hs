@@ -5,11 +5,13 @@ module HAsio.Async.Error where
 
 import HAsio.Error.Error (Error (..))
 import HAsio.Error.ErrorCategory (ErrorCategory (..))
+import Data.Typeable (Typeable)
 
 data AsyncError
   = MissingCallback
   | FailedToMakeIOContext
   | EventNotRegistered
+  deriving Typeable
 
 data AsyncErrorCategory
 

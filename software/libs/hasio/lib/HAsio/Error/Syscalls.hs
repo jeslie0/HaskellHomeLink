@@ -13,6 +13,8 @@ data SyscallError
   | Close
   | Stat
   | Send
+  | Recv
+  | Accept
   | EpollCreate
   | EpollCreate1
   | EpollWait
@@ -39,6 +41,8 @@ instance Error SyscallError where
       Close -> "close failed"
       Stat -> "stat failed"
       Send -> "send failed"
+      Recv -> "recv failed"
+      Accept -> "accept failed"
       EpollCreate -> "epoll_create failed"
       EpollCreate1 -> "epoll_create1 failed"
       EpollWait -> "epoll_wait failed"
