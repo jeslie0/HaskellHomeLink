@@ -3,15 +3,24 @@
 module Test where
 
 import Control.Exception (bracket, bracketOnError)
-import Control.Monad (forever, void)
+import Control.Monad (forM_, forever, void)
 import Control.Monad.Except (runExceptT)
 import Control.Monad.IO.Class (liftIO)
 import Data.ByteString qualified as B
-import HAsio.Async.IO (asyncSendAll, asyncAccept)
-import HAsio.Async.Reactor (Reactor, cancel, run, withReactor, registerFd, deregisterFd)
-import HAsio.Fd (IsFd (..))
+import Data.IORef (newIORef, readIORef, writeIORef)
+import HAsio.Async.IO (RecvResult (..), asyncAccept, asyncRead, asyncRecv, asyncSendAll)
+import HAsio.Async.Reactor (
+  Reactor,
+  cancel,
+  deregisterFd,
+  registerFd,
+  run,
+  withReactor,
+ )
+import HAsio.Fd (IsFd (..), stdInput)
+import HAsio.Fd.Epoll (Event (..), Flag (..))
 import HAsio.Fd.Socket (Socket, ownNetworkSocket)
-import HAsio.Fd.Syscalls (closeUnsafe_)
+import HAsio.Fd.Syscalls (close', closeUnsafe_)
 import Network.Socket (
   AddrInfo (..),
   ServiceName,
@@ -29,10 +38,6 @@ import Network.Socket.Address (connect)
 import RxTx.Connection.Socket (mkServerAddrInfo)
 import System.Posix (Fd (..), FdOption (NonBlockingRead), setFdOption)
 import System.Posix.Internals (setNonBlockingFD)
-import HAsio.Fd.Epoll (Event(..))
-import HAsio.Fd.Epoll (Flag(..))
-import HAsio.Async.IO (asyncRecv)
-import HAsio.Async.IO (RecvResult(..))
 
 aquireBoundListeningServerSocket ::
   ServiceName
@@ -57,15 +62,31 @@ main = do
       Right _ -> pure ()
  where
   go listenSock reactor = do
+    sockRef <- liftIO $ newIORef Nothing
     asyncAccept reactor listenSock $ \case
       Left errs -> liftIO (print errs) >> cancel reactor
       Right connected -> do
+        liftIO $ writeIORef sockRef (Just connected)
         liftIO $ setFdOption (toFd connected) NonBlockingRead True
-        asyncRecv reactor connected $ \case
-          Left errs -> liftIO (print errs) >>liftIO (print errs) >> cancel reactor
-          Right RecvClosed -> deregisterFd reactor connected EpollIn
+        unregister <- asyncRecv reactor connected $ \case
+          Left errs -> liftIO (print errs) >> liftIO (print errs) >> cancel reactor
+          Right RecvClosed -> deregisterFd reactor connected EpollIn >> close' connected
           Right (RecvData bytes) -> liftIO $ print bytes
         pure ()
+
+
+    liftIO $ setFdOption stdInput NonBlockingRead True
+
+    asyncRead reactor stdInput $ \case
+      Left errs -> liftIO (print errs) >> cancel reactor
+      Right RecvClosed -> deregisterFd reactor stdInput EpollIn >> close' stdInput
+      Right (RecvData bytes) -> do
+        liftIO $ print "GOT BYTES FROM STDIN"
+        mSock <- liftIO $ readIORef sockRef
+        forM_ mSock $ \sock -> asyncSendAll reactor sock bytes $ \case
+          Left errs -> liftIO (print errs) >> cancel reactor
+          Right _ -> pure ()
+
     run reactor
 
 main' :: IO ()
