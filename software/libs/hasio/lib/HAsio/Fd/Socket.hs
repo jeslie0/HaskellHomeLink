@@ -35,9 +35,7 @@ newtype Socket = Socket Fd deriving (Eq, Show)
 
 ownNetworkSocket :: Network.Socket -> IO Socket
 ownNetworkSocket sock = do
-  n <- Network.unsafeFdSocket sock
-  Network.touchSocket sock
-  print n
+  n <- Network.socketToFd sock
   pure . Socket . Fd $ n
 
 instance IsFd Socket where

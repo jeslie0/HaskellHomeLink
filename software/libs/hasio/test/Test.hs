@@ -8,7 +8,13 @@ import Control.Monad.Except (runExceptT)
 import Control.Monad.IO.Class (liftIO)
 import Data.ByteString qualified as B
 import Data.IORef (newIORef, readIORef, writeIORef)
-import HAsio.Async.IO (RecvResult (..), asyncAccept, asyncRead, asyncRecv, asyncSendAll)
+import HAsio.Async.IO (
+  RecvResult (..),
+  asyncAccept,
+  asyncRead,
+  asyncRecv,
+  asyncSendAll,
+ )
 import HAsio.Async.Reactor (
   Reactor,
   cancel,
@@ -64,28 +70,48 @@ main = do
   go listenSock reactor = do
     sockRef <- liftIO $ newIORef Nothing
     asyncAccept reactor listenSock $ \case
-      Left errs -> liftIO (print errs) >> cancel reactor
+      Left errs -> do
+        liftIO (print errs)
+        deregisterFd reactor listenSock EpollIn
+        close' listenSock
+        cancel reactor
       Right connected -> do
         liftIO $ writeIORef sockRef (Just connected)
         liftIO $ setFdOption (toFd connected) NonBlockingRead True
         unregister <- asyncRecv reactor connected $ \case
-          Left errs -> liftIO (print errs) >> liftIO (print errs) >> cancel reactor
-          Right RecvClosed -> deregisterFd reactor connected EpollIn >> close' connected
+          Left errs -> do
+            liftIO (print errs)
+            liftIO $ writeIORef sockRef Nothing
+            deregisterFd reactor connected EpollIn
+            close' connected
+            cancel reactor
+          Right RecvClosed -> do
+            deregisterFd reactor connected EpollIn
+            close' connected
+            liftIO $ writeIORef sockRef Nothing
           Right (RecvData bytes) -> liftIO $ print bytes
         pure ()
 
-
     liftIO $ setFdOption stdInput NonBlockingRead True
-
     asyncRead reactor stdInput $ \case
-      Left errs -> liftIO (print errs) >> cancel reactor
-      Right RecvClosed -> deregisterFd reactor stdInput EpollIn >> close' stdInput
+      Left errs -> do
+        liftIO (print errs)
+        deregisterFd reactor stdInput EpollIn
+        close' stdInput
+        cancel reactor
+      Right RecvClosed -> do
+        deregisterFd reactor stdInput EpollIn
+        close' stdInput
+        cancel reactor
       Right (RecvData bytes) -> do
-        liftIO $ print "GOT BYTES FROM STDIN"
         mSock <- liftIO $ readIORef sockRef
         forM_ mSock $ \sock -> asyncSendAll reactor sock bytes $ \case
-          Left errs -> liftIO (print errs) >> cancel reactor
           Right _ -> pure ()
+          Left errs -> do
+            liftIO (print errs)
+            deregisterFd reactor stdInput EpollIn
+            close' stdInput
+            cancel reactor
 
     run reactor
 
