@@ -27,8 +27,10 @@ data EpollEvent = EpollEvent
   }
 
 data Event
-  = EpollIn
-  | EpollOut
+  = -- | Read event
+    EpollIn
+  | -- | Write event
+    EpollOut
   | EpollRdHup
   | EpollPri
   | EpollErr

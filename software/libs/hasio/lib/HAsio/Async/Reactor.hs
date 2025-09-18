@@ -210,7 +210,7 @@ registerFd reactor fd event flags cb = do
         fd
         (EpollEvent [event] flags (fromIntegral . toFd $ fd))
     (events,_) -> do
-      liftIO $ print $ "epoll ctl modify: " <> (show (length events))
+      liftIO $ print $ "epoll ctl modify: " <> show (length events)
       epollCtl'
         (getEventPoller reactor)
         EpollCtlModify

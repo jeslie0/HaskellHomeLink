@@ -62,6 +62,7 @@ library
     exposed-modules:  HAsio.Async,
                       HAsio.Async.IO,
                       HAsio.Async.Error,
+                      HAsio.Async.EventLoop,
                       HAsio.Async.Reactor,
                       HAsio.Data.ByteString,
                       HAsio.Error.ErrorCategory,
@@ -89,12 +90,15 @@ library
     -- other-extensions:
 
     -- Other library packages from which modules are imported.
-    build-depends:    base,
+    build-depends:    transformers-base,
+                      base,
                       bytestring,
                       clock,
                       containers,
                       network,
                       mtl,
+                      mutable-containers,
+                      random,
                       resourcet,
                       text,
                       transformers,
