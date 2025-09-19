@@ -24,6 +24,7 @@ import Data.Typeable (Typeable)
 import Foreign (Ptr, Storable, alloca)
 import HAsio.Async.Reactor (Reactor, deregisterFd, registerFd)
 import HAsio.Async.Reactor qualified as Reactor
+import HAsio.Control (bracket)
 import HAsio.Error.Error (Error (..))
 import HAsio.Error.ErrorCategory (ErrorCategory (..))
 import HAsio.Error.ErrorStack (ErrorStack, makeErrorStack)
@@ -184,27 +185,26 @@ withEventLoop handleEvent withLoop = do
   intervalMapRef <- liftIO $ newIORef Map.empty
   genRef <- getStdGen >>= liftIO . newIORef
   Reactor.withReactor $ \ctx -> do
-    eventFd <- EventFd.eventFd' 0 [EventFd.NonBlocking]
+    bracket (EventFd.eventFd' 0 [EventFd.NonBlocking]) Fd.close' $ \eventFd -> do
+      let loop =
+            STEventLoop
+              { ctx = ctx
+              , eventFd = eventFd
+              , waitingEvents = waitingEvents
+              , timeoutMapRef = timeoutMapRef
+              , intervalMapRef = intervalMapRef
+              , genRef = genRef
+              }
 
-    let loop =
-          STEventLoop
-            { ctx = ctx
-            , eventFd = eventFd
-            , waitingEvents = waitingEvents
-            , timeoutMapRef = timeoutMapRef
-            , intervalMapRef = intervalMapRef
-            , genRef = genRef
-            }
+      registerFd ctx eventFd EpollIn [EpollET] $ do
+        n <- EventFd.read' eventFd
+        forM_ [1 .. n] $ \_ -> do
+          mMsg <- liftIO $ D.popFront waitingEvents
+          case mMsg of
+            Nothing -> makeErrorStack EventsQueueEmpty
+            Just msg -> handleEvent loop msg
 
-    registerFd ctx eventFd EpollIn [EpollET] $ do
-      n <- EventFd.read' eventFd
-      forM_ [1 .. n] $ \_ -> do
-        mMsg <- liftIO $ D.popFront waitingEvents
-        case mMsg of
-          Nothing -> makeErrorStack EventsQueueEmpty
-          Just msg -> handleEvent loop msg
-
-    withLoop loop
+      withLoop loop
 
 run :: STEventLoop msg -> ExceptT ErrorStack IO ()
 run loop = do

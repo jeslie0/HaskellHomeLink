@@ -64,6 +64,7 @@ library
                       HAsio.Async.Error,
                       HAsio.Async.EventLoop,
                       HAsio.Async.Reactor,
+                      HAsio.Control,
                       HAsio.Data.ByteString,
                       HAsio.Error.ErrorCategory,
                       HAsio.Error.Error,
