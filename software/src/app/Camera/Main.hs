@@ -37,7 +37,7 @@ startCheckMemoryPoll = do
 startHomeConnection ::
   EventLoopT Env (Device, ExCameraHandler) IO ()
 startHomeConnection = do
-  addMsg (Camera, ExCameraHandler $ EstablishHomeConnection "192.168.8.128" 9000)
+  addMsg (Camera, ExCameraHandler $ EstablishHomeConnection "192.168.8.238" 9000)
 
 mainImpl :: IO ()
 mainImpl = do

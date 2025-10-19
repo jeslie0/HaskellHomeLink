@@ -64,6 +64,7 @@ library
                       HAsio.Async.Error,
                       HAsio.Async.EventLoop,
                       HAsio.Async.Reactor,
+                      HAsio.Async.TLS,
                       HAsio.Control,
                       HAsio.Data.ByteString,
                       HAsio.Error.ErrorCategory,
@@ -104,7 +105,12 @@ library
                       text,
                       transformers,
                       unix,
-                      vector
+                      vector,
+
+                      tls,
+                      crypton-x509,
+                      crypton-x509-store,
+                      crypton-x509-validation
 
     -- Directories containing source files.
     hs-source-dirs:   lib
@@ -122,14 +128,19 @@ test-suite test-hasio
 
     main-is:          Test.hs
 
-    build-depends:    base,
+    build-depends:    data-default-class,
+                      base,
                       bytestring,
                       clock,
                       hasio,
                       network,
                       rxtx,
                       mtl,
-                      unix
+                      unix,
+                      tls,
+                      crypton-x509,
+                      crypton-x509-store,
+                      crypton-x509-validation
 
     -- other-modules:    Test.Certs
 
@@ -137,4 +148,4 @@ test-suite test-hasio
 
     default-language: GHC2021
 
-    ghc-options: -main-is Test
+    ghc-options: -main-is Test -threaded

@@ -19,11 +19,11 @@ import Data.Functor ((<&>))
 import Data.List.NonEmpty (NonEmpty (..), last, singleton, toList, (<|))
 import Data.Text qualified as T
 import Data.Typeable (Typeable, cast)
-import Foreign.C (Errno(..), getErrno)
+import Foreign.C (Errno (..), getErrno)
 import HAsio.Error.Error (Error (..), getErrorCategoryNameFromError)
 
 data SomeError = forall err. (Error err, Typeable err) => SomeError err
-  deriving Typeable
+  deriving (Typeable)
 
 instance Show SomeError where
   show (SomeError err) = show . getErrorMessage $ err
@@ -46,7 +46,7 @@ push err (ErrorStack errs) =
 singleton :: (Error err, Typeable err) => err -> ErrorStack
 singleton err = ErrorStack . Data.List.NonEmpty.singleton $ SomeError err
 
-pushErrno :: (Error err, Typeable err) => err -> IO ErrorStack
+pushErrno :: forall err. (Error err, Typeable err) => err -> IO ErrorStack
 pushErrno err = do
   errno <- getErrno
   pure $ err `push` HAsio.Error.ErrorStack.singleton errno
@@ -59,7 +59,7 @@ toText (ErrorStack errs) =
     )
 
 makeErrorStack ::
-  (Error err, Typeable err, Applicative m) => err -> ExceptT ErrorStack m ()
+  (Error err, Typeable err, Applicative m) => err -> ExceptT ErrorStack m a
 makeErrorStack = ExceptT . pure . Left . HAsio.Error.ErrorStack.singleton
 
 getBaseErr :: ErrorStack -> SomeError

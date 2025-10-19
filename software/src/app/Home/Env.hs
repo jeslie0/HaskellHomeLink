@@ -7,51 +7,37 @@ module Home.Env (
   audioStreamRef,
   router,
   cleanupEnv,
-  cameraServerSocket,
 ) where
 
 import Control.Concurrent (ThreadId, killThread)
-import Control.Exception (bracketOnError)
+import Control.Monad.Except (ExceptT)
+import Control.Monad.IO.Class (liftIO)
 import Data.Foldable (for_)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Devices (Device (..))
+import HAsio.Error.ErrorStack (ErrorStack)
 import Home.AudioStream (StationId, StreamStatus (..))
 import Lens.Micro ((^.))
 import Lens.Micro.TH (makeLenses)
-import Network.Socket (Socket)
-import Network.Socket qualified as Socket
-import Ports (homeCameraRecvPort)
 import Router (Router, connectionsRegistry, mkRouter)
-import RxTx.Connection.Socket (aquireBoundListeningServerSocket)
 import RxTx.ConnectionRegistry (killConnections)
 
 data Env = Env
   { _router :: Router
   , _audioStreamRef :: IORef (Maybe ThreadId, StreamStatus, StationId)
-  , _cameraServerSocket :: Socket
   }
 
 $(makeLenses ''Env)
 
-mkEnv :: IO Env
+mkEnv :: ExceptT ErrorStack IO Env
 mkEnv = do
-  _audioStreamRef <- newIORef (Nothing, Off, 0)
-  _cameraServerSocket <- newIORef Nothing
-  _router <- mkRouter Home
-  bracketOnError
-    (aquireBoundListeningServerSocket $ show homeCameraRecvPort)
-    Socket.close $ \_cameraServerSocket ->
-    pure $
-      Env
-        { _audioStreamRef
-        , _router
-        , _cameraServerSocket
-        }
+  _audioStreamRef <- liftIO $ newIORef (Nothing, Off, 0)
+  _router <- liftIO $ mkRouter Home
+  pure $ Env _router _audioStreamRef
 
-cleanupEnv :: Env -> IO ()
-cleanupEnv env = do
+cleanupEnv :: Env -> ExceptT ErrorStack IO ()
+cleanupEnv env = liftIO $ do
   (mThread, _, _) <- readIORef (env ^. audioStreamRef)
   for_ mThread killThread
   writeIORef (env ^. audioStreamRef) (Nothing, Off, 0)
   killConnections (env ^. (router . connectionsRegistry))
-  Socket.close (env ^. cameraServerSocket)

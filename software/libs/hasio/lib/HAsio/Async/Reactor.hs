@@ -203,14 +203,12 @@ registerFd reactor fd event flags cb = do
     liftIO $ getRegisteredEvents @reactor fd (getCallbackTableRef reactor)
   case registeredEvents of
     ([], _) -> do
-      liftIO $ print "epoll ctl add"
       epollCtl'
         (getEventPoller reactor)
         EpollCtlAdd
         fd
         (EpollEvent [event] flags (fromIntegral . toFd $ fd))
     (events,_) -> do
-      liftIO $ print $ "epoll ctl modify: " <> show (length events)
       epollCtl'
         (getEventPoller reactor)
         EpollCtlModify

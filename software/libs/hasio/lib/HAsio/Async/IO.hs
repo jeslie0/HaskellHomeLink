@@ -1,11 +1,20 @@
-module HAsio.Async.IO (asyncSendAll, asyncRecv, asyncAccept, RecvResult (..), asyncRead, asyncWriteAll) where
+module HAsio.Async.IO (
+  asyncSendAll,
+  asyncRecv,
+  asyncAccept,
+  RecvResult (..),
+  asyncRead,
+  asyncWriteAll,
+  asyncReadN,
+  asyncRecvN,
+) where
 
 import Control.Exception (throwIO, try)
+import Control.Monad (when)
 import Control.Monad.Except (ExceptT (..), runExceptT)
 import Control.Monad.IO.Class (liftIO)
 import Data.ByteString qualified as B
 import Data.ByteString.Internal qualified as B
-import Data.Functor ((<&>))
 import Data.IORef (newIORef, readIORef, writeIORef)
 import Foreign (Ptr, Word8, plusPtr, withForeignPtr)
 import Foreign.C (eAGAIN, eWOULDBLOCK)
@@ -41,21 +50,26 @@ asyncPut put reactor fd bytes callback = do
   let
     trySend :: EventHandler
     trySend = do
+      liftIO $ print $ "trying to send " <> show (B.length bytes) <> " bytes"
       offset <- liftIO $ readIORef offsetRef
       let remaining = B.length bytes - offset
       if remaining <= 0
         then do
+          liftIO $ print "rem <= 0"
           -- TODO Check to see if it has already been closed as an error.
           -- This is not a real error here.
           deregisterFd reactor fd EpollOut
           callback (Right ())
         else do
+          liftIO $ print "rem > 0"
           let (frnPtr, start, len) = B.toForeignPtr bytes
 
           ExceptT <$> liftIO $ withForeignPtr frnPtr $ \ptr -> do
             res <- put fd (ptr `plusPtr` (start + offset)) (len - offset)
+            liftIO $ print "sent!"
             case res of
-              Left errs ->
+              Left errs -> do
+                liftIO $ print "failed to send!"
                 case getBaseErrno errs of
                   Nothing -> runExceptT . callback $ Left errs
                   Just err
@@ -64,14 +78,19 @@ asyncPut put reactor fd bytes callback = do
                     | otherwise -> do
                         eErrs <- runExceptT $ deregisterFd reactor fd EpollOut
                         case eErrs of
-                          Left moreErrs -> runExceptT . callback . Left $ moreErrs <> errs
+                          Left moreErrs -> do
+                            liftIO $ print "more errs!"
+                            runExceptT . callback . Left $ moreErrs <> errs
                           Right _ -> runExceptT . callback $ Left errs
               Right n -> do
+                liftIO $ print $ "Sent " <> show n
                 if offset + n == B.length bytes
                   then runExceptT $ do
+                    liftIO $ print "send all"
                     deregisterFd reactor fd EpollOut
                     callback $ Right ()
                   else do
+                    liftIO $ print "still got some to send"
                     writeIORef offsetRef $ offset + n
                     pure $ Right ()
 
@@ -97,52 +116,66 @@ asyncWriteAll ::
   -> ExceptT ErrorStack IO ()
 asyncWriteAll = asyncPut writeUnsafe
 
+type Deregister = ExceptT ErrorStack IO ()
+
+asyncGetN ::
+  forall reactor fd.
+  (ReactorCore reactor, IsFd fd) =>
+  (fd -> Ptr Word8 -> Int -> IO (Either ErrorStack Int))
+  -> reactor
+  -> fd
+  -> Int
+  -> (Deregister -> RecvResult -> ExceptT ErrorStack IO ())
+  -> ExceptT ErrorStack IO Deregister
+asyncGetN get reactor fd recvAmount callback = do
+  keepDrainingRef <- liftIO $ newIORef True
+
+  let
+    deregister = do
+      deregisterFd reactor fd EpollIn
+      liftIO $ writeIORef keepDrainingRef False
+
+    mkBytes =
+      B.createAndTrim recvAmount $ \ptr -> do
+        eBytes <- get fd ptr recvAmount
+        case eBytes of
+          Left errs -> throwIO errs
+          Right n -> pure n
+
+    go = do
+      eBytes <- liftIO $ try mkBytes
+      case eBytes of
+        Right bytes
+          -- Connection dropped
+          | B.null bytes ->
+              callback deregister RecvClosed
+          -- Process data and keep draining
+          | otherwise -> do
+              callback deregister $ RecvData bytes
+              keepDraining <- liftIO $ readIORef keepDrainingRef
+              when keepDraining go
+        Left errs -> do
+          case getBaseErrno errs of
+            Nothing -> useErrorStack errs
+            Just err
+              | err == eAGAIN || err == eWOULDBLOCK -> do
+                  pure ()
+              | otherwise -> useErrorStack errs
+
+  registerFd reactor fd EpollIn [EpollET] go
+  pure deregister
+
 asyncGet ::
   forall reactor fd.
   (ReactorCore reactor, IsFd fd) =>
   (fd -> Ptr Word8 -> Int -> IO (Either ErrorStack Int))
   -> reactor
   -> fd
-  -> (Either ErrorStack RecvResult -> ExceptT ErrorStack IO ())
-  -> ExceptT ErrorStack IO (ExceptT ErrorStack IO ())
-asyncGet get reactor fd callback = do
-  let
-    tryRecieve :: EventHandler
-    tryRecieve = do
-      drained <- runExceptT $ go []
-      callback $
-        drained <&> \bytes ->
-          if B.null bytes
-            then RecvClosed
-            else RecvData bytes
-
-    mkBytes = B.createAndTrim recvAmount $ \ptr -> do
-      eBytes <- get fd ptr recvAmount
-      case eBytes of
-        Left errs -> throwIO errs
-        Right n -> pure n
-
-    go acc = do
-      eBytes <- liftIO $ try mkBytes
-      case eBytes of
-        Right bytes
-          | B.null bytes ->
-              -- Connection dropped
-              pure . B.concat . reverse $ acc
-          | otherwise -> go (bytes : acc)
-        Left errs -> do
-          case getBaseErrno errs of
-            Nothing -> useErrorStack errs
-            Just err
-              | err == eAGAIN || err == eWOULDBLOCK -> do
-                  pure . B.concat . reverse $ acc
-              | otherwise -> useErrorStack errs
-
-  registerFd reactor fd EpollIn [EpollET] tryRecieve
-  pure $ deregisterFd reactor fd EpollIn
-
-recvAmount :: Int
-recvAmount = 2048
+  -> (ExceptT ErrorStack IO () -> RecvResult -> ExceptT ErrorStack IO ())
+  -> ExceptT ErrorStack IO Deregister
+asyncGet get reactor socket = asyncGetN get reactor socket recvAmount
+ where
+  recvAmount = 2048
 
 data RecvResult
   = RecvData B.ByteString
@@ -153,18 +186,38 @@ asyncRecv ::
   ReactorCore reactor =>
   reactor
   -> Socket
-  -> (Either ErrorStack RecvResult -> ExceptT ErrorStack IO ())
-  -> ExceptT ErrorStack IO (ExceptT ErrorStack IO ())
+  -> (Deregister -> RecvResult -> ExceptT ErrorStack IO ())
+  -> ExceptT ErrorStack IO Deregister
 asyncRecv = asyncGet (\fd ptr n -> recvUnsafe fd ptr n [])
+
+asyncRecvN ::
+  forall reactor.
+  ReactorCore reactor =>
+  reactor
+  -> Socket
+  -> Int
+  -> (Deregister -> RecvResult -> ExceptT ErrorStack IO ())
+  -> ExceptT ErrorStack IO Deregister
+asyncRecvN = asyncGetN (\fd ptr n -> recvUnsafe fd ptr n [])
 
 asyncRead ::
   forall reactor.
   ReactorCore reactor =>
   reactor
   -> Fd
-  -> (Either ErrorStack RecvResult -> ExceptT ErrorStack IO ())
-  -> ExceptT ErrorStack IO (ExceptT ErrorStack IO ())
+  -> (Deregister -> RecvResult -> ExceptT ErrorStack IO ())
+  -> ExceptT ErrorStack IO Deregister
 asyncRead = asyncGet readUnsafe
+
+asyncReadN ::
+  forall reactor.
+  ReactorCore reactor =>
+  reactor
+  -> Fd
+  -> Int
+  -> (Deregister -> RecvResult -> ExceptT ErrorStack IO ())
+  -> ExceptT ErrorStack IO Deregister
+asyncReadN = asyncGetN readUnsafe
 
 -- let
 --   tryRecieve :: EventHandler
@@ -206,11 +259,12 @@ asyncAccept ::
   reactor
   -> Socket -- listening socket
   -> (Either ErrorStack Socket -> ExceptT ErrorStack IO ())
-  -> ExceptT ErrorStack IO (ExceptT ErrorStack IO ()) -- returns deregister action
+  -> ExceptT ErrorStack IO Deregister -- returns deregister action
 asyncAccept reactor listenSock callback = do
   let
     acceptLoop :: EventHandler
     acceptLoop = do
+      liftIO $ print "accept loop!"
       eConn <- liftIO tryAccept
       case eConn of
         Right conn -> do
@@ -224,7 +278,9 @@ asyncAccept reactor listenSock callback = do
             | otherwise -> do
                 callback (Left errs)
     tryAccept = do
-      -- your raw accept binding, returning (Left ErrorStack | Right Socket)
+      -- your raw accept binding, returning (Left ErrorStack | Right
+      -- Socket)
+      liftIO $ print "Accepting!"
       acceptUnsafe listenSock [SocketNonBlock]
 
   registerFd reactor listenSock EpollIn [EpollET] acceptLoop

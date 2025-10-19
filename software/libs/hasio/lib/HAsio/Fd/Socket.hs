@@ -4,7 +4,6 @@ import Control.Exception (throwIO)
 import Control.Monad ((<=<))
 import Control.Monad.Except (ExceptT (ExceptT))
 import Data.Foldable (foldl')
-import Data.Functor ((<&>))
 import Data.Word (Word8)
 import Foreign (Bits ((.|.)), Ptr, castPtr)
 import Foreign.C.Types (CInt)
@@ -26,7 +25,7 @@ import HAsio.Fd.Socket.Internal (
   c_accept4_unsafe,
   c_recv_unsafe,
   c_send,
-  c_send_unsafe,
+  c_send_unsafe, c_recv,
  )
 import Network.Socket qualified as Network
 import System.Posix (Fd (..))
@@ -136,6 +135,24 @@ recvUnsafe' sock ptr len = do
 recvUnsafe_ :: Integral n => Socket -> Ptr Word8 -> n -> [RecvFlag] -> IO n
 recvUnsafe_ sock ptr len =
   either throwIO pure <=< recvUnsafe sock ptr len
+
+recv ::
+  Integral n => Socket -> Ptr Word8 -> n -> [RecvFlag] -> IO (Either ErrorStack n)
+recv (Socket (Fd fd)) ptr len _flags = do
+  n <- c_recv fd (castPtr ptr) (fromIntegral len) 0
+  if n < 0
+    then
+      Left <$> pushErrno ESys.Recv
+    else pure . Right $ fromIntegral n
+
+recv' ::
+  Integral n => Socket -> Ptr Word8 -> n -> [RecvFlag] -> ExceptT ErrorStack IO n
+recv' sock ptr len = do
+  ExceptT . recv sock ptr len
+
+recv_ :: Integral n => Socket -> Ptr Word8 -> n -> [RecvFlag] -> IO n
+recv_ sock ptr len =
+  either throwIO pure <=< recv sock ptr len
 
 data SocketFlag
   = SocketNonBlock

@@ -94,6 +94,7 @@ executable Home
                       State,
                       Parsing,
                       ProtoHelper,
+                      TCP,
                       TLSHelper,
                       TH,
                       Utilities.Either,
@@ -154,6 +155,7 @@ executable Home
                       base,
                       directory,
                       eventloop-hs,
+                      hasio,
                       network,
                       options,
                       random,
@@ -173,191 +175,191 @@ executable Home
     ghc-options: -main-is Home.Main -O2 -threaded -split-objs
               -- -Wunused-packages
 
-executable Proxy
-    -- Import common warning flags.
-    import:           warnings
+-- executable Proxy
+--     -- Import common warning flags.
+--     import:           warnings
 
-    -- .hs or .lhs file containing the Main module.
-    main-is:          Proxy/Main.hs
-
-
-    -- Modules included in this executable, other than Main.
-    other-modules:    Envelope,
-                      Home.AudioStreamTypes,
-                      Devices,
-                      Logger,
-                      Router,
-                      System,
-                      System.CPU,
-                      System.Memory,
-                      State,
-                      Parsing,
-                      ProtoHelper,
-                      Proxy.Env,
-                      Proxy.Handler,
-                      Proxy.Options,
-                      Proxy.REST.Api,
-                      Proxy.REST.HomeServer,
-                      Proxy.WebsocketServer,
-                      TLSHelper,
-                      TH,
-                      Utilities.Either,
-
-                      -- Proto medules
-                      Proto.Camera,
-                      Proto.Camera_Fields,
-                      Proto.Envelope,
-                      Proto.Envelope_Fields,
-                      Proto.Logging,
-                      Proto.Logging_Fields,
-                      Proto.Radio,
-                      Proto.Radio_Fields,
-                      Proto.DeviceData,
-                      Proto.DeviceData_Fields,
-    -- LANGUAGE extensions used by modules in this package.
-    -- other-extensions:
-
-    -- Other library packages from which modules are imported.
-    build-depends:
-                      -- Data
-                      aeson,
-                      attoparsec,
-                      bytestring,
-                      containers,
-                      cereal,
-                      mtl,
-                      text,
-                      vector,
-
-                      -- TLS
-                      crypton-x509,
-                      crypton-x509-store,
-                      crypton-x509-validation,
-                      data-default-class,
-                      tls,
-
-                      -- HTTP Server
-                      servant-server,
-                      servant-proto-lens,
-                      wai-app-static,
-                      warp,
-                      warp-tls,
-                      wai-websockets,
-                      websockets,
-
-                      -- Tools
-                      microlens,
-                      microlens-th,
-                      template-haskell,
-
-                      -- Protobuf
-                      proto-lens,
-                      proto-lens-runtime,
-
-                      -- General
-                      base,
-                      directory,
-                      eventloop-hs,
-                      network,
-                      options,
-                      random,
-                      rxtx,
-                      time
+--     -- .hs or .lhs file containing the Main module.
+--     main-is:          Proxy/Main.hs
 
 
-    build-tool-depends: proto-lens-protoc:proto-lens-protoc
-                        --^>= 0.9.0.0
+--     -- Modules included in this executable, other than Main.
+--     other-modules:    Envelope,
+--                       Home.AudioStreamTypes,
+--                       Devices,
+--                       Logger,
+--                       Router,
+--                       System,
+--                       System.CPU,
+--                       System.Memory,
+--                       State,
+--                       Parsing,
+--                       ProtoHelper,
+--                       Proxy.Env,
+--                       Proxy.Handler,
+--                       Proxy.Options,
+--                       Proxy.REST.Api,
+--                       Proxy.REST.HomeServer,
+--                       Proxy.WebsocketServer,
+--                       TLSHelper,
+--                       TH,
+--                       Utilities.Either,
 
-    -- Directories containing source files.
-    hs-source-dirs:   app
+--                       -- Proto medules
+--                       Proto.Camera,
+--                       Proto.Camera_Fields,
+--                       Proto.Envelope,
+--                       Proto.Envelope_Fields,
+--                       Proto.Logging,
+--                       Proto.Logging_Fields,
+--                       Proto.Radio,
+--                       Proto.Radio_Fields,
+--                       Proto.DeviceData,
+--                       Proto.DeviceData_Fields,
+--     -- LANGUAGE extensions used by modules in this package.
+--     -- other-extensions:
 
-    -- Base language which the package is written in.
-    default-language: GHC2021
+--     -- Other library packages from which modules are imported.
+--     build-depends:
+--                       -- Data
+--                       aeson,
+--                       attoparsec,
+--                       bytestring,
+--                       containers,
+--                       cereal,
+--                       mtl,
+--                       text,
+--                       vector,
 
-    ghc-options: -main-is Proxy.Main -O2 -threaded -split-objs
-                 -- -Wunused-packages
+--                       -- TLS
+--                       crypton-x509,
+--                       crypton-x509-store,
+--                       crypton-x509-validation,
+--                       data-default-class,
+--                       tls,
 
-executable Camera
-    -- Import common warning flags.
-    import:           warnings
+--                       -- HTTP Server
+--                       servant-server,
+--                       servant-proto-lens,
+--                       wai-app-static,
+--                       warp,
+--                       warp-tls,
+--                       wai-websockets,
+--                       websockets,
 
-    -- .hs or .lhs file containing the Main module.
-    main-is:          Camera/Main.hs
+--                       -- Tools
+--                       microlens,
+--                       microlens-th,
+--                       template-haskell,
+
+--                       -- Protobuf
+--                       proto-lens,
+--                       proto-lens-runtime,
+
+--                       -- General
+--                       base,
+--                       directory,
+--                       eventloop-hs,
+--                       network,
+--                       options,
+--                       random,
+--                       rxtx,
+--                       time
 
 
-    -- Modules included in this executable, other than Main.
-    other-modules:    Camera.VideoStream,
-                      Camera.Env,
-                      Camera.Handler,
-                      Camera.Options,
+--     build-tool-depends: proto-lens-protoc:proto-lens-protoc
+--                         --^>= 0.9.0.0
 
-                      Envelope,
-                      Devices,
-                      Logger,
-                      Parsing,
-                      ProtoHelper,
-                      Router,
-                      State,
-                      System,
-                      System.CPU,
-                      System.Memory,
-                      TH,
-                      Utilities.Either,
-                      Ports,
+--     -- Directories containing source files.
+--     hs-source-dirs:   app
 
-                      -- Proto medules
-                      Proto.Camera,
-                      Proto.Camera_Fields,
-                      Proto.Envelope,
-                      Proto.Envelope_Fields,
-                      Proto.Logging,
-                      Proto.Logging_Fields,
-                      Proto.Radio,
-                      Proto.Radio_Fields,
-                      Proto.DeviceData,
-                      Proto.DeviceData_Fields,
-    -- LANGUAGE extensions used by modules in this package
-    -- other-extensions:
+--     -- Base language which the package is written in.
+--     default-language: GHC2021
 
-    -- Other library packages from which modules are imported.
-    build-depends:    
-                      -- Data
-                      aeson,
-                      attoparsec,
-                      bytestring,
-                      cereal,
-                      containers,
-                      mtl,
-                      text,
-                      vector,
+--     ghc-options: -main-is Proxy.Main -O2 -threaded -split-objs
+--                  -- -Wunused-packages
 
-                      -- Tools
-                      microlens,
-                      microlens-th,
-                      template-haskell,
+-- executable Camera
+--     -- Import common warning flags.
+--     import:           warnings
 
-                      -- Protobuf
-                      proto-lens,
-                      proto-lens-runtime,
+--     -- .hs or .lhs file containing the Main module.
+--     main-is:          Camera/Main.hs
 
-                      -- General
-                      base,
-                      directory,
-                      eventloop-hs,
-                      network,
-                      options,
-                      random,
-                      rxtx,
-                      time,
-                      process
 
-    build-tool-depends: proto-lens-protoc:proto-lens-protoc
+--     -- Modules included in this executable, other than Main.
+--     other-modules:    Camera.VideoStream,
+--                       Camera.Env,
+--                       Camera.Handler,
+--                       Camera.Options,
 
-    -- Directories containing source files.
-    hs-source-dirs:   app
+--                       Envelope,
+--                       Devices,
+--                       Logger,
+--                       Parsing,
+--                       ProtoHelper,
+--                       Router,
+--                       State,
+--                       System,
+--                       System.CPU,
+--                       System.Memory,
+--                       TH,
+--                       Utilities.Either,
+--                       Ports,
 
-    -- Base language which the package is written in.
-    default-language: GHC2021
+--                       -- Proto medules
+--                       Proto.Camera,
+--                       Proto.Camera_Fields,
+--                       Proto.Envelope,
+--                       Proto.Envelope_Fields,
+--                       Proto.Logging,
+--                       Proto.Logging_Fields,
+--                       Proto.Radio,
+--                       Proto.Radio_Fields,
+--                       Proto.DeviceData,
+--                       Proto.DeviceData_Fields,
+--     -- LANGUAGE extensions used by modules in this package
+--     -- other-extensions:
 
-    ghc-options: -main-is Camera.Main -O2 -threaded -split-objs
-                 -- -Wunused-packages
+--     -- Other library packages from which modules are imported.
+--     build-depends:
+--                       -- Data
+--                       aeson,
+--                       attoparsec,
+--                       bytestring,
+--                       cereal,
+--                       containers,
+--                       mtl,
+--                       text,
+--                       vector,
+
+--                       -- Tools
+--                       microlens,
+--                       microlens-th,
+--                       template-haskell,
+
+--                       -- Protobuf
+--                       proto-lens,
+--                       proto-lens-runtime,
+
+--                       -- General
+--                       base,
+--                       directory,
+--                       eventloop-hs,
+--                       network,
+--                       options,
+--                       random,
+--                       rxtx,
+--                       time,
+--                       process
+
+--     build-tool-depends: proto-lens-protoc:proto-lens-protoc
+
+--     -- Directories containing source files.
+--     hs-source-dirs:   app
+
+--     -- Base language which the package is written in.
+--     default-language: GHC2021
+
+--     ghc-options: -main-is Camera.Main -O2 -threaded -split-objs
+--                  -- -Wunused-packages

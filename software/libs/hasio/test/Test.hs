@@ -1,20 +1,33 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Test where
 
-import Control.Exception (bracket, bracketOnError)
-import Control.Monad (forM_, forever, void)
-import Control.Monad.Except (runExceptT)
-import Control.Monad.IO.Class (liftIO)
-import Data.ByteString qualified as B
-import Data.IORef (newIORef, readIORef, writeIORef)
 -- import RxTx.Connection.Socket (mkServerAddrInfo)
 
+import Control.Concurrent (forkIO, threadDelay)
+import Control.Exception (bracket, bracketOnError, SomeException, catch, Exception (..))
+import Control.Monad (forM_, forever, void)
+import Control.Monad.Except (ExceptT, runExceptT)
+import Control.Monad.IO.Class (liftIO)
+import Data.ByteString qualified as B
+import Data.ByteString.Lazy qualified as BL
+import Data.Default.Class (def)
+import Data.IORef (newIORef, readIORef, writeIORef)
+import Data.X509 (Certificate, CertificateChain (CertificateChain), SignedExact)
+import Data.X509.CertificateStore (
+  CertificateStore,
+  listCertificates,
+  makeCertificateStore,
+ )
+import Data.X509.File (readKeyFile, readSignedObject)
 import HAsio.Async.EventLoop (
   addMsg,
+  cancel,
+  getReactor,
   run,
   setTimeout,
-  withEventLoop, getReactor,
+  withEventLoop,
  )
 import HAsio.Async.IO (
   RecvResult (..),
@@ -29,10 +42,20 @@ import HAsio.Async.Reactor (
   registerFd,
   withReactor,
  )
-import HAsio.Fd (IsFd (..), stdInput)
+import HAsio.Async.TLS (
+  TLSConnection,
+  ctx,
+  handShakeTLSConnection,
+  mkTLSConnection,
+  registerTLSConnection,
+  setBlocking,
+  setNonBlocking,
+ )
+import HAsio.Error.ErrorStack
+import HAsio.Fd (IsFd (..), setBlocking, stdInput)
 import HAsio.Fd.Epoll (Event (..), Flag (..))
-import HAsio.Fd.Socket (Socket, ownNetworkSocket)
-import HAsio.Fd.Syscalls (close', closeUnsafe_)
+import HAsio.Fd.Socket (Socket (..), ownNetworkSocket)
+import HAsio.Fd.Syscalls (close', closeUnsafe_, close_)
 import Network.Socket (
   AddrInfo (..),
   ServiceName,
@@ -47,22 +70,111 @@ import Network.Socket (
  )
 import Network.Socket qualified as Network
 import Network.Socket.Address (connect)
+import Network.TLS qualified as TLS
+import Network.TLS.Extra qualified as TLS
+import RxTx.Connection.Socket hiding (aquireClientSocket, mkAddrInfo)
 import System.Posix (Fd (..), FdOption (NonBlockingRead), setFdOption)
 import System.Posix.Internals (setNonBlockingFD)
-import HAsio.Async.EventLoop (cancel)
 
--- aquireBoundListeningServerSocket ::
---   ServiceName
---   -> IO Socket
--- aquireBoundListeningServerSocket port = do
---   addrInfo <- mkServerAddrInfo port
---   sock <-
---     socket (addrFamily addrInfo) (addrSocketType addrInfo) (addrProtocol addrInfo)
---   Network.setSocketOption sock Network.ReuseAddr 1
---   Network.bind sock (addrAddress addrInfo)
---   Network.listen sock 1
---   putStrLn $ "Listening on port " <> port <> " for TLS connections..."
---   ownNetworkSocket sock
+loadCAStore :: FilePath -> IO CertificateStore
+loadCAStore caCertPath = do
+  certs <- readSignedObject caCertPath
+  pure $ makeCertificateStore certs
+
+loadCredentials :: FilePath -> FilePath -> IO (Maybe TLS.Credential)
+loadCredentials certPath keyPath = do
+  certs :: [SignedExact Certificate] <- readSignedObject certPath
+  keys <- readKeyFile keyPath
+  case keys of
+    [key] -> pure . Just $ (CertificateChain certs, key)
+    _ -> pure Nothing
+
+setupTLSServerParams ::
+  TLS.HostName
+  -> FilePath
+  -- ^ Certificate path
+  -> FilePath
+  -- ^ Key path
+  -> IO (Maybe TLS.ServerParams)
+setupTLSServerParams hostname certPath keyPath = do
+  mCreds <- loadCredentials certPath keyPath
+  case mCreds of
+    Nothing -> pure Nothing
+    Just creds ->
+      pure . Just $
+        def
+          { TLS.serverWantClientCert = False
+          , TLS.serverShared = def {TLS.sharedCredentials = TLS.Credentials [creds]}
+          -- , TLS.serverSupported =
+          --     def
+          --       { supportedCiphers = ciphersuite_strong
+          --       , supportedVersions = [TLS13]
+          --       }
+          -- , TLS.serverHooks = mTLSHooks hostname caStore
+          }
+
+setupTLSClientParams ::
+  FilePath
+  -- ^ CA Certificate path
+  -> TLS.HostName
+  -> IO (Maybe TLS.ClientParams)
+setupTLSClientParams caCertPath hostname = do
+  caStore <- loadCAStore caCertPath
+  let defaultParams = TLS.defaultParamsClient hostname ""
+  pure . Just $
+    defaultParams
+      {
+      --   TLS.clientSupported =
+      --     def
+      --       { TLS.supportedCiphers = TLS.ciphersuite_strong
+      --       , TLS.supportedVersions = [TLS.TLS13]
+      --       }
+       TLS.clientShared =
+          def
+            { -- TLS.sharedCredentials = TLS.Credentials [creds]
+            TLS.sharedCAStore = caStore
+            }
+      -- TLS.clientUseServerNameIndication = False
+      -- , TLS.clientHooks =
+      --     def
+      --       { TLS.onServerCertificate = \_ ->
+      --           validateDefault caStore
+      --       , TLS.onCertificateRequest = \_ -> pure $ Just creds
+      --       }
+      }
+
+aquireBoundListeningServerSocket ::
+  ServiceName
+  -> IO Socket
+aquireBoundListeningServerSocket port = do
+  addrInfo <- mkServerAddrInfo port
+  sock <-
+    socket (addrFamily addrInfo) (addrSocketType addrInfo) (addrProtocol addrInfo)
+  Network.setSocketOption sock Network.ReuseAddr 1
+  Network.bind sock (addrAddress addrInfo)
+  Network.listen sock 1
+  putStrLn $ "Listening on port " <> port <> " for TLS connections..."
+  ownNetworkSocket sock
+
+-- TODO getAddrInfo can throw an IOError.
+mkAddrInfo :: TLS.HostName -> ServiceName -> ExceptT ErrorStack IO AddrInfo
+mkAddrInfo host port = do
+  let hints = defaultHints {addrSocketType = Stream}
+  results <- liftIO $ getAddrInfo (Just hints) (Just host) (Just port)
+  case results of
+    (addr : _) -> pure addr
+    [] -> undefined -- makeErrorStack FailedToExtractAddrInfo
+
+aquireClientSocket ::
+  TLS.HostName -> ServiceName -> ExceptT ErrorStack IO (Socket, AddrInfo)
+aquireClientSocket host port = do
+  addrInfo <- mkAddrInfo host port
+  sock <- liftIO $ openSocket addrInfo
+  liftIO $ print "Client Opened socket"
+  liftIO $ Network.connect sock $ addrAddress addrInfo
+  liftIO $ print "Client Connected to socket"
+  fdSock <- liftIO $ ownNetworkSocket sock
+  pure (fdSock, addrInfo)
 
 -- main'' :: IO ()
 -- main'' = do
@@ -159,22 +271,85 @@ import HAsio.Async.EventLoop (cancel)
 --       )
 --     run reactor
 
-data Events = Ev1 | Ev2 | EvDelay
+data Events = Connect TLS.ClientParams String | Ev1 TLSConnection | Ev2 | EvDelay
 
-handleEvents _ Ev1 = liftIO . putStrLn $ "Ev1"
+handleEvents loop (Connect params port) = do
+  liftIO $ print "CLIENT RUN CONNECT"
+  (connSock, _) <- aquireClientSocket "127.0.0.1" port
+  liftIO $ HAsio.Fd.setBlocking (connSock)
+  liftIO $ print "client tcp conn"
+  conn <- liftIO $ mkTLSConnection params (toFd connSock)
+  liftIO $ print "Client TLS conn!"
+  liftIO $ HAsio.Fd.setBlocking connSock
+  liftIO $ print "Client set blocking"
+  liftIO $ handShakeTLSConnection conn
+  liftIO $ print "client handshake done"
+  liftIO $ HAsio.Async.TLS.setNonBlocking (getReactor loop) conn
+  registerTLSConnection (getReactor loop) conn (liftIO . print)
+
+  addMsg (Ev1 conn) loop
+handleEvents _ (Ev1 conn) = do
+  liftIO $ print "reading file"
+  bytes <- liftIO $ B.readFile "/home/james/Beyond.txt"
+  liftIO $ print $ "file is " <> show (B.length bytes) <> " bytes"
+  liftIO $ TLS.sendData (ctx conn) (B.fromStrict  $ bytes) --
 handleEvents _ Ev2 = liftIO . putStrLn $ "Ev2"
 handleEvents loop EvDelay = do
   liftIO . putStrLn $ "Ev2"
   void $ setTimeout loop EvDelay 1000
 
-main :: IO ()
-main = do
+tlsServer port withBytes = do
+  Just params <-
+    setupTLSServerParams
+      "localhost"
+      "/home/james/crypto/dev/127.0.0.1.crt"
+      "/home/james/crypto/dev/Dev_User_Cert.pem"
+  bracket (Test.aquireBoundListeningServerSocket port) close_ $ \listenSock -> do
+    val <- runExceptT $ withEventLoop handleEvents $ \loop -> do
+        registerFd (getReactor loop) stdInput EpollIn [EpollET] $ cancel loop
+        asyncAccept (getReactor loop) listenSock $ \case
+            Left errs -> liftIO $ print errs
+            Right sock -> do
+                liftIO $ HAsio.Fd.setBlocking (sock)
+                liftIO $ print "Server accepted!!"
+                conn <- liftIO $ mkTLSConnection params (toFd sock)
+                liftIO $ print "Server made tls"
+                liftIO $ HAsio.Async.TLS.setBlocking conn
+                liftIO $ print "Server set blocking"
+                liftIO $ handShakeTLSConnection conn
+                liftIO $ print "Server handshake done"
+                liftIO $ setNonBlocking (getReactor loop) conn
+                registerTLSConnection (getReactor loop) conn withBytes
+                pure ()
+
+        run loop
+    case val of
+        Left errs -> print errs
+        Right _ -> pure ()
+
+tlsClient port = do
+  Just params <-
+    setupTLSClientParams
+      "/home/james/crypto/dev/Dev_CA.crt"
+      "127.0.0.1"
   val <- runExceptT $ withEventLoop handleEvents $ \loop -> do
     registerFd (getReactor loop) stdInput EpollIn [EpollET] $ cancel loop
-    addMsg Ev1 loop
-    addMsg Ev2 loop
-    addMsg EvDelay loop
+    addMsg (Connect params port) loop
+
     run loop
   case val of
     Left errs -> print errs
     Right _ -> pure ()
+
+main :: IO ()
+main = do
+  let port = "5005"
+  forkIO $ do
+    tlsServer port (liftIO . print) `catch` \(e :: SomeException) -> do
+       print "SERVER EXCEPTION"
+       print $ displayException e
+  -- tlsServer port $ liftIO . print--(liftIO . B.writeFile "output")
+  threadDelay 10000
+  tlsClient port `catch` \(e :: SomeException) -> do
+       print "CLIENT EXCEPTION"
+       print $ displayException e

@@ -30,8 +30,8 @@ loadCAStore caCertPath = do
   pure $ makeCertificateStore certs
 
 setupTLSServerParams ::
-  HostName ->
-  FilePath
+  HostName
+  -> FilePath
   -- ^ Certificate path
   -> FilePath
   -- ^ Key path
@@ -117,3 +117,25 @@ setupTLSClientParams certPath keyPath caCertPath hostname = do
                 , onCertificateRequest = \_ -> pure $ Just creds
                 }
           }
+
+-- makeBackend :: Reactor -> Socket -> IO Backend
+-- makeBackend reactor socket = do
+--   let
+--     backendFlush = pure ()
+
+--     backendClose = do
+--       void . runExceptT $ deregisterFd reactor socket EpollIn
+--       void . runExceptT $ deregisterFd reactor socket EpollOut
+--       void $ closeUnsafe socket
+
+--     backendSend bytes = void . runExceptT $ asyncSendAll reactor socket bytes (\_ -> pure ())
+
+--     backendRecv n = _
+
+--   pure $
+--     Backend
+--       { backendSend = backendSend
+--       , backendRecv = backendRecv
+--       , backendFlush = backendFlush
+--       , backendClose = backendClose
+--       }
