@@ -1,65 +1,49 @@
 {-# LANGUAGE MonoLocalBinds #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-
-{-# HLINT ignore "Use newtype instead of data" #-}
 
 module Router (
   Router,
-  MessagePackage (..),
+  Sender (..),
+  MessagePackage(..),
   thisDevice,
   connectionsRegistry,
   mkRouter,
-  -- trySendMessage,
-  -- handleBytes,
-  -- tryForwardMessage,
+  removeDevice,
+  trySendMessage,
+  tryForwardMessage,
+  addDevice,
+  nextHop,
+  getDevice,
 ) where
 
-import Control.Concurrent (withMVar)
-import Control.Monad (void, when)
--- import RxTx.Connection (
---   AsyncSomeConnection (..),
---   SomeConnection (..),
---   send,
---   showTxErr,
---  )
--- import RxTx.ConnectionRegistry (
---   AsyncConnectionRegistry (..),
---   mkConnectionRegistry,
---  )
--- import RxTx.Tx (showTxErr)
-
 import Control.Monad.Except (ExceptT)
-import Data.ByteString qualified as B
+import Control.Monad.IO.Class (MonadIO (liftIO))
+import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Map qualified as Map
-import Data.Maybe (fromMaybe)
-import Data.Serialize (Serialize (..), decode, encode)
-import Data.Time.Clock
-import Data.Time.Format
+import Data.Serialize (Serialize (..))
 import Devices (Device (..))
-import HAsio.Async.Reactor (Reactor)
 import HAsio.Error.ErrorStack (ErrorStack)
-import HAsio.Fd.Socket (Socket)
-import Lens.Micro ((^.))
-import Lens.Micro.TH (makeLenses)
 
--- class IsSender fd where
---   sendMsg :: Serialize msg => fd -> msg -> ExceptT ErrorStack IO ()
-
-data Sender = Sender
-  {_sendMsg :: forall msg. Serialize msg => msg -> ExceptT ErrorStack IO ()}
-
-$(makeLenses ''Sender)
-
-fdToSender
+newtype Sender = Sender
+  {sendMsg :: forall msg. Serialize msg => msg -> ExceptT ErrorStack IO ()}
 
 data Router = Router
-  { _thisDevice :: Device
-  , _reactor :: Reactor
-  , _connectionsRegistry :: Map.Map Device Sender
+  { thisDevice :: Device
+  , -- This contains all reachable devices, including via jumps
+    connectionsRegistry :: IORef (Map.Map Device Sender)
   }
 
-$(makeLenses ''Router)
+addDevice :: Router -> Device -> Sender -> IO ()
+addDevice router dev sender = do
+  devMap <- readIORef (connectionsRegistry router)
+  writeIORef (connectionsRegistry router) $ Map.insert dev sender devMap
+
+getDevice :: Router -> Device
+getDevice = thisDevice
+
+removeDevice :: Router -> Device -> IO ()
+removeDevice router dev = do
+  devMap <- readIORef (connectionsRegistry router)
+  writeIORef (connectionsRegistry router) $ Map.delete dev devMap
 
 -- | Determine the next island to hop to. Returns Nothing if we are on
 -- the final island (no more hops)
@@ -76,8 +60,8 @@ nextHop src dest
   | otherwise = Just Home
 
 mkRouter :: Device -> IO Router
-mkRouter island = do
-  Router island <$> mkConnectionRegistry
+mkRouter  island = do
+  Router island <$> newIORef Map.empty
 
 data MessagePackage msg = MessagePackage
   { source :: {-# UNPACK #-} !Device
@@ -97,48 +81,37 @@ instance Serialize msg => Serialize (MessagePackage msg) where
     put dest
     put msg
 
--- trySendMsg ::
---   forall msg.
---   Serialize msg =>
---   AsyncConnectionRegistry Device B.ByteString
---   -> Device
---   -- ^ Source of msg
---   -> Device
---   -- ^ Target of msg
---   -> Device
---   -- ^ Next hop for message
---   -> msg
---   -> IO Bool
--- trySendMsg (AsyncConnectionRegistry mvar) src finalDest nextDest msg = do
---   withMVar mvar $ \connMap -> case Map.lookup nextDest connMap of
---     Just (AsyncSomeConnection _ (SomeConnection conn)) -> do
---       eErr <- send conn $ encode $ MessagePackage src finalDest msg
---       case eErr of
---         Left eErr -> do
---           putStrLn $ "Error sending message: " <> RxTx.Connection.showTxErr conn eErr
---           pure False
---         Right _ -> pure True
---     _ -> do
---       putStrLn $ "Failed to send message: " <> show src <> ", " <> show finalDest
---       pure False
+trySendMsgImpl ::
+  forall msg.
+  Serialize msg =>
+  Map.Map Device Sender
+  -> Device
+  -> msg
+  -> ExceptT ErrorStack IO ()
+trySendMsgImpl devMap dest msg = do
+  case Map.lookup dest devMap of
+    Just sender ->
+      case sender of
+        Sender sendMsg -> do
+          sendMsg msg
+    _ -> do
+      liftIO $ putStrLn $ "Failed to send message to : " <> show dest
 
--- trySendMessage ::
---   Serialize msg => Router -> Device -> msg -> IO Bool
--- trySendMessage (Router island connMgr) dest msg =
---   let hop = fromMaybe dest $ nextHop island dest
---   in trySendMsg connMgr island dest hop msg
+trySendMessage ::
+  Serialize msg => Router -> Device -> msg -> ExceptT ErrorStack IO ()
+trySendMessage router dest msg = do
+  devMap <- liftIO $ readIORef (connectionsRegistry router)
+  trySendMsgImpl devMap dest (MessagePackage (thisDevice router) dest msg)
 
--- tryForwardMessage ::
---   Serialize msg =>
---   Router
---   -> Device
---   -> Device
---   -> msg
---   -> IO Bool
--- tryForwardMessage (Router island connMgr) src dest msg =
---   let hop = fromMaybe dest $ nextHop island dest
---   in do
---     trySendMsg connMgr src dest hop msg
+tryForwardMessage ::
+  Serialize msg =>
+  Router
+  -> Device
+  -> msg
+  -> ExceptT ErrorStack IO ()
+tryForwardMessage router dest msg = do
+  devMap <- liftIO $ readIORef (connectionsRegistry router)
+  trySendMsgImpl devMap dest msg
 
 -- handleBytes ::
 --   forall msg.

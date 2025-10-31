@@ -1,32 +1,54 @@
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeFamilies #-}
 
-module HAsio.Async.TLS where
+module HAsio.Async.TLS (
+  TLSConnection,
+  mkTLSConnection,
+  HAsio.Async.TLS.setBlocking,
+  HAsio.Async.TLS.setNonBlocking,
+  handShakeTLSConnection,
+  registerTLSConnection,
+  sendData,
+  close,
+  closeSession,
+) where
 
-import Control.Exception (catch, throwIO, try)
-import Control.Monad.Except (ExceptT, runExceptT)
-import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Exception (Exception (..), catch, throwIO, try)
+import Control.Monad.Except (ExceptT (ExceptT), runExceptT)
+import Control.Monad.IO.Class (liftIO)
 import Data.ByteString qualified as B
 import Data.ByteString.Internal qualified as B
-import Data.Foldable (for_)
 import Data.IORef (
   IORef,
-  modifyIORef',
   newIORef,
   readIORef,
   writeIORef,
  )
+import Data.Text qualified as T
 import Data.Typeable (Typeable)
 import Foreign (plusPtr, withForeignPtr)
-import Foreign.C (Errno, eWOULDBLOCK)
-import Foreign.C.Error (eAGAIN)
-import GHC.Exception (Exception)
 import HAsio.Async.IO
 import HAsio.Async.Reactor (Reactor)
-import HAsio.Error.ErrorStack (ErrorStack)
+import HAsio.Error.Error (Error (..))
+import HAsio.Error.ErrorCategory (ErrorCategory (..))
+import HAsio.Error.ErrorStack (ErrorStack, makeErrorStack)
 import HAsio.Fd (Fd, IsFd (..), setBlocking, setNonBlocking)
-import HAsio.Fd.Socket (Socket, recvUnsafe_, recv_, sendUnsafe_, send_)
+import HAsio.Fd.Socket (Socket, recv_, send_)
 import Network.TLS qualified as TLS
+import HAsio.Fd.Syscalls (closeUnsafe_, closeUnsafe')
+
+data TLSErrorCategory
+
+instance ErrorCategory TLSErrorCategory where
+  getErrorCategoryName = "tls"
+
+newtype TLSError = TLSError TLS.TLSException
+
+instance Error TLSError where
+  type ECat TLSError = TLSErrorCategory
+
+  getErrorMessage (TLSError ex) = T.pack $ displayException ex
 
 data WouldBlock = WouldBlock deriving (Show, Typeable)
 
@@ -46,21 +68,18 @@ data TLSConnection = TLSConnection
 
 -- | Can throw an error stack
 blockingRecvImpl :: Socket -> Int -> IO B.ByteString
-blockingRecvImpl sock n = do
-  print $ "BLOCKING RECV CALLED with n = " <> show n
+blockingRecvImpl sock n =
   B.createAndTrim n $ \ptr -> do
     recv_ sock ptr n []
 
 blockingSendImpl :: Socket -> B.ByteString -> IO ()
 blockingSendImpl sock bytes = do
-  print "BLOCKING SEND CALLED"
   let (frnPtr, start, len) = B.toForeignPtr bytes
   withForeignPtr frnPtr $ \ptr -> do
     go (ptr `plusPtr` start) len
  where
-  go _ 0 = print "go with n = 0" >> pure ()
+  go _ 0 = pure ()
   go ptr len = do
-    print $ "GO WITH n = " <> show len
     sent <- send_ sock ptr len []
     go (ptr `plusPtr` sent) (len - sent)
 
@@ -78,9 +97,12 @@ nonblockingFlushImpl bytesRef reactor sock = do
     Right _ -> pure ()
 
 -- | Expects Fd to be in blocking mode. It will be changed to
--- nonblocking after the handshake.
-mkTLSConnection :: TLS.TLSParams params => params -> Fd -> IO TLSConnection
-mkTLSConnection params fd = do
+-- nonblocking after the handshake. If this function returns a
+-- TLSConnection, it takes partial ownership of the given Fd (see
+-- closeSession and close).
+mkTLSConnection ::
+  TLS.TLSParams params => params -> Fd -> ExceptT ErrorStack IO TLSConnection
+mkTLSConnection params fd = liftIO $ do
   inBuf <- newIORef B.empty
   outBuf <- newIORef B.empty
   recvFunc <- newIORef $ blockingRecvImpl (fromFd fd)
@@ -89,10 +111,10 @@ mkTLSConnection params fd = do
   processedBuf <- newIORef B.empty
   let backend =
         TLS.Backend
-          { backendFlush = pure ()
-          , backendClose = pure ()
-          , backendSend = \bytes -> readIORef sendFunc >>= ($ bytes)
-          , backendRecv = \n -> readIORef recvFunc >>= ($ n)
+          { TLS.backendFlush = pure ()
+          , TLS.backendClose = closeUnsafe_ fd
+          , TLS.backendSend = \bytes -> readIORef sendFunc >>= ($ bytes)
+          , TLS.backendRecv = \n -> readIORef recvFunc >>= ($ n)
           }
   ctx <- TLS.contextNew backend params
   pure $
@@ -107,30 +129,25 @@ mkTLSConnection params fd = do
       , outBuf
       }
 
-setBlocking :: TLSConnection -> IO ()
-setBlocking conn = do
+setBlocking :: TLSConnection -> ExceptT ErrorStack IO ()
+setBlocking conn = liftIO $ do
   HAsio.Fd.setBlocking (fd conn)
   writeIORef (recvFunc conn) $ blockingRecvImpl (fromFd $ fd conn)
   writeIORef (sendFunc conn) $ blockingSendImpl (fromFd $ fd conn)
   writeIORef (flushFunc conn) blockingFlushImpl
 
-setNonBlocking :: Reactor -> TLSConnection -> IO ()
-setNonBlocking reactor conn = do
+setNonBlocking :: Reactor -> TLSConnection -> ExceptT ErrorStack IO ()
+setNonBlocking reactor conn = liftIO $ do
   HAsio.Fd.setNonBlocking (fd conn)
   writeIORef (recvFunc conn) $ backendRecvImpl (processedBuf conn) (inBuf conn)
   writeIORef (sendFunc conn) $
     backendSendImpl reactor (fromFd $ fd conn) (outBuf conn)
 
--- writeIORef (flushFunc conn) $
---   nonblockingFlushImpl (outBuf conn) reactor (fromFd $ fd conn)
-
 backendRecvImpl ::
   IORef B.ByteString -> IORef B.ByteString -> Int -> IO B.ByteString
 backendRecvImpl processedBuf inBuf n = do
-  print $ "backend recv impl - wanting " <> show n <> " bytes"
   bs <- readIORef inBuf
   processed <- readIORef processedBuf
-  print $ "STORED BYTES SIZE: " <> show (B.length bs)
   if B.length bs < n
     then do
       writeIORef inBuf (processed <> bs)
@@ -146,54 +163,20 @@ backendRecvImpl processedBuf inBuf n = do
 backendSendImpl ::
   Reactor -> Socket -> IORef B.ByteString -> B.ByteString -> IO ()
 backendSendImpl reactor sock outBuf bytes = do
-  print "backend send impl"
   oldBytes <- readIORef outBuf
   let newMsg = oldBytes <> bytes
   writeIORef outBuf newMsg
   nonblockingFlushImpl outBuf reactor sock
 
-data FlushResult
-  = Flushed
-  | WouldBlockPending
-  | FatalSend Errno
-
--- attemptFlush ::
---   TLSConnection -> (Fd -> B.ByteString -> IO (Either Errno Int)) -> IO FlushResult
--- attemptFlush TLSConnection {..} sendRaw = do
---   out <- readIORef outBuf
---   if B.null out
---     then do
---       writeIORef wantsWrite True
---       pure Flushed
---     else do
---       let go bs = do
---             if B.null bs
---               then pure Flushed
---               else do
---                 err <- sendRaw fd bs
---                 case err of
---                   Right n -> go (B.drop n bs)
---                   Left errno ->
---                     if errno == eAGAIN || errno == eWOULDBLOCK
---                       then pure WouldBlockPending
---                       else pure $ FatalSend errno
---       res <- go out
---       case res of
---         Flushed -> do
---           writeIORef outBuf B.empty
---           writeIORef wantsWrite False
---           pure Flushed
---         WouldBlockPending -> pure WouldBlockPending
---         FatalSend errno ->
---           pure $ FatalSend errno
-
 -- | Need to add error detection to all of the functions here. Should
 -- return an ErrorStack on failure.
 handShakeTLSConnection ::
   TLSConnection
-  -> IO ()
-handShakeTLSConnection = do
-  TLS.handshake . ctx
+  -> ExceptT ErrorStack IO ()
+handShakeTLSConnection conn = do
+  ExceptT $
+    catch (Right <$> TLS.handshake @IO (ctx conn)) $
+      \(e :: TLS.TLSException) -> runExceptT . makeErrorStack $ TLSError e
 
 registerTLSConnection ::
   Reactor
@@ -204,34 +187,48 @@ registerTLSConnection reactor tlsConnection withBytes = do
   asyncRecv reactor (fromFd $ fd tlsConnection) $ \dereg -> \case
     RecvClosed -> dereg
     RecvData bytes -> do
-      liftIO $ print $ "Read: " <> show (B.length bytes)
       liftIO $ do
         storedBytes <- readIORef (inBuf tlsConnection)
         writeIORef (inBuf tlsConnection) (storedBytes <> bytes)
-        processTLSData
+      processTLSData
      where
-      -- (Just <$> TLS.recvData (ctx tlsConnection))
-      --   `catch` (\WouldBlock -> pure Nothing)
-      -- case mBytes of
-      --   Nothing -> liftIO $ print "WOULD BLOCK"
-      --   Just bytes' -> withBytes bytes'
+      processTLSDataUnsafe :: ExceptT ErrorStack IO ()
+      processTLSDataUnsafe = do
+        eRes <- liftIO . try $ recvData tlsConnection
+        case eRes of
+          Left WouldBlock -> pure ()
+          Right bs
+            | B.null bs -> pure ()
+            | otherwise -> do
+                withBytes bs
+                processTLSDataUnsafe
 
+      processTLSData :: ExceptT ErrorStack IO ()
       processTLSData = do
-        let loop = do
-              eRes <- try $ recvData tlsConnection
-              case eRes of
-                Left WouldBlock -> print "WOULD BLACK"
-                Right bs
-                  | B.null bs -> pure ()
-                  | otherwise -> do
-                      _ <- runExceptT (withBytes bs)
-                      loop -- <--- call recvData again immediately
-        loop
+        ExceptT <$> catch (runExceptT processTLSDataUnsafe) $
+          \(e :: TLS.TLSException) -> runExceptT . makeErrorStack $ TLSError e
 
--- for_ mBytes withBytes
-
-recvData :: MonadIO m => TLSConnection -> m B.ByteString
+-- | Can throw WouldBlock, TLSException, IOException, although
+-- IOException shouldn't happen due to our Backend implementation.
+recvData :: TLSConnection -> IO B.ByteString
 recvData conn = do
   bytes <- TLS.recvData (ctx conn)
   liftIO $ writeIORef (processedBuf conn) B.empty
   pure bytes
+
+-- | Can throw WouldBlock, TLSException
+sendData :: TLSConnection -> B.ByteString -> ExceptT ErrorStack IO ()
+sendData conn bytes = do
+  ExceptT <$> catch (Right <$> TLS.sendData @IO (ctx conn) (B.fromStrict bytes)) $
+    \(e :: TLS.TLSException) -> runExceptT . makeErrorStack $ TLSError e
+
+-- | Close the TLS Connection but keep the underlying FD alive.
+closeSession :: TLSConnection -> ExceptT ErrorStack IO ()
+closeSession = do
+  liftIO . TLS.bye . ctx
+
+-- | Close the TLS connection then close the underlying FD.
+close :: TLSConnection -> ExceptT ErrorStack IO ()
+close conn = do
+  liftIO . TLS.bye . ctx $ conn
+  closeUnsafe' . fd $ conn

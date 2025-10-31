@@ -3,10 +3,14 @@
 
 module Test where
 
--- import RxTx.Connection.Socket (mkServerAddrInfo)
-
 import Control.Concurrent (forkIO, threadDelay)
-import Control.Exception (bracket, bracketOnError, SomeException, catch, Exception (..))
+import Control.Exception (
+  Exception (..),
+  SomeException,
+  bracket,
+  bracketOnError,
+  catch,
+ )
 import Control.Monad (forM_, forever, void)
 import Control.Monad.Except (ExceptT, runExceptT)
 import Control.Monad.IO.Class (liftIO)
@@ -44,15 +48,15 @@ import HAsio.Async.Reactor (
  )
 import HAsio.Async.TLS (
   TLSConnection,
-  ctx,
   handShakeTLSConnection,
   mkTLSConnection,
   registerTLSConnection,
+  sendData,
   setBlocking,
   setNonBlocking,
  )
 import HAsio.Error.ErrorStack
-import HAsio.Fd (IsFd (..), setBlocking, stdInput)
+import HAsio.Fd (IsFd (..), stdInput)
 import HAsio.Fd.Epoll (Event (..), Flag (..))
 import HAsio.Fd.Socket (Socket (..), ownNetworkSocket)
 import HAsio.Fd.Syscalls (close', closeUnsafe_, close_)
@@ -123,24 +127,23 @@ setupTLSClientParams caCertPath hostname = do
   let defaultParams = TLS.defaultParamsClient hostname ""
   pure . Just $
     defaultParams
-      {
-      --   TLS.clientSupported =
-      --     def
-      --       { TLS.supportedCiphers = TLS.ciphersuite_strong
-      --       , TLS.supportedVersions = [TLS.TLS13]
-      --       }
-       TLS.clientShared =
+      { --   TLS.clientSupported =
+        --     def
+        --       { TLS.supportedCiphers = TLS.ciphersuite_strong
+        --       , TLS.supportedVersions = [TLS.TLS13]
+        --       }
+        TLS.clientShared =
           def
             { -- TLS.sharedCredentials = TLS.Credentials [creds]
-            TLS.sharedCAStore = caStore
+              TLS.sharedCAStore = caStore
             }
-      -- TLS.clientUseServerNameIndication = False
-      -- , TLS.clientHooks =
-      --     def
-      --       { TLS.onServerCertificate = \_ ->
-      --           validateDefault caStore
-      --       , TLS.onCertificateRequest = \_ -> pure $ Just creds
-      --       }
+            -- TLS.clientUseServerNameIndication = False
+            -- , TLS.clientHooks =
+            --     def
+            --       { TLS.onServerCertificate = \_ ->
+            --           validateDefault caStore
+            --       , TLS.onCertificateRequest = \_ -> pure $ Just creds
+            --       }
       }
 
 aquireBoundListeningServerSocket ::
@@ -170,9 +173,7 @@ aquireClientSocket ::
 aquireClientSocket host port = do
   addrInfo <- mkAddrInfo host port
   sock <- liftIO $ openSocket addrInfo
-  liftIO $ print "Client Opened socket"
   liftIO $ Network.connect sock $ addrAddress addrInfo
-  liftIO $ print "Client Connected to socket"
   fdSock <- liftIO $ ownNetworkSocket sock
   pure (fdSock, addrInfo)
 
@@ -274,25 +275,19 @@ aquireClientSocket host port = do
 data Events = Connect TLS.ClientParams String | Ev1 TLSConnection | Ev2 | EvDelay
 
 handleEvents loop (Connect params port) = do
-  liftIO $ print "CLIENT RUN CONNECT"
   (connSock, _) <- aquireClientSocket "127.0.0.1" port
-  liftIO $ HAsio.Fd.setBlocking (connSock)
-  liftIO $ print "client tcp conn"
-  conn <- liftIO $ mkTLSConnection params (toFd connSock)
-  liftIO $ print "Client TLS conn!"
-  liftIO $ HAsio.Fd.setBlocking connSock
-  liftIO $ print "Client set blocking"
-  liftIO $ handShakeTLSConnection conn
-  liftIO $ print "client handshake done"
-  liftIO $ HAsio.Async.TLS.setNonBlocking (getReactor loop) conn
+  conn <- mkTLSConnection params (toFd connSock)
+  setBlocking conn
+  handShakeTLSConnection conn
+  setNonBlocking (getReactor loop) conn
   registerTLSConnection (getReactor loop) conn (liftIO . print)
 
   addMsg (Ev1 conn) loop
 handleEvents _ (Ev1 conn) = do
   liftIO $ print "reading file"
-  bytes <- liftIO $ B.readFile "/home/james/Beyond.txt"
+  bytes <- liftIO $ B.readFile "/home/james/BIN"
   liftIO $ print $ "file is " <> show (B.length bytes) <> " bytes"
-  liftIO $ TLS.sendData (ctx conn) (B.fromStrict  $ bytes) --
+  sendData conn bytes
 handleEvents _ Ev2 = liftIO . putStrLn $ "Ev2"
 handleEvents loop EvDelay = do
   liftIO . putStrLn $ "Ev2"
@@ -302,30 +297,25 @@ tlsServer port withBytes = do
   Just params <-
     setupTLSServerParams
       "localhost"
-      "/home/james/crypto/dev/127.0.0.1.crt"
+      "/home/james/crypto/dev/Dev_User_Cert.crt"
       "/home/james/crypto/dev/Dev_User_Cert.pem"
   bracket (Test.aquireBoundListeningServerSocket port) close_ $ \listenSock -> do
     val <- runExceptT $ withEventLoop handleEvents $ \loop -> do
-        registerFd (getReactor loop) stdInput EpollIn [EpollET] $ cancel loop
-        asyncAccept (getReactor loop) listenSock $ \case
-            Left errs -> liftIO $ print errs
-            Right sock -> do
-                liftIO $ HAsio.Fd.setBlocking (sock)
-                liftIO $ print "Server accepted!!"
-                conn <- liftIO $ mkTLSConnection params (toFd sock)
-                liftIO $ print "Server made tls"
-                liftIO $ HAsio.Async.TLS.setBlocking conn
-                liftIO $ print "Server set blocking"
-                liftIO $ handShakeTLSConnection conn
-                liftIO $ print "Server handshake done"
-                liftIO $ setNonBlocking (getReactor loop) conn
-                registerTLSConnection (getReactor loop) conn withBytes
-                pure ()
+      registerFd (getReactor loop) stdInput EpollIn [EpollET] $ cancel loop
+      asyncAccept (getReactor loop) listenSock $ \case
+        Left errs -> liftIO $ print errs
+        Right sock -> do
+          conn <- mkTLSConnection params (toFd sock)
+          setBlocking conn
+          handShakeTLSConnection conn
+          setNonBlocking (getReactor loop) conn
+          registerTLSConnection (getReactor loop) conn withBytes
+          pure ()
 
-        run loop
+      run loop
     case val of
-        Left errs -> print errs
-        Right _ -> pure ()
+      Left errs -> print errs
+      Right _ -> pure ()
 
 tlsClient port = do
   Just params <-
@@ -345,11 +335,10 @@ main :: IO ()
 main = do
   let port = "5005"
   forkIO $ do
-    tlsServer port (liftIO . print) `catch` \(e :: SomeException) -> do
-       print "SERVER EXCEPTION"
-       print $ displayException e
-  -- tlsServer port $ liftIO . print--(liftIO . B.writeFile "output")
+    tlsServer port (liftIO . B.appendFile "output") `catch` \(e :: SomeException) -> do
+      print "SERVER EXCEPTION"
+      print $ displayException e
   threadDelay 10000
   tlsClient port `catch` \(e :: SomeException) -> do
-       print "CLIENT EXCEPTION"
-       print $ displayException e
+    print "CLIENT EXCEPTION"
+    print $ displayException e

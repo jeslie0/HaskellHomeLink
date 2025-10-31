@@ -50,26 +50,21 @@ asyncPut put reactor fd bytes callback = do
   let
     trySend :: EventHandler
     trySend = do
-      liftIO $ print $ "trying to send " <> show (B.length bytes) <> " bytes"
       offset <- liftIO $ readIORef offsetRef
       let remaining = B.length bytes - offset
       if remaining <= 0
         then do
-          liftIO $ print "rem <= 0"
           -- TODO Check to see if it has already been closed as an error.
           -- This is not a real error here.
           deregisterFd reactor fd EpollOut
           callback (Right ())
         else do
-          liftIO $ print "rem > 0"
           let (frnPtr, start, len) = B.toForeignPtr bytes
 
           ExceptT <$> liftIO $ withForeignPtr frnPtr $ \ptr -> do
             res <- put fd (ptr `plusPtr` (start + offset)) (len - offset)
-            liftIO $ print "sent!"
             case res of
               Left errs -> do
-                liftIO $ print "failed to send!"
                 case getBaseErrno errs of
                   Nothing -> runExceptT . callback $ Left errs
                   Just err
@@ -79,18 +74,14 @@ asyncPut put reactor fd bytes callback = do
                         eErrs <- runExceptT $ deregisterFd reactor fd EpollOut
                         case eErrs of
                           Left moreErrs -> do
-                            liftIO $ print "more errs!"
                             runExceptT . callback . Left $ moreErrs <> errs
                           Right _ -> runExceptT . callback $ Left errs
               Right n -> do
-                liftIO $ print $ "Sent " <> show n
                 if offset + n == B.length bytes
                   then runExceptT $ do
-                    liftIO $ print "send all"
                     deregisterFd reactor fd EpollOut
                     callback $ Right ()
                   else do
-                    liftIO $ print "still got some to send"
                     writeIORef offsetRef $ offset + n
                     pure $ Right ()
 
@@ -264,7 +255,6 @@ asyncAccept reactor listenSock callback = do
   let
     acceptLoop :: EventHandler
     acceptLoop = do
-      liftIO $ print "accept loop!"
       eConn <- liftIO tryAccept
       case eConn of
         Right conn -> do
@@ -280,7 +270,6 @@ asyncAccept reactor listenSock callback = do
     tryAccept = do
       -- your raw accept binding, returning (Left ErrorStack | Right
       -- Socket)
-      liftIO $ print "Accepting!"
       acceptUnsafe listenSock [SocketNonBlock]
 
   registerFd reactor listenSock EpollIn [EpollET] acceptLoop

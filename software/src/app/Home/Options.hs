@@ -1,43 +1,27 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TemplateHaskell #-}
 
 module Home.Options (
-  HomeOptions,
-  configPath,
-  HomeConfiguration,
-  httpsCertificatePath,
-  httpsKeyPath,
-  httpsCACertificatePath,
-  tlsCertificatePath,
-  tlsKeyPath,
-  tlsCACertificatePath,
-  tlsHostname,
-  proxyURL,
-  proxyPort,
-  httpPort,
-  httpHostname,
+  HomeOptions (..),
+  HomeConfiguration (..),
 ) where
 
 import Data.Aeson (FromJSON (..), withObject, (.:))
-import Lens.Micro.TH (makeLenses)
 import Network.Socket (HostName, PortNumber)
 import Options (Options (..), simpleOption)
 
 data HomeConfiguration = HomeConfiguration
-  { _httpsCertificatePath :: String
-  , _httpsKeyPath :: String
-  , _httpsCACertificatePath :: String
-  , _httpHostname :: HostName
-  , _httpPort :: PortNumber
-  , _tlsCertificatePath :: String
-  , _tlsKeyPath :: String
-  , _tlsCACertificatePath :: String
-  , _tlsHostname :: HostName
-  , _proxyURL :: String
-  , _proxyPort :: PortNumber
+  { httpsCertificatePath :: String
+  , httpsKeyPath :: String
+  , httpsCACertificatePath :: String
+  , httpHostname :: HostName
+  , httpPort :: PortNumber
+  , tlsCertificatePath :: String
+  , tlsKeyPath :: String
+  , tlsCACertificatePath :: String
+  , tlsHostname :: HostName
+  , proxyURL :: String
+  , proxyPort :: PortNumber
   }
-
-$(makeLenses ''HomeConfiguration)
 
 instance FromJSON HomeConfiguration where
   parseJSON = withObject "HomeConfiguration" $ \v -> do
@@ -57,9 +41,7 @@ instance FromJSON HomeConfiguration where
       <*> proxy .: "url"
       <*> (toEnum <$> proxy .: "port")
 
-newtype HomeOptions = HomeOptions {_configPath :: FilePath}
-
-$(makeLenses ''HomeOptions)
+newtype HomeOptions = HomeOptions {configPath :: FilePath}
 
 instance Options HomeOptions where
   defineOptions =

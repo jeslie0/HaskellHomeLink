@@ -1,43 +1,54 @@
 {-# LANGUAGE MonoLocalBinds #-}
-{-# LANGUAGE TemplateHaskell #-}
 
 module Home.Env (
   Env,
   mkEnv,
-  audioStreamRef,
   router,
   cleanupEnv,
+  withEnv,
 ) where
 
-import Control.Concurrent (ThreadId, killThread)
 import Control.Monad.Except (ExceptT)
 import Control.Monad.IO.Class (liftIO)
-import Data.Foldable (for_)
-import Data.IORef (IORef, newIORef, readIORef, writeIORef)
+import Data.Foldable (traverse_)
+import Data.IORef (IORef, newIORef, readIORef)
 import Devices (Device (..))
+import HAsio.Async.TLS qualified as TLS
+import HAsio.Control (bracket)
 import HAsio.Error.ErrorStack (ErrorStack)
-import Home.AudioStream (StationId, StreamStatus (..))
-import Lens.Micro ((^.))
-import Lens.Micro.TH (makeLenses)
-import Router (Router, connectionsRegistry, mkRouter)
-import RxTx.ConnectionRegistry (killConnections)
+import HAsio.Fd.Socket (Socket)
+import HAsio.Fd.Syscalls (close')
+import Router (Router, mkRouter)
 
 data Env = Env
-  { _router :: Router
-  , _audioStreamRef :: IORef (Maybe ThreadId, StreamStatus, StationId)
+  { router :: Router
+  , cameraServerSocket :: Socket
+  , cameraConnectionRef :: IORef (Maybe Socket)
+  , proxyConnectionRef :: IORef (Maybe TLS.TLSConnection)
+  -- , _audioStreamRef :: IORef (Maybe ThreadId, StreamStatus, StationId)
   }
-
-$(makeLenses ''Env)
 
 mkEnv :: ExceptT ErrorStack IO Env
 mkEnv = do
-  _audioStreamRef <- liftIO $ newIORef (Nothing, Off, 0)
-  _router <- liftIO $ mkRouter Home
-  pure $ Env _router _audioStreamRef
+  router <- liftIO $ mkRouter Home
+  cameraConnectionRef <- liftIO $ newIORef Nothing
+  proxyConnectionRef <- liftIO $ newIORef Nothing
+
+  pure $
+    Env
+      { router
+      , cameraServerSocket = undefined
+      , cameraConnectionRef
+      , proxyConnectionRef
+      }
 
 cleanupEnv :: Env -> ExceptT ErrorStack IO ()
-cleanupEnv env = liftIO $ do
-  (mThread, _, _) <- readIORef (env ^. audioStreamRef)
-  for_ mThread killThread
-  writeIORef (env ^. audioStreamRef) (Nothing, Off, 0)
-  killConnections (env ^. (router . connectionsRegistry))
+cleanupEnv env = do
+  liftIO (readIORef (cameraConnectionRef env)) >>= traverse_ close'
+  liftIO (readIORef (proxyConnectionRef env)) >>= traverse_ TLS.close
+  close' (cameraServerSocket env)
+
+withEnv ::
+  (Env -> ExceptT ErrorStack IO ()) -> ExceptT ErrorStack IO ()
+withEnv =
+  bracket mkEnv cleanupEnv

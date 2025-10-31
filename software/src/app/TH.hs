@@ -48,13 +48,15 @@ makeInstance ::
   Name
   -- ^ Class name
   -> Name
+  -- ^ Env name
+  -> Name
   -- ^ Envelope type name
   -> Name
   -- ^ Payload constructor name
   -> Name
   -- ^ Payload type name
   -> Q [Dec]
-makeInstance className typeName payloadConstructorName payloadType = do
+makeInstance className envTypeName typeName payloadConstructorName payloadType = do
   decs <- mkDecs
   let inst =
         InstanceD
@@ -74,18 +76,19 @@ makeInstance className typeName payloadConstructorName payloadType = do
     mkClause methodName = do
       envelopeName <- newName "envelope"
       islandName <- newName "islandName"
-      matches <- mkMatches methodName islandName
+      envName <- newName "env"
+      matches <- mkMatches envName methodName islandName
       let caseExpression =
             UInfixE (VarE envelopeName) (VarE $ mkName "^.") (VarE payloadConstructorName)
       let bodyExpression =
             CaseE caseExpression matches
       pure $
         Clause
-          [VarP islandName, VarP envelopeName]
+          [VarP envName, VarP islandName, VarP envelopeName]
           (NormalB bodyExpression)
           []
 
-    mkMatches methodName islandName = do
+    mkMatches envName methodName islandName = do
       constructorNames <- getConstructorNames payloadType
       constructors <- forM constructorNames $ \constructorName -> do
         varName <- newName "variable"
@@ -94,7 +97,7 @@ makeInstance className typeName payloadConstructorName payloadType = do
             (ConP 'Just [] [ConP constructorName [] [VarP varName]])
             ( NormalB $
                 AppE
-                  (AppE (VarE methodName) (VarE islandName))
+                  (AppE (AppE (VarE methodName) (VarE envName)) (VarE islandName))
                   (VarE varName)
             )
             []

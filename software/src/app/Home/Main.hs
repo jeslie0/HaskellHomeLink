@@ -38,11 +38,8 @@ import HAsio.Fd (setNonBlocking)
 import HAsio.Fd.Epoll (Event (..))
 import HAsio.Fd.Socket (Socket)
 import HAsio.Fd.Syscalls (close')
-import Home.Env (Env, cleanupEnv, mkEnv)
-import Home.Handler (
-  EstablishTLSConnection (..),
-  ExHomeHandler (..),
- )
+import Home.Env (Env, cleanupEnv, mkEnv, withEnv)
+import Home.Handler (HomeMsg (..), SomeHomeMsg (..))
 import Home.Options (
   HomeConfiguration,
   HomeOptions,
@@ -133,35 +130,31 @@ mainImpl = runCommand $ \(opts :: HomeOptions) _args -> do
   -- case mConfig of
   --   Left errs -> putStrLn $ "Could not parse configuration file: " <> errs
   --   Right config -> do
-  result <- runExceptT $ bracket mkEnv cleanupEnv $ \env -> do
-    bracket (aquireBoundListeningServerSocket $ show homeCameraRecvPort) close' $ \cameraListenSock -> do
-      liftIO $ setNonBlocking cameraListenSock
-      withEventLoop handler $ \loop -> do
-        void . asyncAccept (getReactor loop) cameraListenSock $ \case
-          Left errs -> liftIO $ print errs
-          Right socket -> do
-            void $ asyncRecvHandler (getReactor loop) socket $ \bytes -> do
-              liftIO $ print bytes
-        addMsg CreateClientConn loop
-        run loop
+  result <- runExceptT . withEnv $ \env -> do
+    withEventLoop (handler env) $ \loop -> do
+      run loop
   case result of
     Left errs -> print errs
     Right _ -> pure ()
  where
-  handler loop CreateClientConn = do
-    bracketOnError
-      (aquireClientSocket "127.0.0.1" "9000")
-      (\(sock, _) -> close' sock)
-      $ \(sock, addrInfo) -> do
-        liftIO $ setNonBlocking sock
-        void $ setInterval loop (SendMessage sock) 1000
-  handler loop (SendMessage sock) = do
-    let
-      message = "hi"
-      hdr = runPut . putWord32be . fromIntegral $ B.length message
-    asyncSendAll (getReactor loop) sock (hdr <> message) $ \case
-      Left errs -> liftIO $ print errs
-      Right _ -> liftIO $ print "sent message"
+  handler env loop msg =
+    case msg of
+      SomeHomeMsg m -> handle env Home m
+
+-- handler loop CreateClientConn = do
+--   bracketOnError
+--     (aquireClientSocket "127.0.0.1" "9000")
+--     (\(sock, _) -> close' sock)
+--     $ \(sock, addrInfo) -> do
+--       liftIO $ setNonBlocking sock
+--       void $ setInterval loop (SendMessage sock) 1000
+-- handler loop (SendMessage sock) = do
+--   let
+--     message = "hi"
+--     hdr = runPut . putWord32be . fromIntegral $ B.length message
+--   asyncSendAll (getReactor loop) sock (hdr <> message) $ \case
+--     Left errs -> liftIO $ print errs
+--     Right _ -> liftIO $ print "sent message"
 
 -- runExcept $ bracket mkEnv cleanupEnv $ \env -> do
 --   withEventLoop _ _

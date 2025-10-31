@@ -26,7 +26,10 @@ import Proto.DeviceData qualified as Proto
 import Proto.Logging qualified as Proto
 import Proto.Logging_Fields qualified as Proto
 import ProtoHelper (FromMessage (..), ToMessage (..))
-import Router (Router, thisDevice, trySendMessage)
+import Router (Router, thisDevice, trySendMessage, getDevice)
+import Control.Monad.Except (ExceptT)
+import HAsio.Error.ErrorStack (ErrorStack)
+import Control.Monad.IO.Class (MonadIO(liftIO))
 
 data LogLevel
   = Trace
@@ -83,22 +86,22 @@ formatLog log' =
     "[" <> time <> "] [" <> island <> "] " <> (log' ^. Proto.content)
 
 reportLog ::
-  Router -> LogLevel -> T.Text -> IO ()
+  Router -> LogLevel -> T.Text -> ExceptT ErrorStack IO ()
 reportLog rtr lvl txt = do
-  MkSystemTime sec nano <- getSystemTime
+  MkSystemTime sec nano <- liftIO getSystemTime
   let
     log' =
       defMessage
         & Proto.timestampMs
         .~ (1000 * sec + fromIntegral nano `div` 1000000)
         & Proto.device
-        .~ toMessage (rtr ^. thisDevice)
+        .~ toMessage (getDevice rtr)
         & Proto.level
         .~ toMessage lvl
         & Proto.content
         .~ txt
     msg :: Proto.AddLog =
       defMessage & Proto.log .~ log'
-  T.putStrLn . formatLog $ log'
+  liftIO $ T.putStrLn . formatLog $ log'
   forM_ proxies $ \i ->
     trySendMessage rtr i $ wrapProxyMsg msg
